@@ -1,0 +1,18 @@
+{
+  "images": 26,
+  "missing_local_files": [],
+  "latest_inbox_outbox_selected": true,
+  "final_mockup_dimensions": {
+    "proposed/01-inbox-slate-jade-v4.png": [
+      1586,
+      992
+    ],
+    "proposed/03-outbox-slate-jade-v2.png": [
+      1586,
+      992
+    ]
+  },
+  "prompt_records": 14,
+  "authoritative_selected_boards": 8,
+  "scope": "Visual mockups and design documentation only; no application or storage migration."
+}

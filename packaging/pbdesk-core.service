@@ -1,0 +1,13 @@
+# Example only. pbdesk-admin install-service writes absolute virtualenv paths.
+[Unit]
+Description=pbdesk private inbox core
+
+[Service]
+Type=simple
+ExecStart=%h/.local/share/pbdesk/.venv/bin/pbdesk-core --foreground
+Restart=on-failure
+RestartSec=3
+UMask=0077
+
+[Install]
+WantedBy=default.target

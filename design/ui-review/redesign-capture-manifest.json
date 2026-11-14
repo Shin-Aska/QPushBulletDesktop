@@ -1,0 +1,153 @@
+{
+  "data": "fictional fixtures only",
+  "native_platform": "wayland",
+  "native_capture": "actual production QWidget.grab",
+  "web_capture": "installed Firefox WebDriver screenshot, external HTTP blocked",
+  "captured_at": "2026-11-14T07:06:45.612027+00:00",
+  "screens": [
+    {
+      "file": "implemented/01-inbox.png",
+      "title": "Inbox and selected notification",
+      "surface": "native",
+      "sha256": "637246c384ce045155b30800f514b1608857cd7a1468230c3002ab5744926cd9"
+    },
+    {
+      "file": "implemented/02-devices.png",
+      "title": "Device list",
+      "surface": "native",
+      "sha256": "02166569e7574ee28bda8b1cbe15bf98d65cffc41c38f89d3e6730377ffd4810"
+    },
+    {
+      "file": "implemented/03-outbox.png",
+      "title": "Outbox and action details",
+      "surface": "native",
+      "sha256": "6a0cbe64ca46861a836d2f05a92dbd46a096a0084ad3557d89e3fec3e6f0f7b8"
+    },
+    {
+      "file": "implemented/19-inbox-sms.png",
+      "title": "Cached SMS conversation and background sync",
+      "surface": "native",
+      "sha256": "f4e1171388e5c5714cdce720a44316aa3a04a0d6aa5565a95316ac5d6d8e3d52"
+    },
+    {
+      "file": "implemented/20-outbox-sms.png",
+      "title": "Phone sent history separate from pending actions",
+      "surface": "native",
+      "sha256": "434526963a41aecad682170f21a9a8d41799598c4232860f63c2034514c9d5ec"
+    },
+    {
+      "file": "implemented/21-register-linux.png",
+      "title": "Register this Linux client",
+      "surface": "native",
+      "sha256": "390264838efef09d52168a27ad70cd9010cbc71bfb7cbfeeed52ee89b26af619"
+    },
+    {
+      "file": "implemented/22-phone-browser-setup.png",
+      "title": "Phone or browser setup guide",
+      "surface": "native",
+      "sha256": "0c85dc81cbc7d03dacc160fa5db9b59ae61aae9de2723f3054b7212f21210bfb"
+    },
+    {
+      "file": "implemented/23-local-encryption.png",
+      "title": "Local per-device KWallet reference",
+      "surface": "native",
+      "sha256": "66d4582ea0a62fb53232435d0a055ce20c46383339a58d25aa8729bc51071ac6"
+    },
+    {
+      "file": "implemented/24-remove-device.png",
+      "title": "Exact registration removal and retained history",
+      "surface": "native",
+      "sha256": "3696ea905f8daadb526df3216d16271c23ab4fe1512d546dd2324a1df26b9969"
+    },
+    {
+      "file": "implemented/04-compose-note.png",
+      "title": "Compose Note",
+      "surface": "native",
+      "sha256": "54c05254bbc0e8ebf29a0ea65a26df56a324cc56559500849810655cdde5f83d"
+    },
+    {
+      "file": "implemented/05-compose-link.png",
+      "title": "Compose Link",
+      "surface": "native",
+      "sha256": "331dfb80680b712795c3375aadb058f211b1611a7c339af7ecb320a4ad3133e0"
+    },
+    {
+      "file": "implemented/06-compose-sms.png",
+      "title": "Compose Sms",
+      "surface": "native",
+      "sha256": "dfbaef894c3a2cd1014ffcf8b278bb98082467805b311a77d214dd0c7b1287a7"
+    },
+    {
+      "file": "implemented/07-review-approval.png",
+      "title": "Review and approve an exact message",
+      "surface": "native",
+      "sha256": "d51309183fe94ce82d1f4efe98a7baea1eb37bee461b0e00b1b848f628a039f6"
+    },
+    {
+      "file": "implemented/08-edit-action.png",
+      "title": "Edit an action",
+      "surface": "native",
+      "sha256": "792e955f6426126cb67b79f532929f1395018a88738f34dd7095d2a301e6bee6"
+    },
+    {
+      "file": "implemented/09-web-settings-disabled.png",
+      "title": "Web hosting settings \u2014 disabled",
+      "surface": "native",
+      "sha256": "4ea8ebc2de7bdd3a99ca2be0f00af77b3b627b5c8c5098bdb87e40947bd33489"
+    },
+    {
+      "file": "implemented/10-web-settings-enabled.png",
+      "title": "Web hosting settings \u2014 enabled",
+      "surface": "native",
+      "sha256": "091590c66690199859f701cb2645622fbe2d040f357c6f3e0966bc47802fa38e"
+    },
+    {
+      "file": "implemented/11-stop-all-confirmation.png",
+      "title": "Stop all services confirmation",
+      "surface": "native",
+      "sha256": "3b675579530ed0a02595105223d18fd3238c09c2af5183ba9a1fe9737dc6c605"
+    },
+    {
+      "file": "implemented/12-application-menu.png",
+      "title": "Application menu",
+      "surface": "native",
+      "sha256": "928489e9751d14e7a11354a398c21a174a6398f20030ddac892a3702869d1511"
+    },
+    {
+      "file": "implemented/13-tray-menu.png",
+      "title": "Tray menu",
+      "surface": "native",
+      "sha256": "1e97d3cbe4ba8be7854140259688b03006bb6d5c3544630d901dd8a1b3764b66"
+    },
+    {
+      "file": "implemented/14-inbox-empty.png",
+      "title": "Empty inbox",
+      "surface": "native",
+      "sha256": "d922f0d133b270ab8552bb89b7283f134d40204775d6de9442b5a6a660a23587"
+    },
+    {
+      "file": "implemented/15-connection-error.png",
+      "title": "Connection and locked-encryption state",
+      "surface": "native",
+      "sha256": "b0018f834bbb992af3b10c83e634a5f0ec9625680a02437f902cef11e02e8e79"
+    },
+    {
+      "file": "implemented/16-review-uncertain.png",
+      "title": "Review an uncertain send",
+      "surface": "native",
+      "sha256": "5992dbe87986b67e9ff998bf36cb95ac27e247193fbdfdb0de37850a2ea7a354"
+    },
+    {
+      "file": "implemented/17-web-status-desktop.png",
+      "title": "Web status \u2014 desktop",
+      "surface": "web",
+      "sha256": "89540faebe5be9d9fee57ce6ca180476a595afce5348a179608d77c7d2dc7e37"
+    },
+    {
+      "file": "implemented/18-web-status-mobile.png",
+      "title": "Web status \u2014 mobile",
+      "surface": "web",
+      "sha256": "16367cae851143f029220ac0eeb7fb9f3cc1cee3bd52ff05f098e0ff647eb30c"
+    }
+  ]
+}

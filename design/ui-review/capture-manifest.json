@@ -1,0 +1,96 @@
+{
+  "data": "fictional fixtures only",
+  "native_platform": "wayland",
+  "screens": [
+    {
+      "file": "current/01-inbox.png",
+      "title": "Inbox and selected notification",
+      "surface": "native"
+    },
+    {
+      "file": "current/02-devices.png",
+      "title": "Device list",
+      "surface": "native"
+    },
+    {
+      "file": "current/03-outbox.png",
+      "title": "Outbox and action details",
+      "surface": "native"
+    },
+    {
+      "file": "current/04-compose-note.png",
+      "title": "Compose Note",
+      "surface": "native"
+    },
+    {
+      "file": "current/05-compose-link.png",
+      "title": "Compose Link",
+      "surface": "native"
+    },
+    {
+      "file": "current/06-compose-sms.png",
+      "title": "Compose Sms",
+      "surface": "native"
+    },
+    {
+      "file": "current/07-review-approval.png",
+      "title": "Review and approve an exact message",
+      "surface": "native"
+    },
+    {
+      "file": "current/08-edit-action.png",
+      "title": "Edit an action",
+      "surface": "native"
+    },
+    {
+      "file": "current/09-web-settings-disabled.png",
+      "title": "Web hosting settings \u2014 disabled",
+      "surface": "native"
+    },
+    {
+      "file": "current/10-web-settings-enabled.png",
+      "title": "Web hosting settings \u2014 enabled",
+      "surface": "native"
+    },
+    {
+      "file": "current/11-stop-all-confirmation.png",
+      "title": "Stop all services confirmation",
+      "surface": "native"
+    },
+    {
+      "file": "current/12-application-menu.png",
+      "title": "Application menu",
+      "surface": "native"
+    },
+    {
+      "file": "current/13-tray-menu.png",
+      "title": "Tray menu",
+      "surface": "native"
+    },
+    {
+      "file": "current/14-inbox-empty.png",
+      "title": "Empty inbox",
+      "surface": "native"
+    },
+    {
+      "file": "current/15-connection-error.png",
+      "title": "Connection and locked-encryption state",
+      "surface": "native"
+    },
+    {
+      "file": "current/16-review-uncertain.png",
+      "title": "Review an uncertain send",
+      "surface": "native"
+    },
+    {
+      "file": "current/17-web-status-desktop.png",
+      "title": "Web status \u2014 desktop",
+      "surface": "web"
+    },
+    {
+      "file": "current/18-web-status-mobile.png",
+      "title": "Web status \u2014 mobile",
+      "surface": "web"
+    }
+  ]
+}

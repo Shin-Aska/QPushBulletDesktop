@@ -1,0 +1,92 @@
+[
+  {
+    "file": "current/01-inbox.png",
+    "width": 1000,
+    "height": 660
+  },
+  {
+    "file": "current/02-devices.png",
+    "width": 1000,
+    "height": 660
+  },
+  {
+    "file": "current/03-outbox.png",
+    "width": 1000,
+    "height": 660
+  },
+  {
+    "file": "current/04-compose-note.png",
+    "width": 600,
+    "height": 650
+  },
+  {
+    "file": "current/05-compose-link.png",
+    "width": 600,
+    "height": 650
+  },
+  {
+    "file": "current/06-compose-sms.png",
+    "width": 600,
+    "height": 650
+  },
+  {
+    "file": "current/07-review-approval.png",
+    "width": 680,
+    "height": 730
+  },
+  {
+    "file": "current/08-edit-action.png",
+    "width": 600,
+    "height": 650
+  },
+  {
+    "file": "current/09-web-settings-disabled.png",
+    "width": 277,
+    "height": 220
+  },
+  {
+    "file": "current/10-web-settings-enabled.png",
+    "width": 277,
+    "height": 220
+  },
+  {
+    "file": "current/11-stop-all-confirmation.png",
+    "width": 500,
+    "height": 110
+  },
+  {
+    "file": "current/12-application-menu.png",
+    "width": 242,
+    "height": 152
+  },
+  {
+    "file": "current/13-tray-menu.png",
+    "width": 120,
+    "height": 50
+  },
+  {
+    "file": "current/14-inbox-empty.png",
+    "width": 1000,
+    "height": 660
+  },
+  {
+    "file": "current/15-connection-error.png",
+    "width": 1000,
+    "height": 660
+  },
+  {
+    "file": "current/16-review-uncertain.png",
+    "width": 680,
+    "height": 730
+  },
+  {
+    "file": "current/17-web-status-desktop.png",
+    "width": 1440,
+    "height": 914
+  },
+  {
+    "file": "current/18-web-status-mobile.png",
+    "width": 500,
+    "height": 758
+  }
+]

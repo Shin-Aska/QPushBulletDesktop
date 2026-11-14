@@ -1,0 +1,23 @@
+{
+  "selected_mockups": 9,
+  "current_captures": 18,
+  "gallery_images": 27,
+  "missing_local_files": [],
+  "selected_images_match_provenance": true,
+  "new_mockup_dimensions": {
+    "proposed/01-inbox-slate-jade-v5.png": [
+      1585,
+      992
+    ],
+    "proposed/02-devices-slate-jade-v2.png": [
+      1568,
+      1003
+    ],
+    "proposed/09-device-management-flows.png": [
+      1458,
+      1079
+    ]
+  },
+  "generation_records": 17,
+  "scope": "Target-product mockups and design documentation; application, real devices, credentials, and database unchanged."
+}

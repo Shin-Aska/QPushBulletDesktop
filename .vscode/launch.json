@@ -1,0 +1,122 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "pbdesk: Desktop",
+      "type": "debugpy",
+      "request": "launch",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "module": "pbdesk.desktop",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "subProcess": false,
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src",
+        "PYTHONUNBUFFERED": "1",
+        "PBDESK_LIFECYCLE": "foreground",
+        "PBDESK_STATE_DIR": "${workspaceFolder}/.runtime/editor",
+        "PBDESK_CORE_PORT": "18765",
+        "PBDESK_WEB_PORT": "18766",
+        "PBDESK_APPLICATION_DIR": "${workspaceFolder}"
+      }
+    },
+    {
+      "name": "pbdesk: Desktop (demo)",
+      "type": "debugpy",
+      "request": "launch",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "module": "pbdesk.desktop",
+      "args": [
+        "--demo"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "subProcess": false,
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src",
+        "PYTHONUNBUFFERED": "1",
+        "PBDESK_LIFECYCLE": "foreground",
+        "PBDESK_STATE_DIR": "${workspaceFolder}/.runtime/editor-demo",
+        "PBDESK_CORE_PORT": "18767",
+        "PBDESK_WEB_PORT": "18768",
+        "PBDESK_APPLICATION_DIR": "${workspaceFolder}/.runtime/editor-demo"
+      }
+    },
+    {
+      "name": "pbdesk: Core (demo, foreground)",
+      "type": "debugpy",
+      "request": "launch",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "module": "pbdesk.cli",
+      "args": [
+        "--foreground",
+        "--demo"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "subProcess": false,
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src",
+        "PYTHONUNBUFFERED": "1",
+        "PBDESK_LIFECYCLE": "foreground",
+        "PBDESK_STATE_DIR": "${workspaceFolder}/.runtime/editor-demo",
+        "PBDESK_CORE_PORT": "18767",
+        "PBDESK_WEB_PORT": "18768",
+        "PBDESK_APPLICATION_DIR": "${workspaceFolder}/.runtime/editor-demo"
+      }
+    },
+    {
+      "name": "pbdesk: Web status (standalone)",
+      "type": "debugpy",
+      "request": "launch",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "module": "pbdesk.web",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "subProcess": false,
+      "jinja": true,
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src",
+        "PYTHONUNBUFFERED": "1",
+        "PBDESK_LIFECYCLE": "foreground",
+        "PBDESK_STATE_DIR": "${workspaceFolder}/.runtime/editor-demo",
+        "PBDESK_CORE_PORT": "18767",
+        "PBDESK_WEB_PORT": "18768",
+        "PBDESK_APPLICATION_DIR": "${workspaceFolder}/.runtime/editor-demo"
+      }
+    },
+    {
+      "name": "pbdesk: Tests (headless)",
+      "type": "debugpy",
+      "request": "launch",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "module": "pytest",
+      "args": [
+        "-q",
+        "-m",
+        "not integration"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "subProcess": false,
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src",
+        "PYTHONUNBUFFERED": "1",
+        "PBDESK_LIFECYCLE": "foreground",
+        "PBDESK_STATE_DIR": "${workspaceFolder}/.runtime/editor-demo",
+        "PBDESK_CORE_PORT": "18767",
+        "PBDESK_WEB_PORT": "18768",
+        "QT_QPA_PLATFORM": "offscreen",
+        "PYTEST_QT_API": "pyqt6",
+        "PBDESK_APPLICATION_DIR": "${workspaceFolder}/.runtime/editor-demo"
+      }
+    }
+  ]
+}

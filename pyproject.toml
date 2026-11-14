@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools==84.2.1"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pbdesk"
+version = "0.1.0"
+description = "Private Linux Pushbullet inbox core and native desktop"
+requires-python = ">=3.14"
+dependencies = ["fastapi==0.162.5", "uvicorn==0.54.0", "pydantic==2.14.3", "SQLAlchemy==2.1.8", "alembic==1.20.1", "httpx==0.28.1", "websockets==17.4", "keyring==25.7.0", "SecretStorage==3.5.0", "jeepney==0.9.0", "cryptography==50.0.2"]
+
+[project.optional-dependencies]
+desktop = ["PyQt6==6.12.0"]
+web = ["Jinja2==3.1.6"]
+mcp = ["mcp==2.3.0"]
+dev = ["pytest==9.2.0", "pytest-qt==4.5.0", "selenium==4.52.0", "build==1.6.1"]
+
+[project.scripts]
+pbdesk = "pbdesk.cli:desktop_main"
+pbdesk-desktop = "pbdesk.desktop.app:main"
+pbdesk-core = "pbdesk.cli:core_main"
+pbdesk-web = "pbdesk.cli:web_main"
+pbdesk-mcp = "pbdesk.cli:mcp_main"
+pbdesk-admin = "pbdesk.cli:admin_main"
+pbdesk-diagnostics = "pbdesk.cli:diagnostics_main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+pbdesk = ["storage/migrations/*.py", "storage/migrations/versions/*.py", "web/templates/**/*.html", "web/templates/*.html", "web/static/**/*", "web/vendor-manifest.json"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+markers = ["integration: opt-in installed-browser integration tests"]

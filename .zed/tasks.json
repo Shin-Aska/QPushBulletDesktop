@@ -1,0 +1,115 @@
+[
+  {
+    "label": "pbdesk: Desktop",
+    "command": ".venv/bin/python",
+    "args": [
+      "-m",
+      "pbdesk.desktop"
+    ],
+    "cwd": "$ZED_WORKTREE_ROOT",
+    "env": {
+      "PYTHONPATH": "$ZED_WORKTREE_ROOT/src",
+      "PYTHONUNBUFFERED": "1",
+      "PBDESK_LIFECYCLE": "foreground",
+      "PBDESK_STATE_DIR": "$ZED_WORKTREE_ROOT/.runtime/editor",
+      "PBDESK_CORE_PORT": "18765",
+      "PBDESK_WEB_PORT": "18766",
+      "PBDESK_APPLICATION_DIR": "$ZED_WORKTREE_ROOT"
+    },
+    "use_new_terminal": false,
+    "allow_concurrent_runs": false,
+    "reveal": "always"
+  },
+  {
+    "label": "pbdesk: Desktop (demo)",
+    "command": ".venv/bin/python",
+    "args": [
+      "-m",
+      "pbdesk.desktop",
+      "--demo"
+    ],
+    "cwd": "$ZED_WORKTREE_ROOT",
+    "env": {
+      "PYTHONPATH": "$ZED_WORKTREE_ROOT/src",
+      "PYTHONUNBUFFERED": "1",
+      "PBDESK_LIFECYCLE": "foreground",
+      "PBDESK_STATE_DIR": "$ZED_WORKTREE_ROOT/.runtime/editor-demo",
+      "PBDESK_CORE_PORT": "18767",
+      "PBDESK_WEB_PORT": "18768",
+      "PBDESK_APPLICATION_DIR": "$ZED_WORKTREE_ROOT/.runtime/editor-demo"
+    },
+    "use_new_terminal": false,
+    "allow_concurrent_runs": false,
+    "reveal": "always"
+  },
+  {
+    "label": "pbdesk: Core (demo, foreground)",
+    "command": ".venv/bin/python",
+    "args": [
+      "-m",
+      "pbdesk.cli",
+      "--foreground",
+      "--demo"
+    ],
+    "cwd": "$ZED_WORKTREE_ROOT",
+    "env": {
+      "PYTHONPATH": "$ZED_WORKTREE_ROOT/src",
+      "PYTHONUNBUFFERED": "1",
+      "PBDESK_LIFECYCLE": "foreground",
+      "PBDESK_STATE_DIR": "$ZED_WORKTREE_ROOT/.runtime/editor-demo",
+      "PBDESK_CORE_PORT": "18767",
+      "PBDESK_WEB_PORT": "18768",
+      "PBDESK_APPLICATION_DIR": "$ZED_WORKTREE_ROOT/.runtime/editor-demo"
+    },
+    "use_new_terminal": false,
+    "allow_concurrent_runs": false,
+    "reveal": "always"
+  },
+  {
+    "label": "pbdesk: Web status (standalone)",
+    "command": ".venv/bin/python",
+    "args": [
+      "-m",
+      "pbdesk.web"
+    ],
+    "cwd": "$ZED_WORKTREE_ROOT",
+    "env": {
+      "PYTHONPATH": "$ZED_WORKTREE_ROOT/src",
+      "PYTHONUNBUFFERED": "1",
+      "PBDESK_LIFECYCLE": "foreground",
+      "PBDESK_STATE_DIR": "$ZED_WORKTREE_ROOT/.runtime/editor-demo",
+      "PBDESK_CORE_PORT": "18767",
+      "PBDESK_WEB_PORT": "18768",
+      "PBDESK_APPLICATION_DIR": "$ZED_WORKTREE_ROOT/.runtime/editor-demo"
+    },
+    "use_new_terminal": false,
+    "allow_concurrent_runs": false,
+    "reveal": "always"
+  },
+  {
+    "label": "pbdesk: Tests (headless)",
+    "command": ".venv/bin/python",
+    "args": [
+      "-m",
+      "pytest",
+      "-q",
+      "-m",
+      "not integration"
+    ],
+    "cwd": "$ZED_WORKTREE_ROOT",
+    "env": {
+      "PYTHONPATH": "$ZED_WORKTREE_ROOT/src",
+      "PYTHONUNBUFFERED": "1",
+      "PBDESK_LIFECYCLE": "foreground",
+      "PBDESK_STATE_DIR": "$ZED_WORKTREE_ROOT/.runtime/editor-demo",
+      "PBDESK_CORE_PORT": "18767",
+      "PBDESK_WEB_PORT": "18768",
+      "QT_QPA_PLATFORM": "offscreen",
+      "PYTEST_QT_API": "pyqt6",
+      "PBDESK_APPLICATION_DIR": "$ZED_WORKTREE_ROOT/.runtime/editor-demo"
+    },
+    "use_new_terminal": false,
+    "allow_concurrent_runs": false,
+    "reveal": "always"
+  }
+]

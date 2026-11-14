@@ -1,0 +1,143 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "pbdesk: Desktop",
+      "type": "process",
+      "command": "${workspaceFolder}/.venv/bin/python",
+      "args": [
+        "-m",
+        "pbdesk.desktop"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "PYTHONPATH": "${workspaceFolder}/src",
+          "PYTHONUNBUFFERED": "1",
+          "PBDESK_LIFECYCLE": "foreground",
+          "PBDESK_STATE_DIR": "${workspaceFolder}/.runtime/editor",
+          "PBDESK_CORE_PORT": "18765",
+          "PBDESK_WEB_PORT": "18766",
+          "PBDESK_APPLICATION_DIR": "${workspaceFolder}"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "pbdesk: Desktop (demo)",
+      "type": "process",
+      "command": "${workspaceFolder}/.venv/bin/python",
+      "args": [
+        "-m",
+        "pbdesk.desktop",
+        "--demo"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "PYTHONPATH": "${workspaceFolder}/src",
+          "PYTHONUNBUFFERED": "1",
+          "PBDESK_LIFECYCLE": "foreground",
+          "PBDESK_STATE_DIR": "${workspaceFolder}/.runtime/editor-demo",
+          "PBDESK_CORE_PORT": "18767",
+          "PBDESK_WEB_PORT": "18768",
+          "PBDESK_APPLICATION_DIR": "${workspaceFolder}/.runtime/editor-demo"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "pbdesk: Core (demo, foreground)",
+      "type": "process",
+      "command": "${workspaceFolder}/.venv/bin/python",
+      "args": [
+        "-m",
+        "pbdesk.cli",
+        "--foreground",
+        "--demo"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "PYTHONPATH": "${workspaceFolder}/src",
+          "PYTHONUNBUFFERED": "1",
+          "PBDESK_LIFECYCLE": "foreground",
+          "PBDESK_STATE_DIR": "${workspaceFolder}/.runtime/editor-demo",
+          "PBDESK_CORE_PORT": "18767",
+          "PBDESK_WEB_PORT": "18768",
+          "PBDESK_APPLICATION_DIR": "${workspaceFolder}/.runtime/editor-demo"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "pbdesk: Web status (standalone)",
+      "type": "process",
+      "command": "${workspaceFolder}/.venv/bin/python",
+      "args": [
+        "-m",
+        "pbdesk.web"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "PYTHONPATH": "${workspaceFolder}/src",
+          "PYTHONUNBUFFERED": "1",
+          "PBDESK_LIFECYCLE": "foreground",
+          "PBDESK_STATE_DIR": "${workspaceFolder}/.runtime/editor-demo",
+          "PBDESK_CORE_PORT": "18767",
+          "PBDESK_WEB_PORT": "18768",
+          "PBDESK_APPLICATION_DIR": "${workspaceFolder}/.runtime/editor-demo"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "pbdesk: Tests (headless)",
+      "type": "process",
+      "command": "${workspaceFolder}/.venv/bin/python",
+      "args": [
+        "-m",
+        "pytest",
+        "-q",
+        "-m",
+        "not integration"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "PYTHONPATH": "${workspaceFolder}/src",
+          "PYTHONUNBUFFERED": "1",
+          "PBDESK_LIFECYCLE": "foreground",
+          "PBDESK_STATE_DIR": "${workspaceFolder}/.runtime/editor-demo",
+          "PBDESK_CORE_PORT": "18767",
+          "PBDESK_WEB_PORT": "18768",
+          "QT_QPA_PLATFORM": "offscreen",
+          "PYTEST_QT_API": "pyqt6",
+          "PBDESK_APPLICATION_DIR": "${workspaceFolder}/.runtime/editor-demo"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": []
+    }
+  ]
+}

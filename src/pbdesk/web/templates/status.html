@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="status-layout">
+  <div class="intro"><p class="eyebrow">LOCAL WEB COMPANION</p><h1>Service status</h1><p class="lead">A quiet check on your desktop services.</p></div>
+  <section class="card status-card" aria-label="Service status">
+    <div class="status-card-heading"><span class="service-icon" aria-hidden="true">◈</span><div><h2>Private core</h2><p>Local service connection</p></div><span id="core-status" class="state {{ 'ready' if ready else 'unavailable' }}">{{ 'Ready' if ready else 'Unavailable' }}</span></div>
+    <dl><div><dt>Pushbullet provider</dt><dd>{{ provider }}</dd></div><div><dt>Access</dt><dd>Loopback · this computer</dd></div></dl>
+    {% if error %}<p class="status-error" role="status">{{ error }}</p>{% endif %}
+    <a id="refresh-status" class="btn btn-primary" href="/" aria-label="Refresh status"><span aria-hidden="true">↻ &nbsp;</span> Refresh status</a>
+  </section>
+  <section class="desktop-note"><div class="note-icon" aria-hidden="true">ⓘ</div><div><h2>Your messages stay in the desktop app</h2><p>Open pbdesk on this computer to read your inbox, manage devices, and review message actions.</p><p class="muted">This page provides service status only. Refresh to check again.</p></div></section>
+</div>
+{% endblock %}
