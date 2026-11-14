@@ -7,7 +7,13 @@ import time
 import httpx
 from urllib.parse import quote
 from pbdesk.pushbullet.crypto import decrypt_object, DecryptionError
-from pbdesk.pushbullet.normalize import utc_timestamp
+from pbdesk.pushbullet.normalize import utc_timestamp, media_recipients, media_urls
+
+NORMALIZER_VERSION = 2
+
+
+def thread_fingerprint(thread):
+    return hashlib.sha256(json.dumps([NORMALIZER_VERSION, thread], sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
 class SmsHistory:
@@ -72,9 +78,10 @@ class SmsHistory:
         recipients=thread.get('recipients') or []
         if not isinstance(recipients,list):
             raise ValueError('Malformed SMS recipients')
-        addresses=[r.get('address') or r.get('number') for r in recipients if isinstance(r,dict)]
+        clean_recipients=media_recipients(recipients)
+        addresses=[r.get('address') or r.get('number') for r in clean_recipients]
         addresses=[a for a in addresses if isinstance(a,str) and a]
-        names=[r.get('name') for r in recipients if isinstance(r,dict) and isinstance(r.get('name'),str)]
+        names=[r.get('name') for r in clean_recipients if isinstance(r.get('name'),str)]
         result=[]
         for row in rows:
             if not isinstance(row,dict):
@@ -99,7 +106,8 @@ class SmsHistory:
                 else:
                     raise ValueError('SMS body malformed')
             result.append(dict(message_id=str(identity),direction=direction,body=body,timestamp=float(timestamp),
-                addresses=addresses,name=', '.join(names) or None,decrypted=int(decrypted)))
+                addresses=addresses,name=', '.join(names) or None,decrypted=int(decrypted),
+                recipients=clean_recipients,image_urls=media_urls(row.get('image_urls'))))
         return result
 
     async def sync_device(self,device):
@@ -122,7 +130,7 @@ class SmsHistory:
                     # A missing latest identity must cause a re-read, never a stale skip.
                     latest=thread.get('latest')
                     has_latest=isinstance(latest,dict) and ('id' in latest or 'guid' in latest) and 'timestamp' in latest
-                    fingerprint=hashlib.sha256(json.dumps(thread,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+                    fingerprint=thread_fingerprint(thread)
                     previous=await asyncio.to_thread(self.store.sms_thread_fingerprint,account,device,conversation)
                     if has_latest and previous==fingerprint and conversation not in previous_missing:
                         continue
@@ -186,7 +194,7 @@ class SmsHistory:
                 if not isinstance(decoded.get('thread'),list):
                     continue
                 messages=self.normalize_thread(thread,decoded['thread'],True)
-                fingerprint=hashlib.sha256(json.dumps(thread,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+                fingerprint=thread_fingerprint(thread)
                 await asyncio.to_thread(self.store.merge_sms_thread,account,device,conversation,messages,fingerprint)
                 await asyncio.to_thread(self.store.delete_sms_envelope,account,device,key)
         except (DecryptionError,ValueError,TypeError):

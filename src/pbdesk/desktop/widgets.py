@@ -51,6 +51,10 @@ def make_icon(kind, color=None, size=18):
         painter.drawArc(QRectF(3.5 * s, 3.5 * s, 11 * s, 11 * s), 35 * 16, 290 * 16)
         painter.drawLine(int(13.5 * s), int(3.5 * s), int(14 * s), int(7 * s))
         painter.drawLine(int(14 * s), int(7 * s), int(10.6 * s), int(6.6 * s))
+    elif kind == 'summary':
+        painter.drawRoundedRect(QRectF(4 * s, 2.5 * s, 10 * s, 13 * s), 1 * s, 1 * s)
+        for y, end in ((6, 11.5), (9, 11.5), (12, 9)):
+            painter.drawLine(int(6.5 * s), int(y * s), int(end * s), int(y * s))
     elif kind == 'brand':
         painter.setBrush(QColor(color))
         painter.setPen(Qt.PenStyle.NoPen)
@@ -161,7 +165,11 @@ class NotificationDelegate(QStyledItemDelegate):
         _draw_row(painter, option, c)
 
         pad_x, pad_y = 14, 11
-        inner_w = rect.width() - pad_x * 2
+        icon = index.data(Qt.ItemDataRole.DecorationRole)
+        if isinstance(icon, QIcon) and not icon.isNull():
+            icon.paint(painter, QRect(rect.left() + 12, rect.top() + 12, 30, 30))
+            pad_x = 52
+        inner_w = rect.width() - pad_x - 14
         title_font = QFont(option.font)
         title_font.setWeight(QFont.Weight.DemiBold)
         meta_font = _small_font(option.font)
@@ -174,7 +182,7 @@ class NotificationDelegate(QStyledItemDelegate):
         time_fm = QFontMetrics(meta_font)
         time_w = time_fm.horizontalAdvance(time_text) + 8
         painter.setPen(QColor(c['muted']))
-        painter.drawText(QRect(rect.right() - pad_x - time_w, rect.top() + pad_y, time_w, 20), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, time_text)
+        painter.drawText(QRect(rect.right() - 14 - time_w, rect.top() + pad_y, time_w, 20), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, time_text)
 
         title = item.get('title') or '(Untitled)'
         painter.setFont(title_font)
@@ -192,7 +200,7 @@ class NotificationDelegate(QStyledItemDelegate):
         kind = (item.get('type') or 'note').replace('_', ' ').title()
         bg, fg = ((c['highlight'], c['highlighted_text']) if selected
                   else (c['alternate'], c['text']))
-        _draw_pill(painter, QRectF(rect.left() + pad_x, rect.bottom() - 28, 120, 20), kind, bg, fg)
+        _draw_pill(painter, QRectF(rect.left() + 14, rect.bottom() - 28, 120, 20), kind, bg, fg)
         painter.restore()
 
 
@@ -220,7 +228,11 @@ class ConversationDelegate(QStyledItemDelegate):
         _draw_row(painter, option, c)
 
         pad_x, pad_y = 14, 12
-        inner_w = rect.width() - pad_x * 2
+        icon = index.data(Qt.ItemDataRole.DecorationRole)
+        if isinstance(icon, QIcon) and not icon.isNull():
+            icon.paint(painter, QRect(rect.left() + 12, rect.top() + 14, 36, 36))
+            pad_x = 60
+        inner_w = rect.width() - pad_x - 14
         title_font = QFont(option.font)
         title_font.setWeight(QFont.Weight.DemiBold)
         meta_font = _small_font(option.font)
@@ -232,7 +244,7 @@ class ConversationDelegate(QStyledItemDelegate):
         time_fm = QFontMetrics(meta_font)
         time_w = time_fm.horizontalAdvance(time_text) + 8
         painter.setPen(QColor(c['muted']))
-        painter.drawText(QRect(rect.right() - pad_x - time_w, rect.top() + pad_y, time_w, 20), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, time_text)
+        painter.drawText(QRect(rect.right() - 14 - time_w, rect.top() + pad_y, time_w, 20), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, time_text)
 
         title = row.get('title') or row.get('id') or 'Conversation'
         painter.setFont(title_font)

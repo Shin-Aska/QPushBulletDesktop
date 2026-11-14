@@ -1,8 +1,10 @@
 """Native SMS conversations. Phone history and local send requests stay distinct."""
 from dataclasses import dataclass
 from datetime import datetime
+from html import escape
 import re
 import uuid
+import weakref
 
 from PyQt6.QtCore import QSize, Qt, QTimer, pyqtSignal
 from PyQt6 import sip
@@ -13,6 +15,7 @@ from PyQt6.QtWidgets import (
     QTextEdit, QVBoxLayout, QWidget,
 )
 
+from .media import attachment_revision, contact_icon, inline_image, RemoteImage
 from .actions import PLAINTEXT_NOTICE, STATE_LABELS, plain_label
 from .theme import colors, primary, theme_signals
 from .widgets import ConversationDelegate, card_frame, divider_line, make_icon
@@ -93,6 +96,7 @@ class SmsPage(QWidget):
     review_requested = pyqtSignal(dict)
     action_created = pyqtSignal(dict)
     activity_requested = pyqtSignal()
+    ai_context_changed = pyqtSignal()
 
     def __init__(self, worker, parent=None):
         super().__init__(parent)
@@ -182,6 +186,10 @@ class SmsPage(QWidget):
         chat_header = QWidget()
         chat_header_layout = QHBoxLayout(chat_header)
         chat_header_layout.setContentsMargins(18, 12, 18, 12)
+        self.avatar = QLabel()
+        self.avatar.setFixedSize(36, 36)
+        self.avatar.setAccessibleName("Conversation avatar")
+        chat_header_layout.addWidget(self.avatar)
         header_titles = QVBoxLayout()
         header_titles.setSpacing(2)
         self.heading = plain_label("Your SMS conversations")
@@ -191,6 +199,12 @@ class SmsPage(QWidget):
         self.context_label.setObjectName("smsMeta")
         header_titles.addWidget(self.context_label)
         chat_header_layout.addLayout(header_titles, 1)
+        self._avatar_key = None
+        self.avatar_remote = RemoteImage(worker, {}, valid=self._media_validator())
+        self.avatar_remote.setMaximumWidth(180)
+        self.avatar_remote.set_preview_bounds(72, 72)
+        self.avatar_remote.image_loaded.connect(self._remote_avatar_loaded)
+        chat_header_layout.addWidget(self.avatar_remote)
         right_layout.addWidget(chat_header)
         right_layout.addWidget(divider_line())
 
@@ -227,6 +241,9 @@ class SmsPage(QWidget):
         self.composer.setAccessibleName("SMS message draft")
         self.composer.setFixedHeight(86)
         self.composer.textChanged.connect(self._draft_changed)
+        self.assistant_layout = QVBoxLayout()
+        self.assistant_layout.setContentsMargins(0, 0, 0, 0)
+        composer_layout.addLayout(self.assistant_layout)
         composer_layout.addWidget(self.composer)
         self.feedback = plain_label()
         self.feedback.setObjectName("smsMeta")
@@ -261,10 +278,100 @@ class SmsPage(QWidget):
         self._update_controls()
         theme_signals(QApplication.instance()).changed.connect(self._refresh_theme)
 
+    def ai_context(self):
+        """Capture an insertion token without exposing thumbnail/attachment metadata."""
+        if (not self.account_known or not self.account_id or not self.selected_device_id or
+                not self.current_thread or self.current_thread[0] != "history" or self._current_pending()):
+            return None
+        thread = self._threads.get(self.current_thread)
+        if not thread:
+            return None
+        token = {"account_id": self.account_id, "device_id": self.selected_device_id,
+            "thread": list(self.current_thread), "recipient": self._route(),
+            "draft": self.composer.toPlainText(),
+            "composer_version": self._drafts.get(self._key(), ("", 0))[1],
+            "context_version": self._render_generation,
+            "message_ids": [item.get("id") for item in thread["messages"][-100:]]}
+        device = next((item for item in self.devices if item["id"] == self.selected_device_id), {})
+        reason = ''
+        if not self._route() or not E164.fullmatch(self._route()):
+            reason = 'Group or unknown senders are read-only. You can copy this draft; choose New message with an explicit number to send.'
+        elif not device.get('active') or not device.get('can_sms'):
+            reason = 'This phone is history only. You can copy this draft; choose an active SMS-capable phone to send.'
+        elif not self.capabilities.get('features', {}).get('send_sms') or not self.capabilities.get('send_ready'):
+            reason = self.capabilities.get('send_unavailable_reason') or 'SMS sending is currently unavailable. You can copy this draft.'
+        return {"account_id": self.account_id, "device_id": self.selected_device_id,
+            "conversation_id": self.current_thread[1], "token": token,
+            "can_reply": not reason, "reply_unavailable_reason": reason}
+
+    def insert_ai_draft(self, text, token):
+        """Only a still-current explicit insertion can replace the captured draft."""
+        context = self.ai_context()
+        if (not context or context["token"] != token or not isinstance(text, str) or
+                not text.strip() or len(text) > 65536 or self._current_pending()):
+            return False
+        self.composer.setPlainText(text)
+        self.composer.setFocus()
+        return True
+
+    @staticmethod
+    def _thread_recipients(thread):
+        messages = thread.get("messages", [])
+        recipients = next((item.get("recipients") for item in reversed(messages) if item.get("recipients")), [])
+        if recipients:
+            return recipients
+        return [{"address": address} for address in sorted({str(address) for item in messages for address in item.get("addresses", [])})]
+
+    def _media_validator(self, generation=None):
+        page_ref = weakref.ref(self)
+        def valid():
+            page = page_ref()
+            return (page is not None and not sip.isdeleted(page) and
+                (page._avatar_key == page._key() if generation is None else page._render_generation == generation))
+        return valid
+
+    def _remote_avatar_loaded(self, image):
+        if self._avatar_key != self._key():
+            return
+        from PyQt6.QtGui import QIcon, QPixmap
+        icon = QIcon(QPixmap.fromImage(image))
+        self.avatar.setPixmap(icon.pixmap(36, 36))
+        for index in range(self.threads.count()):
+            item = self.threads.item(index)
+            if item.data(Qt.ItemDataRole.UserRole) == self.current_thread:
+                item.setIcon(icon)
+        self.avatar_remote.hide()
+
+    def _sync_remote_avatar(self, thread):
+        self._avatar_key = self._key()
+        recipients = self._thread_recipients(thread)
+        reference = None
+        if len(recipients) == 1 and recipients[0].get('image_url') and inline_image(recipients[0].get('thumbnail')) is None:
+            message = next((item for item in reversed(thread.get('messages', []))
+                if len(item.get('recipients', [])) == 1 and item['recipients'][0].get('image_url') == recipients[0]['image_url']), None)
+            if message and message.get('id') is not None:
+                reference = {'account_id': self.account_id, 'kind': 'contact', 'message_id': message['id'],
+                    'index': 0, 'revision': attachment_revision(recipients[0]['image_url'])}
+        self.avatar_remote.set_reference(reference)
+        if reference:
+            if self.avatar_remote.image is not None:
+                self._remote_avatar_loaded(self.avatar_remote.image)
+            elif not self.avatar_remote.request_id:
+                self.avatar_remote.status.setText('Contact image · load to display')
+                self.avatar_remote.load_button.setText('Load contact image')
+
     def _refresh_theme(self):
         # Global semantic QSS repaints existing bubbles without rebuilding the
         # timeline, so drafts, selections, and scroll anchors remain intact.
         self.refresh_button.setIcon(make_icon("refresh", colors()["text"], 14))
+        for index in range(self.threads.count()):
+            row = self.threads.item(index)
+            key = row.data(Qt.ItemDataRole.UserRole)
+            thread = self._threads.get(key, {})
+            row.setIcon(contact_icon(self._thread_recipients(thread), self._thread_title(key, thread)))
+        thread = self._threads.get(self.current_thread, {})
+        self.avatar.setPixmap(contact_icon(self._thread_recipients(thread), self.heading.text()).pixmap(36, 36))
+        self._sync_remote_avatar(thread)
         self.threads.viewport().update()
 
     def _key(self):
@@ -347,6 +454,9 @@ class SmsPage(QWidget):
         return "account_id" not in part or (self.account_known and part["account_id"] == self.account_id)
 
     def _reset_account(self, account):
+        if hasattr(self.worker, '_media_cache'):
+            self.worker._media_cache.clear()
+            self.worker._media_cache_account = account
         self.account_id, self.account_known = account, True
         self.devices, self.actions, self.sms_cache = [], [], {}
         self._drafts.clear()
@@ -479,6 +589,7 @@ class SmsPage(QWidget):
         return name or thread.get("recipient") or (", ".join(addresses) if addresses else "Unknown sender")
 
     def _populate_threads(self):
+        old_scroll = self.threads.verticalScrollBar().value()
         self.threads.blockSignals(True)
         self.threads.clear()
         query = self.search.text().casefold()
@@ -488,12 +599,13 @@ class SmsPage(QWidget):
         for key, thread in sorted(self._threads.items(), key=recent, reverse=True):
             title = self._thread_title(key, thread)
             records = thread["messages"]
-            preview = str(records[-1].get("body", "")) if records else "Local request · review in Activity"
+            preview = (str(records[-1].get("body", "")) or ("Image attachment" if records[-1].get("image_urls") else "")) if records else "Local request · review in Activity"
             searchable = title + " " + " ".join(str(item.get("body", "")) for item in records)
             if query and query not in searchable.casefold():
                 continue
             item = QListWidgetItem(title + "\n" + preview[:90].replace("\n", " "))
             item.setData(Qt.ItemDataRole.UserRole, key)
+            item.setIcon(contact_icon(self._thread_recipients(thread), title))
             last_ts = records[-1].get("timestamp") if records else (thread["actions"][-1].get("created_at") if thread["actions"] else None)
             item.setData(Qt.ItemDataRole.UserRole + 1, {
                 "title": title,
@@ -504,6 +616,7 @@ class SmsPage(QWidget):
             if key == self.current_thread:
                 self.threads.setCurrentItem(item)
         self.threads.blockSignals(False)
+        self.threads.verticalScrollBar().setValue(old_scroll)
 
     def _thread_changed(self, item, previous=None):
         if item is not None:
@@ -584,6 +697,7 @@ class SmsPage(QWidget):
         self.feedback.setText("The result is uncertain. Reconcile the exact original request; no SMS is sent by this button." if state == "ambiguous" else
             "Saving a pending request. Nothing is sent until you review and approve it." if pending else self.validation_message())
         self.refresh_button.setEnabled(bool(self.selected_device_id) and bool(self.capabilities.get("features", {}).get("sms_history")))
+        self.ai_context_changed.emit()
 
     def submit(self):
         record = self._current_pending()
@@ -645,15 +759,37 @@ class SmsPage(QWidget):
         sync = self.sms_cache.get(self.selected_device_id, {}).get("sync", {})
         state = sync.get("state")
         last = _time(sync.get("last_success_at"))
-        text = "Stored phone history" + (" · " + last.strftime("%d %b, %H:%M") if last else " · not yet synced")
-        if state and state not in {"ready", "ok", "synced"}:
-            text += " · " + str(state).replace("_", " ")
+        unavailable = sync.get("unavailable_count", 0)
+        unavailable = unavailable if isinstance(unavailable, int) and not isinstance(unavailable, bool) and unavailable > 0 else 0
+        failed = bool(sync.get("error")) or state == "error"
+        label = {"partial": "Partial", "refreshing": "Refreshing", "queued": "Refresh queued",
+            "locked": "History locked", "rate_limited": "Rate limited"}.get(state,
+                "Refresh unavailable" if failed else "Stored history")
+        text = (last.strftime("%d %b, %H:%M") if last else "Not yet synced") + " · " + label
+        details = ["Stored phone history.", "Last successful sync: " + last.strftime("%d %b %Y, %H:%M") + "."
+            if last else "No successful history sync has been recorded."]
+        if state == "partial":
+            details.append("Available conversations synced; some history unavailable. Cached messages are retained.")
+        elif failed or state in {"locked", "rate_limited"}:
+            details.append("Refresh unavailable; cached history kept.")
+        elif state in {"refreshing", "queued"}:
+            details.append("A history refresh is " + ("in progress" if state == "refreshing" else "queued") + "; cached messages remain available.")
+        if unavailable:
+            text += " · " + str(unavailable) + " unavailable"
+            details.append(str(unavailable) + (" conversation unavailable." if unavailable == 1 else " conversations unavailable."))
+        if state:
+            details.append("Sync state: " + str(state).replace("_", " ") + ".")
         if sync.get("error"):
-            text += (" · available conversations synced; some history unavailable" if state == "partial" else
-                     " · refresh unavailable; cached history kept")
-        if sync.get("unavailable_count"):
-            text += " · " + str(sync["unavailable_count"]) + " conversations unavailable"
-        self.sync_status.setText(text if self.selected_device_id else "Choose a phone to read SMS history.")
+            details.append("Details: " + str(sync["error"]))
+        if not self.selected_device_id:
+            text = "Choose a phone"
+            details = ["Choose a phone to read retained SMS history."]
+        description = "\n".join(details)
+        self.sync_status.setText(text)
+        self.sync_status.setAccessibleDescription(description)
+        # A controlled wrapper prevents Qt from interpreting provider detail as
+        # tooltip markup; accessibility keeps the complete plain-text version.
+        self.sync_status.setToolTip("<qt>" + escape(description).replace("\n", "<br>") + "</qt>")
 
     def _anchor(self):
         value = self.timeline.verticalScrollBar().value()
@@ -667,6 +803,8 @@ class SmsPage(QWidget):
         is_new = bool(self.current_thread and self.current_thread[0] == "new")
         self.recipient.setVisible(is_new)
         self.heading.setText("New message" if is_new else self._thread_title(self.current_thread, thread) if self.current_thread in self._threads else "Your SMS conversations")
+        self.avatar.setPixmap(contact_icon(self._thread_recipients(thread), self.heading.text()).pixmap(36, 36))
+        self._sync_remote_avatar(thread)
         route = thread.get("recipient")
         self.context_label.setText("Enter the complete phone number, including + and country code." if is_new else
             ("Phone history · " + route if route else "Phone history is read-only here. Use New message with an explicit number.") if thread["messages"] else
@@ -708,6 +846,14 @@ class SmsPage(QWidget):
             body = MessageText(str(message.get("body") or ""))
             body.setAccessibleName("Outgoing SMS" if outgoing else "Incoming SMS")
             bubble_layout.addWidget(body)
+            for index, unused in enumerate(message.get("image_urls", [])[:16]):
+                media = RemoteImage(self.worker, {"account_id": self.account_id,
+                    "kind": "sms", "message_id": message["id"], "index": index,
+                    "revision": attachment_revision(unused)},
+                    valid=self._media_validator(generation))
+                media.geometry_changing.connect(self._media_anchor)
+                media.geometry_changed.connect(self._restore_media_anchor)
+                bubble_layout.addWidget(media)
             key = ("sms", str(message.get("id") or message.get("message_id")))
             row.setProperty("messageId", key[1])
             bubble.setProperty("direction", "outgoing" if outgoing else "incoming")
@@ -750,6 +896,24 @@ class SmsPage(QWidget):
             else:
                 scroll.setValue(old_value)
         # Native wrapping settles after the viewport's layout pass.
+        QTimer.singleShot(0, restore)
+        QTimer.singleShot(30, restore)
+
+    def _media_anchor(self):
+        scroll = self.timeline.verticalScrollBar()
+        self._image_anchor = (self._anchor(), scroll.value(), scroll.maximum() - scroll.value() < 48)
+
+    def _restore_media_anchor(self):
+        state = getattr(self, '_image_anchor', None)
+        generation = self._render_generation
+        def restore():
+            if sip.isdeleted(self) or generation != self._render_generation or state is None:
+                return
+            self.timeline_layout.activate()
+            anchor, old_value, near_bottom = state
+            scroll = self.timeline.verticalScrollBar()
+            row = next((row for key, row in self._rows if anchor and key == anchor[0]), None)
+            scroll.setValue(scroll.maximum() if near_bottom else row.y() - anchor[1] if row else old_value)
         QTimer.singleShot(0, restore)
         QTimer.singleShot(30, restore)
 

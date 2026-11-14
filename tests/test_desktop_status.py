@@ -1,4 +1,5 @@
 """Status timing and account/core boundaries, with only private fake data."""
+from test_desktop import isolated_desktop_preferences
 from PyQt6.QtCore import QObject, QPoint, Qt, pyqtSignal
 import pytest
 

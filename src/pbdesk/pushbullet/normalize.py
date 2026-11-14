@@ -3,6 +3,43 @@ from datetime import datetime, timezone
 import json
 import math
 
+# Keep only bounded public media metadata, never complete provider objects.
+MAX_INLINE_IMAGE = 32768
+MAX_MEDIA_URL = 4096
+
+
+def media_string(value, limit):
+    return value if isinstance(value, str) and 0 < len(value) <= limit else None
+
+
+def media_recipients(value):
+    result = []
+    budget = MAX_INLINE_IMAGE
+    for recipient in value[:16] if isinstance(value, list) else []:
+        if not isinstance(recipient, dict):
+            continue
+        clean = {}
+        for field, limit in (("address", 256), ("name", 256), ("image_url", MAX_MEDIA_URL)):
+            text = media_string(recipient.get(field), limit)
+            if text:
+                clean[field] = text
+        if "address" not in clean:
+            address = media_string(recipient.get("number"), 256)
+            if address:
+                clean["address"] = address
+        thumbnail = media_string(recipient.get("thumbnail"), budget)
+        if thumbnail:
+            clean["thumbnail"] = thumbnail
+            budget -= len(thumbnail)
+        if clean:
+            result.append(clean)
+    return result
+
+
+def media_urls(value):
+    return [url for raw in value[:16] if (url := media_string(raw, MAX_MEDIA_URL))] if isinstance(value, list) else []
+
+
 # Stored pushes arrive through REST after a stream tickle, not as ephemerals.
 DEMO = {"iden": "pbdesk-sanitized-demo-v1", "type": "note", "title": "pbdesk demo", "body": "A sanitized event received once by your private core.", "created": 1704067200}
 
@@ -58,4 +95,9 @@ def normalize(payload):
     return {"source_id": source_id, "type": kind, "title": string("title"), "body": string("body"),
             "url": string("url") or None, "device_id": string("source_device_iden") or None,
             "created_at": created_at, "source_device_id": string("source_device_iden") or None,
-            "target_device_id": string("target_device_iden") or None}
+            "target_device_id": string("target_device_iden") or None,
+            "application_name": media_string(push.get("application_name"), 256),
+            "icon": media_string(push.get("icon"), MAX_INLINE_IMAGE),
+            "file_name": media_string(push.get("file_name"), 1024),
+            "file_type": media_string(push.get("file_type"), 256),
+            "file_url": media_string(push.get("file_url"), MAX_MEDIA_URL)}

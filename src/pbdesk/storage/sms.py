@@ -7,7 +7,7 @@ from sqlalchemy.dialects.sqlite import insert as upsert
 metadata=MetaData()
 messages=Table('sms_messages',metadata,Column('id',Integer,primary_key=True),
     *(Column(k,Text) for k in ('account_id','device_id','conversation_id','message_id','direction','body')),
-    Column('timestamp',Float),Column('addresses',Text),Column('name',Text),Column('decrypted',Integer))
+    Column('timestamp',Float),Column('addresses',Text),Column('name',Text),Column('decrypted',Integer),Column('image_urls',Text),Column('recipients',Text))
 sync=Table('sms_sync',metadata,Column('account_id',Text,primary_key=True),Column('device_id',Text,primary_key=True),
     Column('state',Text),Column('last_success_at',Float),Column('error',Text),Column('has_more',Integer))
 threads=Table('sms_threads',metadata,Column('account_id',Text,primary_key=True),Column('device_id',Text,primary_key=True),
@@ -29,7 +29,21 @@ class SmsStore:
                 statement=statement.where(messages.c.direction==direction)
             rows=[]
             for row in conn.execute(statement.order_by(messages.c.timestamp,messages.c.id)).mappings():
-                rows.append({**dict(row),'addresses':json.loads(row['addresses']),'decrypted':bool(row['decrypted'])})
+                rows.append({**dict(row),'addresses':json.loads(row['addresses']),'decrypted':bool(row['decrypted']),'image_urls':json.loads(row['image_urls'] or '[]'),'recipients':json.loads(row['recipients'] or '[]')})
+            # Thumbnails describe contacts, not each historical message. Expose
+            # each conversation's latest copy once, with a snapshot-wide budget.
+            seen = set()
+            thumbnail_budget = 512 * 1024
+            for message in reversed(rows):
+                conversation = message['conversation_id']
+                first = conversation not in seen
+                seen.add(conversation)
+                for recipient in message['recipients']:
+                    thumbnail = recipient.get('thumbnail')
+                    if thumbnail and first and len(thumbnail) <= thumbnail_budget:
+                        thumbnail_budget -= len(thumbnail)
+                    else:
+                        recipient.pop('thumbnail', None)
             state=conn.execute(select(sync).where(sync.c.account_id==account,sync.c.device_id==device_id)).mappings().first()
             public={k:state[k] for k in ('state','last_success_at','error','has_more')} if state else dict(state='idle',last_success_at=None,error=None,has_more=False)
             public['has_more']=bool(public['has_more'])
@@ -39,6 +53,14 @@ class SmsStore:
             missing=json.loads(value) if value else {}
             public['unavailable_count']=len(missing.get('conversation_ids',[]))
             return {'account_id':account,'messages':rows,'sync':public}
+
+    def sms_message(self, message_id):
+        """Resolve a retained row only inside the active provider account."""
+        with self.engine.connect() as conn:
+            row = conn.execute(select(messages).where(messages.c.id == message_id,
+                messages.c.account_id == self.account_key())).mappings().first()
+            return {**dict(row), 'image_urls': json.loads(row['image_urls'] or '[]'),
+                'recipients': json.loads(row['recipients'] or '[]')} if row else None
 
     @staticmethod
     def sms_unavailable_key(account,device):
@@ -71,9 +93,9 @@ class SmsStore:
         with self.writing() as conn:
             for value in values:
                 statement=upsert(messages).values(
-                    **{**value,'account_id':account,'device_id':device,'conversation_id':conversation,'addresses':json.dumps(value['addresses'])})
+                    **{**value,'account_id':account,'device_id':device,'conversation_id':conversation,'addresses':json.dumps(value['addresses']),'image_urls':json.dumps(value.get('image_urls',[])),'recipients':json.dumps(value.get('recipients',[]))})
                 conn.execute(statement.on_conflict_do_update(index_elements=['account_id','device_id','conversation_id','message_id','direction'],
-                    set_={k:statement.excluded[k] for k in ('body','timestamp','addresses','name','decrypted')}))
+                    set_={k:statement.excluded[k] for k in ('body','timestamp','addresses','name','decrypted','image_urls','recipients')}))
             statement=upsert(threads).values(account_id=account,device_id=device,conversation_id=conversation,fingerprint=fingerprint)
             conn.execute(statement.on_conflict_do_update(index_elements=['account_id','device_id','conversation_id'],set_={'fingerprint':fingerprint}))
 

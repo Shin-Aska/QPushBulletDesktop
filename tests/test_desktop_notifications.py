@@ -1,4 +1,5 @@
 """Literal, complete supplied content and click-only notification web links."""
+from test_desktop import isolated_desktop_preferences
 from PyQt6.QtCore import QUrl, Qt
 from PyQt6.QtGui import QTextDocument, QTextOption
 from PyQt6.QtWidgets import QApplication, QComboBox

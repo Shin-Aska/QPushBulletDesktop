@@ -269,3 +269,56 @@ def test_pill_columns_resize_to_contents_and_render_full_labels(theme_app, qtbot
     finally:
         painter.end()
     assert any('…' in text for text in painted), painted
+
+
+def test_stylesheet_gc_keeps_widget_snapshot_alive_then_releases(tmp_path):
+    """Run the historical native crash out of process, with cyclic GC enabled."""
+    import os
+    import subprocess
+    import sys
+    import textwrap
+    script = textwrap.dedent("""
+        import gc
+        import weakref
+        from PyQt6.QtCore import QEvent
+        from PyQt6.QtWidgets import QApplication, QWidget
+        from pbdesk.desktop.theme import apply_theme
+        app = QApplication([])
+        apply_theme(app, 'light')
+        armed = False
+        collected = False
+        during = []
+        class Trigger(QWidget):
+            def event(self, event):
+                global collected
+                if armed and not collected and event.type() == QEvent.Type.StyleChange:
+                    collected = True
+                    gc.collect()
+                    during.append(sum(reference() is not None for reference in references))
+                return super().event(event)
+        trigger = Trigger()
+        windows = [QWidget() for _ in range(128)]
+        for window in windows:
+            window.cycle = window
+        references = [weakref.ref(window) for window in windows]
+        trigger.ensurePolished()
+        for window in windows:
+            window.ensurePolished()
+        del window
+        windows = None
+        armed = True
+        assert gc.isenabled()
+        apply_theme(app, 'dark')
+        assert during == [128], during
+        assert gc.isenabled()
+        gc.collect()
+        assert all(reference() is None for reference in references)
+        print('snapshot survived collection; wrappers released after repolish')
+    """)
+    env = dict(os.environ, PBDESK_APPLICATION_DIR=str(tmp_path / 'app'),
+               PBDESK_STATE_DIR=str(tmp_path / 'state'),
+               DBUS_SESSION_BUS_ADDRESS='unix:path=' + str(tmp_path / 'no-dbus'))
+    result = subprocess.run([sys.executable, '-X', 'faulthandler', '-c', script],
+                            env=env, capture_output=True, text=True, timeout=15)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert 'wrappers released after repolish' in result.stdout

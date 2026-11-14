@@ -3,13 +3,11 @@
 System leaves font/style integration to Qt (including KDE integration when present).
 Only semantic containers are styled; controls keep their native interaction states.
 """
-import json
-
 from PyQt6.QtCore import QEvent, QObject, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor, QPalette
 from PyQt6.QtWidgets import QApplication
 
-from pbdesk.config import Settings
+from .preferences import read_preferences, update_preferences
 
 SCHEMES = ('system', 'light', 'dark')
 
@@ -142,6 +140,11 @@ class _Theme(QObject):
             self._refresh()
 
     def _refresh(self):
+        # Qt repolishes a raw widget-pointer snapshot. A Python StyleChange
+        # callback can run cyclic GC and otherwise destroy a later widget in
+        # that snapshot. Keep its wrappers alive until synchronous repolish
+        # and theme callbacks finish; normal collection resumes on return.
+        retained_widgets = self.app.allWidgets()
         self._updating = True
         try:
             self._last_colors = colors(self.app.palette())
@@ -149,6 +152,7 @@ class _Theme(QObject):
         finally:
             self._updating = False
         self.changed.emit()
+        del retained_widgets
 
     def apply(self, scheme):
         previous = self.scheme
@@ -166,17 +170,9 @@ class _Theme(QObject):
         self._refresh()
 
 
-def _preference_path():
-    return Settings.from_env().state_dir / 'ui-preferences.json'
-
-
 def _load_scheme():
-    try:
-        value = json.loads(_preference_path().read_text(encoding='utf-8'))
-        scheme = value.get('color_scheme') if isinstance(value, dict) else None
-        return scheme if scheme in SCHEMES else 'system'
-    except (OSError, ValueError, TypeError):
-        return 'system'
+    scheme = read_preferences().get('color_scheme')
+    return scheme if scheme in SCHEMES else 'system'
 
 
 def theme_signals(app):
@@ -205,11 +201,7 @@ def set_color_scheme(app, scheme):
     """Apply and atomically persist this local UI preference only."""
     if scheme not in SCHEMES:
         raise ValueError('Unknown color scheme: ' + str(scheme))
-    path = _preference_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix('.tmp')
-    temporary.write_text(json.dumps({'color_scheme': scheme}) + '\n', encoding='utf-8')
-    temporary.replace(path)
+    update_preferences({'color_scheme': scheme})
     apply_theme(app, scheme)
 
 

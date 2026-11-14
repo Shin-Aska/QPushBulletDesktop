@@ -426,7 +426,9 @@ def test_failed_empty_refresh_keeps_cached_history_sync_and_draft(qtbot):
     assert widget.sms_cache["a"]["messages"][0]["id"] == 1
     assert widget.sms_cache["a"]["sync"]["last_success_at"] == 1780000000
     assert widget.composer.toPlainText() == "Keep my draft"
-    assert "cached history kept" in widget.sync_status.text()
+    assert "Refresh unavailable" in widget.sync_status.text()
+    assert "cached history kept" in widget.sync_status.accessibleDescription()
+    assert "provider unavailable" in widget.sync_status.accessibleDescription()
     assert len(worker.requests) == requests
 
 
@@ -463,8 +465,87 @@ def test_partial_sync_copy_counts_conversations_and_chat_metadata_omits_action_i
     widget.apply_snapshot({"sms_device_id": "a", "sms": {"account_id": "acct",
         "messages": [message()], "sync": {"state": "partial", "error": "some threads missing",
         "last_success_at": 1780000000, "unavailable_count": 2}}})
-    assert "2 conversations unavailable" in widget.sync_status.text()
-    assert "available conversations synced" in widget.sync_status.text()
-    assert "refresh unavailable" not in widget.sync_status.text()
+    assert "Partial · 2 unavailable" in widget.sync_status.text()
+    assert "2 conversations unavailable" in widget.sync_status.accessibleDescription()
+    assert "Available conversations synced" in widget.sync_status.accessibleDescription()
+    assert "some threads missing" in widget.sync_status.accessibleDescription()
+    assert "Refresh unavailable" not in widget.sync_status.accessibleDescription()
     assert widget.threads.horizontalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
     assert widget.threads.wordWrap()
+
+
+def test_sync_details_keep_provider_text_plain_and_tooltip_escaped(qtbot):
+    widget, worker = page(qtbot)
+    detail = 'Fixture failure <img src="https://example.invalid/image"> & retry'
+    widget.apply_snapshot({'sms_device_id': 'a', 'sms': {'account_id': 'acct',
+        'messages': [message()], 'sync': {'state': 'error', 'error': detail,
+        'last_success_at': 1780000000, 'unavailable_count': 3}}})
+    assert 'Refresh unavailable · 3 unavailable' in widget.sync_status.text()
+    assert 'cached history kept' in widget.sync_status.accessibleDescription()
+    assert detail in widget.sync_status.accessibleDescription()
+    assert '<img' not in widget.sync_status.toolTip()
+    assert '&lt;img src=&quot;https://example.invalid/image&quot;&gt; &amp; retry' in widget.sync_status.toolTip()
+
+
+@pytest.mark.parametrize('scheme', ['system', 'dark'])
+def test_narrow_main_window_partial_history_has_no_horizontal_overflow(qtbot, qapp, tmp_path, monkeypatch, scheme):
+    from PyQt6.QtCore import QRect
+    from PyQt6.QtGui import QFontMetrics, QPalette
+    from pbdesk.desktop.app import MainWindow
+    from pbdesk.desktop.theme import apply_theme, theme_signals
+    from test_desktop import FakeWorker as WindowWorker
+
+    monkeypatch.setenv('PBDESK_STATE_DIR', str(tmp_path / 'ui-state'))
+    monkeypatch.setenv('PBDESK_APPLICATION_DIR', str(tmp_path / 'ui-app'))
+    monkeypatch.setattr('pbdesk.desktop.app.QSystemTrayIcon.isSystemTrayAvailable', lambda: False)
+    manager = theme_signals(qapp)
+    old = (QPalette(qapp.palette()), qapp.styleSheet(), manager.scheme, manager._last_colors)
+    apply_theme(qapp, scheme)
+    worker = WindowWorker()
+    window = MainWindow(worker)
+    qtbot.addWidget(window)
+    try:
+        data = snapshot([message()])
+        data['sms']['sync'] = {'state': 'partial', 'error': '3 listed conversations are currently unavailable; cached history kept',
+            'last_success_at': 1780000000, 'unavailable_count': 3}
+        worker.snapshot.emit(data)
+        window.navigate(1)
+        window.resize(850, 540)
+        window.show()
+        window.sms_page.composer.setPlainText('Fictional draft remains editable')
+        worker.result.emit({'command': 'refresh_devices', 'error': 'Device refresh failed. Check the provider connection and retry.'})
+        qtbot.wait(40)
+        page = window.sms_page
+        viewport = window.sms_scroll.viewport()
+        assert window.error.isVisible() and window.command_error
+        assert (window.width(), window.height()) == (850, 540)
+        assert 'Partial · 3 unavailable' in page.sync_status.text()
+        assert 'Available conversations synced' in page.sync_status.accessibleDescription()
+        assert '3 conversations unavailable' in page.sync_status.accessibleDescription()
+        assert page.width() <= viewport.width()
+        assert window.sms_scroll.horizontalScrollBar().maximum() == 0
+        assert QFontMetrics(page.sync_status.font()).horizontalAdvance(page.sync_status.text()) <= page.sync_status.width()
+        assert page.composer.height() == 86
+        assert page.composer.toPlainText() == 'Fictional draft remains editable'
+        for button in (window.sms_ai_button, page.send_button):
+            assert button.height() >= button.sizeHint().height()
+            window.sms_scroll.ensureWidgetVisible(button, 0, 0)
+            qtbot.wait(10)
+            top_left = button.mapTo(viewport, button.rect().topLeft())
+            assert viewport.rect().contains(QRect(top_left, button.size()))
+        window.sms_scroll.ensureWidgetVisible(page.composer, 0, 0)
+        qtbot.wait(10)
+        top_left = page.composer.mapTo(viewport, page.composer.rect().topLeft())
+        assert viewport.rect().contains(QRect(top_left, page.composer.size()))
+        assert not any(command in {'create_action', 'approve_action', 'media_image'} for command, *unused in worker.requests)
+    finally:
+        window.exit_desktop()
+        manager._updating = True
+        try:
+            qapp.setStyleSheet(old[1])
+            qapp.setPalette(old[0])
+            qapp.processEvents()
+            manager.scheme, manager._last_colors = old[2:]
+            manager._scheduled = False
+        finally:
+            manager._updating = False
