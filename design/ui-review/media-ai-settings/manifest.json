@@ -1,0 +1,451 @@
+{
+  "captured_at": "2026-11-14T12:55:33.189973+00:00",
+  "data": "fictional fixtures only",
+  "native_platform": "xcb",
+  "native_runtime": {
+    "style": "fusion",
+    "available_style_keys": [
+      "Windows",
+      "Fusion"
+    ],
+    "font": "Sans Serif,9,-1,5,400,0,0,0,0,0,0,0,0,0,0,1,,0,0",
+    "base_color": "#161925"
+  },
+  "capture": "Actual production Qt QWidget.grab on private Xvfb; fake Core/AI fixture clients for visual states; real API wiring independently verified.",
+  "live_core_touched": false,
+  "credentials_read": false,
+  "real_openai_calls": false,
+  "screens": [
+    {
+      "file": "system-notifications.png",
+      "title": "System \u00b7 Notification native icon and explicit image load",
+      "width": 1280,
+      "height": 850,
+      "sha256": "53b82401bd81e09326ec52cdde38d283af71a34d17e514c89db931b9026274c4"
+    },
+    {
+      "file": "system-sms.png",
+      "title": "System \u00b7 Native contact avatar and MMS attachment",
+      "width": 1280,
+      "height": 850,
+      "sha256": "244fe6ef12f2826c0b3aca01b8c997d54dbd7ec37289d597e4d7504138803d82"
+    },
+    {
+      "file": "system-summary-notifications.png",
+      "title": "System \u00b7 Explicit generated notification summary",
+      "width": 1280,
+      "height": 850,
+      "sha256": "0b89bd0dfc4941ab166405bd1c288fe4a993d773ebd2600759b7fcbe7c7299e0"
+    },
+    {
+      "file": "system-settings-appearance.png",
+      "title": "System \u00b7 Settings / Appearance",
+      "width": 1000,
+      "height": 700,
+      "sha256": "31612576e4305aacf02c87b6eb1d313fe3db71fadf8e19960901f4adc70acd48"
+    },
+    {
+      "file": "system-settings-devices.png",
+      "title": "System \u00b7 Settings / Devices",
+      "width": 1000,
+      "height": 700,
+      "sha256": "a7faac0d99f175ba62cf8656490108d259c60bbd8c1a6d18486a4cd4d6870258"
+    },
+    {
+      "file": "system-settings-ai.png",
+      "title": "System \u00b7 Settings / AI",
+      "width": 1000,
+      "height": 700,
+      "sha256": "49601fa9b45b14c9415b03cae6da335d353a18a0e2b546a40ef1ea951f8116ba"
+    },
+    {
+      "file": "system-settings-local-web.png",
+      "title": "System \u00b7 Settings / Local Web",
+      "width": 1000,
+      "height": 700,
+      "sha256": "59e658a2e63a38026b3d0ac74c5caa761880a13a929370c4a66ecfdb12b94ebb"
+    },
+    {
+      "file": "system-assistant-preview.png",
+      "title": "System \u00b7 SMS exact context preview before generation",
+      "width": 760,
+      "height": 680,
+      "sha256": "f51e9eed7b9d1f8a6a2e7ea34ba520cbc10be9635b0c6292cd343c91d8e08b40"
+    },
+    {
+      "file": "dark-notifications.png",
+      "title": "Dark \u00b7 Notification native icon and explicit image load",
+      "width": 1280,
+      "height": 850,
+      "sha256": "75bed648b4e4e60d731119aaeda3d4b5dc321bcba5bb5d4b246903407dfccfec"
+    },
+    {
+      "file": "dark-notification-loaded.png",
+      "title": "Dark \u00b7 Native loaded notification attachment",
+      "width": 1280,
+      "height": 850,
+      "sha256": "47c1722031f58ff0891b43288c530d649c72b6b752a840b2d967c28b883d8b68"
+    },
+    {
+      "file": "dark-notification-load-error.png",
+      "title": "Dark \u00b7 Expired image offers explicit retry",
+      "width": 1280,
+      "height": 850,
+      "sha256": "9f7aca456452322471568df21a8987529df6a5e44ce7e731018d93a62f604425"
+    },
+    {
+      "file": "dark-sms.png",
+      "title": "Dark \u00b7 Native contact avatar and MMS attachment",
+      "width": 1280,
+      "height": 850,
+      "sha256": "708b67bc01a9d4b3c0a98c31358a058273e8ade38ea2952b1cac224090dc9d33"
+    },
+    {
+      "file": "dark-sms-mms-loaded.png",
+      "title": "Dark \u00b7 Loaded native MMS image retains composer",
+      "width": 1280,
+      "height": 850,
+      "sha256": "64dd7d4c49d3aa2b5faaffafb12d9fa74e6ff3c5615171162b9d708fc2366056"
+    },
+    {
+      "file": "dark-sms-contact-loaded.png",
+      "title": "Dark \u00b7 Explicitly loaded contact image",
+      "width": 1280,
+      "height": 850,
+      "sha256": "881a23a95e2a99696bda1767f3bd232345bf211fb0f679f47bf20bcc96041c0b"
+    },
+    {
+      "file": "dark-summary-notifications.png",
+      "title": "Dark \u00b7 Explicit generated notification summary",
+      "width": 1280,
+      "height": 850,
+      "sha256": "9553caf38b1cf556639b1ce001012d2e369ef6efdcb252e78fbd5a2659133df6"
+    },
+    {
+      "file": "dark-summary-retained-output.png",
+      "title": "Dark \u00b7 Captured completed summary survives polling and unrelated draft edits without another cloud request",
+      "width": 1280,
+      "height": 850,
+      "sha256": "9553caf38b1cf556639b1ce001012d2e369ef6efdcb252e78fbd5a2659133df6"
+    },
+    {
+      "file": "dark-settings-appearance.png",
+      "title": "Dark \u00b7 Settings / Appearance",
+      "width": 1000,
+      "height": 700,
+      "sha256": "14dfffcf20d5c8ed9bec243458c994b3e486b69cfc5113d123a83f0b4b2abdb8"
+    },
+    {
+      "file": "dark-settings-devices.png",
+      "title": "Dark \u00b7 Settings / Devices",
+      "width": 1000,
+      "height": 700,
+      "sha256": "3effe3bea89000bd3b3232fb0eec85d392351ec5e1ad6dd06a387a787b3bc825"
+    },
+    {
+      "file": "dark-settings-ai.png",
+      "title": "Dark \u00b7 Settings / AI",
+      "width": 1000,
+      "height": 700,
+      "sha256": "8ec8bba3baab18215b1bc51d0e759211df781366f6f77895ae3f5967fe6321b6"
+    },
+    {
+      "file": "dark-settings-local-web.png",
+      "title": "Dark \u00b7 Settings / Local Web",
+      "width": 1000,
+      "height": 700,
+      "sha256": "0484427c4916d0e179b0b7aa587940f587681e4e63395ec5b2062387cd74d726"
+    },
+    {
+      "file": "dark-assistant-preview.png",
+      "title": "Dark \u00b7 SMS exact context preview before generation",
+      "width": 760,
+      "height": 680,
+      "sha256": "61f5071ffa12098bb2d7415e9200cbc7cf47e358a039f7fd644c48466cb36aa6"
+    },
+    {
+      "file": "dark-assistant-generated.png",
+      "title": "Dark \u00b7 Generated reply requires separate insertion",
+      "width": 760,
+      "height": 680,
+      "sha256": "a0775cfa31f7f886cdce9eedc630c0b32bb933c0fb45770d4da9d7a50acb7798"
+    },
+    {
+      "file": "dark-assistant-stale.png",
+      "title": "Dark \u00b7 Changed draft rejects stale insertion",
+      "width": 760,
+      "height": 680,
+      "sha256": "8990bdaecb16d1a625f1d754ed582f87af253070391d65968e68cc56fb0d7f98"
+    },
+    {
+      "file": "dark-summary-sms.png",
+      "title": "Dark \u00b7 Explicit selected SMS conversation summary",
+      "width": 1280,
+      "height": 850,
+      "sha256": "bffec984110502daf3282b152e632bb08e1408be14aac293a51bc8351db9c5cc"
+    },
+    {
+      "file": "dark-summary-limits.png",
+      "title": "Dark \u00b7 Exact bounded context preview explains truncation",
+      "width": 1280,
+      "height": 850,
+      "sha256": "7f8f6fa6aa9c85494df0a5e3b71c317de7688aa7316082b685954c3cf6c3aba0"
+    },
+    {
+      "file": "dark-activity.png",
+      "title": "Dark \u00b7 Accepted actions remain in Activity",
+      "width": 1040,
+      "height": 660,
+      "sha256": "0bcbaf027afaccfc0353383395f500e3d42272e056233df188ae87786599deb2"
+    },
+    {
+      "file": "dark-review.png",
+      "title": "Dark \u00b7 Exact review stays separate from generated draft",
+      "width": 680,
+      "height": 730,
+      "sha256": "12b6a5ab947379eb18b428a62a723454545c495581b4e151fbe814e4667324a9"
+    },
+    {
+      "file": "light-notifications.png",
+      "title": "Light \u00b7 Native icon and retained supplied notification",
+      "width": 1280,
+      "height": 850,
+      "sha256": "838d80232b4095cecf8194f99b28c415cc6876448a40dea92ecd5b2015e497aa"
+    },
+    {
+      "file": "light-sms.png",
+      "title": "Light \u00b7 Contact and MMS conversation",
+      "width": 1280,
+      "height": 850,
+      "sha256": "ca1772a0a6e938874e162626ce2794596f52a55cdd2282ff84e1a9abcf5b5d5a"
+    },
+    {
+      "file": "light-summary.png",
+      "title": "Light \u00b7 Summary",
+      "width": 1280,
+      "height": 850,
+      "sha256": "bc764995310d5ca01e094a6c936d65329d01a271260d03e3ef88f131f79acb74"
+    },
+    {
+      "file": "light-settings-ai.png",
+      "title": "Light \u00b7 Settings / AI",
+      "width": 1000,
+      "height": 700,
+      "sha256": "5921bcc23d73889fcf9ca4c43769753db090efecae44c15568b38c2dea883a0b"
+    },
+    {
+      "file": "system-narrow-sms.png",
+      "title": "System \u00b7 850\u00d7540 SMS and compact assistant entry",
+      "width": 850,
+      "height": 540,
+      "sha256": "56958d5eeb04a0963baac14e8918586679480323be3e396213494b0ea6b127b7"
+    },
+    {
+      "file": "system-narrow-sms-partial.png",
+      "title": "System \u00b7 Truthful partial-history metadata at 850\u00d7540",
+      "width": 850,
+      "height": 540,
+      "sha256": "17bfa6c9b85ec434982c7bd70100e1c568ef6a4fd63c62e0c08551541e2c463d"
+    },
+    {
+      "file": "system-narrow-sms-error.png",
+      "title": "System \u00b7 850\u00d7540 usable native SMS controls with genuine command-error banner",
+      "width": 850,
+      "height": 540,
+      "sha256": "9fc69b99614285cb091c186eca074a561df7fbef31a2f94aef6aa4de43d486c5"
+    },
+    {
+      "file": "system-narrow-sms-error-controls.png",
+      "title": "System \u00b7 Vertical scrolling reaches native assistant/composer/Review controls",
+      "width": 850,
+      "height": 540,
+      "sha256": "1b4bc28553a3cb469a47d6c65e6ae786958d3331b6bb2332825fa6de3c9c09ef"
+    },
+    {
+      "file": "system-narrow-summary.png",
+      "title": "System \u00b7 850\u00d7540 Summary fits native layout",
+      "width": 850,
+      "height": 540,
+      "sha256": "8a582e9b026d2c010fdf01ee29fab886eeca1502b6c4c3b14e02454a11c97880"
+    },
+    {
+      "file": "system-settings-devices-narrow.png",
+      "title": "System \u00b7 Settings / Devices",
+      "width": 850,
+      "height": 540,
+      "sha256": "5224f2e5fabafdb045c95dd3f029cbfd3b1255189ce8b7a1c8597f5c57a29190"
+    },
+    {
+      "file": "system-settings-ai-narrow.png",
+      "title": "System \u00b7 Settings / AI",
+      "width": 850,
+      "height": 540,
+      "sha256": "375abad43673db1dca83ab88531af936e4ecd9792a1b01c8376dac55dcaa6be1"
+    },
+    {
+      "file": "system-narrow-assistant.png",
+      "title": "System \u00b7 Scrollable 600\u00d7480 draft assistant with explicit insertion",
+      "width": 600,
+      "height": 480,
+      "sha256": "c70367815beac998373aa66f23e1ae1c482f4b6fb57204171ffb5e426408e492"
+    },
+    {
+      "file": "system-narrow-notifications.png",
+      "title": "System \u00b7 850\u00d7540 Notifications with complete supplied text",
+      "width": 850,
+      "height": 540,
+      "sha256": "4d17b327bae57da9aab1ab8f87b0e483fe863599607046b37e9ded532d14db94"
+    },
+    {
+      "file": "dark-narrow-sms.png",
+      "title": "Dark \u00b7 850\u00d7540 SMS and compact assistant entry",
+      "width": 850,
+      "height": 540,
+      "sha256": "abe74579e56933e20c00c1aa278564587416a6a472702ec0dae249aa7b1fecc7"
+    },
+    {
+      "file": "dark-narrow-sms-partial.png",
+      "title": "Dark \u00b7 Truthful partial-history metadata at 850\u00d7540",
+      "width": 850,
+      "height": 540,
+      "sha256": "6b40eee2095caa9169468d1e114de473001bc5ecadc1e8cb962def089d6044a0"
+    },
+    {
+      "file": "dark-narrow-sms-error.png",
+      "title": "Dark \u00b7 850\u00d7540 usable native SMS controls with genuine command-error banner",
+      "width": 850,
+      "height": 540,
+      "sha256": "b9c9b95de51b0f6ea68848f7d674f7970a9c2d9e9177bbb635f3b843509fbc83"
+    },
+    {
+      "file": "dark-narrow-sms-error-controls.png",
+      "title": "Dark \u00b7 Vertical scrolling reaches native assistant/composer/Review controls",
+      "width": 850,
+      "height": 540,
+      "sha256": "5b35261ee4b7a9816946d97d3c0077274985cbe9ea7ba391d816b0f7c6b29f3b"
+    },
+    {
+      "file": "dark-narrow-summary.png",
+      "title": "Dark \u00b7 850\u00d7540 Summary fits native layout",
+      "width": 850,
+      "height": 540,
+      "sha256": "fe28d56db4b00ea09c80a4d3820f8b618d30971d917880da034f90d07851bff6"
+    },
+    {
+      "file": "dark-settings-devices-narrow.png",
+      "title": "Dark \u00b7 Settings / Devices",
+      "width": 850,
+      "height": 540,
+      "sha256": "55abff3170d1fb09508f324f876ccd1b8bb0cdd8c76bc896def4cb176e816f3b"
+    },
+    {
+      "file": "dark-settings-ai-narrow.png",
+      "title": "Dark \u00b7 Settings / AI",
+      "width": 850,
+      "height": 540,
+      "sha256": "ad02196a4d4262f13febe42e56829e51bcfd2ab564144c0daba30d45691c60bd"
+    },
+    {
+      "file": "dark-narrow-assistant.png",
+      "title": "Dark \u00b7 Scrollable 600\u00d7480 draft assistant with explicit insertion",
+      "width": 600,
+      "height": 480,
+      "sha256": "2b86188d96445bfefafbefe850414e10cd9e49998d456eede934099ee9da9a85"
+    },
+    {
+      "file": "dark-narrow-notifications.png",
+      "title": "Dark \u00b7 850\u00d7540 Notifications with complete supplied text",
+      "width": 850,
+      "height": 540,
+      "sha256": "22b1680dcb6178f68c9fbbaa5854fad07187b4e50e480dba7741d7a4b225f782"
+    },
+    {
+      "file": "dark-status-transient.png",
+      "title": "Dark \u00b7 Transient reconnect stays quiet",
+      "width": 1280,
+      "height": 850,
+      "sha256": "47c1722031f58ff0891b43288c530d649c72b6b752a840b2d967c28b883d8b68"
+    },
+    {
+      "file": "dark-status-sustained.png",
+      "title": "Dark \u00b7 Sustained reconnect keeps stable geometry",
+      "width": 1280,
+      "height": 850,
+      "sha256": "157c8fc9acfab09d1d2c84162b84645474c9109c854fe1bccf3fdf674d4681c1"
+    }
+  ],
+  "source_sha256": {
+    "src/pbdesk/__init__.py": "df3dc3bef669f594e280a2df05ef144dea23dbaf766b843403d33661e2a61d77",
+    "src/pbdesk/api/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/pbdesk/api/ai.py": "bec149110a6f8f1fa427f587d2faae30eec3be3995358676279dfb4fe42bdb88",
+    "src/pbdesk/api/app.py": "ad5ec11d35c65efb5e77dd6f33059aeb24d96409ad935cb8bb29a43809f83396",
+    "src/pbdesk/api/media.py": "e8989159a6c02115eb36637bcf73ff99e4f092399f8a59ca66e239240208dd4c",
+    "src/pbdesk/api/streaming.py": "e30716a3e4aa6e27bbc42d053f1a0e480d03c323cc4218a0381f2fc98e05a665",
+    "src/pbdesk/cli.py": "9f0b7af19e3dbff7dc479a0524754a238a090bd10455197396109530b29eb2f8",
+    "src/pbdesk/config.py": "1c9fdfadba8aebe440bf092a5897037bf606d91c215b12feb75b5e20a3a63197",
+    "src/pbdesk/credentials.py": "9caa5218a6cc913f45a0842f2716d9f63dbdbc0a41a4cadf50ac8125168fb2db",
+    "src/pbdesk/desktop/__init__.py": "c8c30a6789ea7fb50ff10a768d1cf815a946d27fe8f421d8f707935c71633fe7",
+    "src/pbdesk/desktop/__main__.py": "71837522fdbc7a090e37a24901d50f26ecbe0be17aa7c2af5a4ee962f3e986c1",
+    "src/pbdesk/desktop/actions.py": "c1882bcd07a83b45872c1ca785646c72b51b259a548efc7f7bdd1dd3ee0bf2bf",
+    "src/pbdesk/desktop/activity.py": "f660da77cd48e60d1b55cfef99b8f6b95b52e16d00549f02b6ce1af3fe30cd73",
+    "src/pbdesk/desktop/ai.py": "67472a1f84ecc10af29023d9e83860d4f4cbf560da234740b66a571978ecd1a7",
+    "src/pbdesk/desktop/ai_worker.py": "38e62460890906f43c1b7cc2400457cef51be98d5e68f1e6b36f60625c40258e",
+    "src/pbdesk/desktop/app.py": "1b1d88f1730bb3e154b06b8e9d4cc56215b191619e90993563e8894cd88255e4",
+    "src/pbdesk/desktop/chat.py": "fb2718a7e33047d423e123f4dc5d252db900de5aca973d34a3acfaabf362d6f5",
+    "src/pbdesk/desktop/devices.py": "4e698cd7b181f4755517674d96fef04bfd6a9eef7eda6a165ca8a19a347b4866",
+    "src/pbdesk/desktop/media.py": "ae38e3fe17fcb7f6e15fe1831dd932076b1b57c4d302b171bf795f05a103741e",
+    "src/pbdesk/desktop/models.py": "35a6cd683f1c1349421ee14049881ee2dbfbf90e0f14745b2f42b0745abb1bb5",
+    "src/pbdesk/desktop/notification_content.py": "0ae938d232efaff45b74ea19bf10b165523c88eb43ff377b42efdb3be1ac2518",
+    "src/pbdesk/desktop/preferences.py": "104125e6e28746948134935ffc381291ba4ad6753d012da63989f5b7bf2352c0",
+    "src/pbdesk/desktop/status.py": "743d025ac94c3958a4b4569631144a99ecd1bc0b799179ca34b75a090dba92ae",
+    "src/pbdesk/desktop/theme.py": "2ac2e0c92de5d6cce2247a4b245b0437bd6525892a57fd161d00fb3a869b4501",
+    "src/pbdesk/desktop/widgets.py": "d87605d3ae88a661175c0b5661668b447d981cf62ff5552af7d86ca404d32ea5",
+    "src/pbdesk/desktop/worker.py": "4db32166a38d1e46abbec3451b84f9b0703a09a929143a4a5cdb729044335286",
+    "src/pbdesk/domain/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/pbdesk/domain/actions.py": "670d87fa7077798dc07ac8f0e161e238e812d789516f6c3e3b9f3bb218c7c2e1",
+    "src/pbdesk/mcp_server/__init__.py": "1915f4f2779514e811a73253a149bd703a2427f4fc81fb61e6f848570d40f534",
+    "src/pbdesk/mcp_server/__main__.py": "ddd60a1df996b2b744c45953165711e5afe2711f5f0249f4e98875e1342411df",
+    "src/pbdesk/mcp_server/server.py": "0acf30a43e642d7c12a55020bbaba897ea42a707286659c639a9bb10e6036192",
+    "src/pbdesk/pushbullet/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/pbdesk/pushbullet/crypto.py": "b4b8e31a982c5bd52137915a7247eeb5e0088078a96f0804a3e24092706311b9",
+    "src/pbdesk/pushbullet/normalize.py": "20f7373e0b40a7d9d0a716766f7671364d5158f6234969231ee81d799db8e9c1",
+    "src/pbdesk/pushbullet/provider.py": "23928bb6e5c96253ef29fc970cb06537473393c052df002a58139262678d97cb",
+    "src/pbdesk/pushbullet/sms.py": "b19d61621f5ed29ba74792809461c5e821d27da29f0da1779c8f1a90158ea08a",
+    "src/pbdesk/services/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/pbdesk/services/ai.py": "b34b2141f8110929aa5f73587c2241c2072b2fccfb2759711c438cccdddcdb7e",
+    "src/pbdesk/services/instance.py": "2b955aa63d569e60c95f3f0e4d034111bd786a1593a873cc9809e44d7643d657",
+    "src/pbdesk/services/kwallet.py": "48c36c1b06a2d74fef241df4752387c6cc3f0410e8a1bf93528532d98ddbd6c2",
+    "src/pbdesk/services/lifecycle.py": "0cdc9f2927066f3aa00053efed97c0f898812d16611ea2957c749827daa47b80",
+    "src/pbdesk/services/notifications.py": "1d55d3e06a8363db07f48c4ff1489c2324ce2ca5affde397a0f17b3210aa34ab",
+    "src/pbdesk/services/outbox.py": "4340894046a4d8ef75663ec22cd4a6f9f9bfd96197ea186d2604749480430aa6",
+    "src/pbdesk/services/webhost.py": "6840e5406a1a7d5083ab8b84469c2981b4ef111a252e5b590f58a55d4c73b532",
+    "src/pbdesk/storage/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/pbdesk/storage/database.py": "52c2553a788392d0d297469a3df23e4cf2de8c75b61dbfdcc5b199013191bba2",
+    "src/pbdesk/storage/migrations/env.py": "60e840e320a12b2f5fdf2e6ad0b03ccf70fc7b1d740c1c07035a4e498fbc48d2",
+    "src/pbdesk/storage/migrations/versions/0001_inbox.py": "510f6e1b8c8961f3eb5d5158a66ce202b0bef867f84e669054d95bb292b93fab",
+    "src/pbdesk/storage/migrations/versions/0002_devices_outbox_crypto.py": "00c65e6a7c2f425a22e2be732fb89c5558072fff2ae37277949d803dfb3a3152",
+    "src/pbdesk/storage/migrations/versions/0003_sms_history.py": "15e2e27002e5143c6bc93dac91cd044f2fbefefe3a2f7b2bc22b54b77d9facba",
+    "src/pbdesk/storage/migrations/versions/0004_item_association.py": "763ccb6fd3244731fdbaf35d5ef120a47b0f5c3f3726d4bfdc6e56d32146f30e",
+    "src/pbdesk/storage/migrations/versions/0005_account_partitions.py": "7ee17df8e96a717cde9f67bd62ee646eb5db3cd1ff3e67915031b4e055a073b0",
+    "src/pbdesk/storage/migrations/versions/0006_media.py": "557e458c6286829ce3b6665f954f525e5f4ae1d2d81638cdf38bcaaecd881bb7",
+    "src/pbdesk/storage/sms.py": "f9a88e761c2852fa571b001072740a79ef3986e629771ee92dd3a3a09184c1ae",
+    "src/pbdesk/storage/workflows.py": "52e51b7ce999bdc4ab87be71898e15377895ef517b7f8685afda61137b189be5",
+    "src/pbdesk/web/__init__.py": "9e8e6a36ec9de9372cc1f475624b9da3e47ca2d7fefb7016e3dccba7a03d0314",
+    "src/pbdesk/web/__main__.py": "71837522fdbc7a090e37a24901d50f26ecbe0be17aa7c2af5a4ee962f3e986c1",
+    "src/pbdesk/web/app.py": "eaeeed8c0f142717d0173d5d60fba82543d76b0641436697d0ec06164dd9399b",
+    "src/pbdesk/web/static/css/app.css": "3245930fd4ec614f351599aa534221a29dfaf554e1f1e71b264e70096a19bf20",
+    "src/pbdesk/web/static/js/app.js": "aa81b59967a1f277e3386670e2a58e656e58f89758f26ee28e45a948f14221eb",
+    "src/pbdesk/web/static/vendor/bootstrap/LICENSE": "4620c84ad5ce8602ff65640ed6b7c8b78ebb9e036584f0ebc1ccc88206a4bb51",
+    "src/pbdesk/web/static/vendor/bootstrap/bootstrap.bundle.min.js": "c6f670216aedd2c61ec83102f7e40c1c44114eecd7f37b2edc332757390c386a",
+    "src/pbdesk/web/static/vendor/bootstrap/bootstrap.min.css": "8f8173cb2d8f867274aeb0cb15328e60f490c7f272351e51a55f1dabb486e4ff",
+    "src/pbdesk/web/templates/base.html": "af6bbf1ce11e1c293f418ba12795f985dbab8b341d2bd7ad076a8956460a5db7",
+    "src/pbdesk/web/templates/status.html": "45b29cb5fda6fe781568e460f10be1b92910fefd909d15c4aa18bf069150c4ea",
+    "src/pbdesk/web/vendor-manifest.json": "1a23bb392690e2177beb84c2af90d7191901c844301bcee1e02e0e115e3d8a57",
+    "src/pbdesk.egg-info/PKG-INFO": "0cf9018ddde41952c37aa5d0904498ce6196dbeea83069493459adc4612a8a32",
+    "src/pbdesk.egg-info/SOURCES.txt": "d93af295246dbf620e93d197f3778c45bc718ddf07aee880475d8242717c75d6",
+    "src/pbdesk.egg-info/dependency_links.txt": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+    "src/pbdesk.egg-info/entry_points.txt": "a8e49a2b4ce3735b309265c49ddeaeb51b79ae7bb12ff1e50a2d367f944ce6cc",
+    "src/pbdesk.egg-info/requires.txt": "5c8583e6e6d9c281b176f8b099245d2f58e484ea3abbf1f6a60577af7d8b6f7f",
+    "src/pbdesk.egg-info/top_level.txt": "da1d39978af8d7394001662610a84060eee95cb0db4189ec4c6e110649dc5920"
+  }
+}

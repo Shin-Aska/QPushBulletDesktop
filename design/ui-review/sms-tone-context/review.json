@@ -1,0 +1,12 @@
+{
+  "inspected_at": "2026-11-14T17:19:08Z",
+  "capture_count": 16,
+  "result": "pass",
+  "reviewed": "Native light/dark normal/narrow table, wrapped plain message text, selected/unchecked/zero actions, Natural/custom tone, editable ready and preserved-error draft. All footer actions and feedback within dialog; scroll handles retained 20 rows. Narrow-width row-height issue found and repaired before final capture.",
+  "tests": "81 passed in 3.58s",
+  "private_Xvfb": true,
+  "fresh_temporary_state": true,
+  "fake_clients_only": true,
+  "no_installs_or_live_services": true,
+  "visible_use_focus": "Existing production MainWindow visible-button Use regression passed: closes dialog, preserves edited text, returns focus to composer, sends no SMS action."
+}

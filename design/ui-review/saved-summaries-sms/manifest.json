@@ -1,0 +1,411 @@
+{
+  "synthetic": true,
+  "live_services_used": false,
+  "captures": [
+    {
+      "file": "system-normal-latest.png",
+      "width": 1120,
+      "height": 800
+    },
+    {
+      "file": "system-normal-latest-details.png",
+      "width": 1120,
+      "height": 800
+    },
+    {
+      "file": "system-normal-history.png",
+      "width": 1120,
+      "height": 800
+    },
+    {
+      "file": "system-normal-history-pinned-metrics.png",
+      "width": 1120,
+      "height": 800
+    },
+    {
+      "file": "system-normal-history-legacy-metrics.png",
+      "width": 1120,
+      "height": 800
+    },
+    {
+      "file": "system-narrow-latest.png",
+      "width": 850,
+      "height": 600
+    },
+    {
+      "file": "system-narrow-latest-details.png",
+      "width": 850,
+      "height": 600
+    },
+    {
+      "file": "system-narrow-history.png",
+      "width": 850,
+      "height": 600
+    },
+    {
+      "file": "system-narrow-history-pinned-metrics.png",
+      "width": 850,
+      "height": 600
+    },
+    {
+      "file": "system-narrow-history-legacy-metrics.png",
+      "width": 850,
+      "height": 600
+    },
+    {
+      "file": "system-normal-preset-editor.png",
+      "width": 540,
+      "height": 650
+    },
+    {
+      "file": "system-narrow-preset-editor.png",
+      "width": 380,
+      "height": 520
+    },
+    {
+      "file": "system-normal-active-preset-editor.png",
+      "width": 540,
+      "height": 650
+    },
+    {
+      "file": "system-narrow-active-preset-editor.png",
+      "width": 380,
+      "height": 520
+    },
+    {
+      "file": "system-history-retention.png",
+      "width": 200,
+      "height": 218
+    },
+    {
+      "file": "system-normal-sms-empty.png",
+      "width": 640,
+      "height": 500
+    },
+    {
+      "file": "system-normal-sms-context.png",
+      "width": 640,
+      "height": 500
+    },
+    {
+      "file": "system-normal-sms-generating.png",
+      "width": 640,
+      "height": 500
+    },
+    {
+      "file": "system-normal-sms-editable.png",
+      "width": 640,
+      "height": 500
+    },
+    {
+      "file": "system-normal-sms-stale.png",
+      "width": 640,
+      "height": 500
+    },
+    {
+      "file": "system-normal-sms-error.png",
+      "width": 640,
+      "height": 500
+    },
+    {
+      "file": "system-narrow-sms-empty.png",
+      "width": 440,
+      "height": 500
+    },
+    {
+      "file": "system-narrow-sms-context.png",
+      "width": 440,
+      "height": 500
+    },
+    {
+      "file": "system-narrow-sms-generating.png",
+      "width": 440,
+      "height": 500
+    },
+    {
+      "file": "system-narrow-sms-editable.png",
+      "width": 440,
+      "height": 500
+    },
+    {
+      "file": "system-narrow-sms-stale.png",
+      "width": 440,
+      "height": 500
+    },
+    {
+      "file": "system-narrow-sms-error.png",
+      "width": 440,
+      "height": 500
+    },
+    {
+      "file": "light-normal-latest.png",
+      "width": 1120,
+      "height": 800
+    },
+    {
+      "file": "light-normal-latest-details.png",
+      "width": 1120,
+      "height": 800
+    },
+    {
+      "file": "light-normal-history.png",
+      "width": 1120,
+      "height": 800
+    },
+    {
+      "file": "light-normal-history-pinned-metrics.png",
+      "width": 1120,
+      "height": 800
+    },
+    {
+      "file": "light-normal-history-legacy-metrics.png",
+      "width": 1120,
+      "height": 800
+    },
+    {
+      "file": "light-narrow-latest.png",
+      "width": 850,
+      "height": 600
+    },
+    {
+      "file": "light-narrow-latest-details.png",
+      "width": 850,
+      "height": 600
+    },
+    {
+      "file": "light-narrow-history.png",
+      "width": 850,
+      "height": 600
+    },
+    {
+      "file": "light-narrow-history-pinned-metrics.png",
+      "width": 850,
+      "height": 600
+    },
+    {
+      "file": "light-narrow-history-legacy-metrics.png",
+      "width": 850,
+      "height": 600
+    },
+    {
+      "file": "light-normal-preset-editor.png",
+      "width": 540,
+      "height": 650
+    },
+    {
+      "file": "light-narrow-preset-editor.png",
+      "width": 380,
+      "height": 520
+    },
+    {
+      "file": "light-normal-active-preset-editor.png",
+      "width": 540,
+      "height": 650
+    },
+    {
+      "file": "light-narrow-active-preset-editor.png",
+      "width": 380,
+      "height": 520
+    },
+    {
+      "file": "light-history-retention.png",
+      "width": 200,
+      "height": 218
+    },
+    {
+      "file": "light-normal-sms-empty.png",
+      "width": 640,
+      "height": 500
+    },
+    {
+      "file": "light-normal-sms-context.png",
+      "width": 640,
+      "height": 500
+    },
+    {
+      "file": "light-normal-sms-generating.png",
+      "width": 640,
+      "height": 500
+    },
+    {
+      "file": "light-normal-sms-editable.png",
+      "width": 640,
+      "height": 500
+    },
+    {
+      "file": "light-normal-sms-stale.png",
+      "width": 640,
+      "height": 500
+    },
+    {
+      "file": "light-normal-sms-error.png",
+      "width": 640,
+      "height": 500
+    },
+    {
+      "file": "light-narrow-sms-empty.png",
+      "width": 440,
+      "height": 500
+    },
+    {
+      "file": "light-narrow-sms-context.png",
+      "width": 440,
+      "height": 500
+    },
+    {
+      "file": "light-narrow-sms-generating.png",
+      "width": 440,
+      "height": 500
+    },
+    {
+      "file": "light-narrow-sms-editable.png",
+      "width": 440,
+      "height": 500
+    },
+    {
+      "file": "light-narrow-sms-stale.png",
+      "width": 440,
+      "height": 500
+    },
+    {
+      "file": "light-narrow-sms-error.png",
+      "width": 440,
+      "height": 500
+    },
+    {
+      "file": "dark-normal-latest.png",
+      "width": 1120,
+      "height": 800
+    },
+    {
+      "file": "dark-normal-latest-details.png",
+      "width": 1120,
+      "height": 800
+    },
+    {
+      "file": "dark-normal-history.png",
+      "width": 1120,
+      "height": 800
+    },
+    {
+      "file": "dark-normal-history-pinned-metrics.png",
+      "width": 1120,
+      "height": 800
+    },
+    {
+      "file": "dark-normal-history-legacy-metrics.png",
+      "width": 1120,
+      "height": 800
+    },
+    {
+      "file": "dark-narrow-latest.png",
+      "width": 850,
+      "height": 600
+    },
+    {
+      "file": "dark-narrow-latest-details.png",
+      "width": 850,
+      "height": 600
+    },
+    {
+      "file": "dark-narrow-history.png",
+      "width": 850,
+      "height": 600
+    },
+    {
+      "file": "dark-narrow-history-pinned-metrics.png",
+      "width": 850,
+      "height": 600
+    },
+    {
+      "file": "dark-narrow-history-legacy-metrics.png",
+      "width": 850,
+      "height": 600
+    },
+    {
+      "file": "dark-normal-preset-editor.png",
+      "width": 540,
+      "height": 650
+    },
+    {
+      "file": "dark-narrow-preset-editor.png",
+      "width": 380,
+      "height": 520
+    },
+    {
+      "file": "dark-normal-active-preset-editor.png",
+      "width": 540,
+      "height": 650
+    },
+    {
+      "file": "dark-narrow-active-preset-editor.png",
+      "width": 380,
+      "height": 520
+    },
+    {
+      "file": "dark-history-retention.png",
+      "width": 200,
+      "height": 218
+    },
+    {
+      "file": "dark-normal-sms-empty.png",
+      "width": 640,
+      "height": 500
+    },
+    {
+      "file": "dark-normal-sms-context.png",
+      "width": 640,
+      "height": 500
+    },
+    {
+      "file": "dark-normal-sms-generating.png",
+      "width": 640,
+      "height": 500
+    },
+    {
+      "file": "dark-normal-sms-editable.png",
+      "width": 640,
+      "height": 500
+    },
+    {
+      "file": "dark-normal-sms-stale.png",
+      "width": 640,
+      "height": 500
+    },
+    {
+      "file": "dark-normal-sms-error.png",
+      "width": 640,
+      "height": 500
+    },
+    {
+      "file": "dark-narrow-sms-empty.png",
+      "width": 440,
+      "height": 500
+    },
+    {
+      "file": "dark-narrow-sms-context.png",
+      "width": 440,
+      "height": 500
+    },
+    {
+      "file": "dark-narrow-sms-generating.png",
+      "width": 440,
+      "height": 500
+    },
+    {
+      "file": "dark-narrow-sms-editable.png",
+      "width": 440,
+      "height": 500
+    },
+    {
+      "file": "dark-narrow-sms-stale.png",
+      "width": 440,
+      "height": 500
+    },
+    {
+      "file": "dark-narrow-sms-error.png",
+      "width": 440,
+      "height": 500
+    }
+  ]
+}

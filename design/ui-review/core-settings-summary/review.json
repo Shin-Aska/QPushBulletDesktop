@@ -1,0 +1,77 @@
+{
+  "scope": "Native Core settings/restart and visual Summary\u2192Notifications\u2192SMS sidebar order",
+  "owned_source_hashes": {
+    "src/pbdesk/desktop/app.py": "affae566b3efdf4a48f19053f6733de5edc853def3782f4e5a607a55a173d72e",
+    "src/pbdesk/desktop/core_settings.py": "11b5f042e143145885b5594aef1c2a00492cc44dc47d158f8b8f3c3c3730093c",
+    "tests/test_desktop_core_settings.py": "f70acfa68b70aac6ee8b45f69500f9bd6f922daf1bc0b132e2760c7cd288b819"
+  },
+  "source_frozen": true,
+  "tests": [
+    {
+      "result": "104 passed in 9.99s",
+      "command": "xvfb-run -a -s '-screen 0 1440x1000x24 -nolisten tcp' env QT_QPA_PLATFORM=xcb QT_X11_NO_MITSHM=1 WAYLAND_DISPLAY= MOZ_ENABLE_WAYLAND=0 PBDESK_CAPTURE_PRIVATE_DISPLAY=1 PBDESK_APPLICATION_DIR=/tmp/pbdesk-core-settings-final-ui-app PBDESK_STATE_DIR=/tmp/pbdesk-core-settings-final-ui-state PYTHONPATH=/mnt/internal-hdd/Development/pushbullet/src DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent-pbdesk-test-bus .venv/bin/pytest -q tests/test_desktop.py tests/test_desktop_core_settings.py tests/test_desktop_preferences.py tests/test_desktop_ai.py tests/test_desktop_chat.py tests/test_desktop_theme.py",
+      "note": "Before final explicit restart feature/invalid-status guards; the final affected Core suite was then rerun."
+    },
+    {
+      "result": "21 passed in 1.55s",
+      "command": "xvfb-run -a -s '-screen 0 1440x1000x24 -nolisten tcp' env QT_QPA_PLATFORM=xcb QT_X11_NO_MITSHM=1 WAYLAND_DISPLAY= MOZ_ENABLE_WAYLAND=0 PBDESK_CAPTURE_PRIVATE_DISPLAY=1 PBDESK_APPLICATION_DIR=/tmp/pbdesk-core-settings-final-ui-app PBDESK_STATE_DIR=/tmp/pbdesk-core-settings-final-ui-state PYTHONPATH=/mnt/internal-hdd/Development/pushbullet/src DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent-pbdesk-test-bus .venv/bin/pytest -q tests/test_desktop_core_settings.py",
+      "note": "Final Core widget source, including capability/status guard regression."
+    }
+  ],
+  "capture_script": ".runtime/core-settings-summary/capture_native_core.py",
+  "captures": [
+    "design/ui-review/core-settings-summary/core-dark-narrow-storage-notifications.png",
+    "design/ui-review/core-settings-summary/core-dark-narrow.png",
+    "design/ui-review/core-settings-summary/core-dark-normal-storage-notifications.png",
+    "design/ui-review/core-settings-summary/core-dark-normal.png",
+    "design/ui-review/core-settings-summary/core-error.png",
+    "design/ui-review/core-settings-summary/core-light-narrow-storage-notifications.png",
+    "design/ui-review/core-settings-summary/core-light-narrow.png",
+    "design/ui-review/core-settings-summary/core-light-normal-storage-notifications.png",
+    "design/ui-review/core-settings-summary/core-light-normal.png",
+    "design/ui-review/core-settings-summary/core-old-backend.png",
+    "design/ui-review/core-settings-summary/core-system-narrow-storage-notifications.png",
+    "design/ui-review/core-settings-summary/core-system-narrow.png",
+    "design/ui-review/core-settings-summary/core-system-normal-storage-notifications.png",
+    "design/ui-review/core-settings-summary/core-system-normal.png",
+    "design/ui-review/core-settings-summary/notifications-off.png",
+    "design/ui-review/core-settings-summary/notifications-on.png",
+    "design/ui-review/core-settings-summary/notifications-requested-unavailable.png",
+    "design/ui-review/core-settings-summary/restart-confirmation.png",
+    "design/ui-review/core-settings-summary/restart-reconnecting.png",
+    "design/ui-review/core-settings-summary/restart-verified-success.png",
+    "design/ui-review/core-settings-summary/sidebar-saved-notifications.png",
+    "design/ui-review/core-settings-summary/sidebar-saved-sms.png",
+    "design/ui-review/core-settings-summary/sidebar-saved-summary.png"
+  ],
+  "visual_review": [
+    "Native System/Light/Dark tab captures at1000\u00d7700 and850\u00d7540, top plus storage/notification scroll positions. Read-only details and actions remain reachable; long paths have no horizontal overflow in the focused test.",
+    "Requested On/effective Off/service unavailable is displayed truthfully; no installation action.",
+    "Native restart confirmation defaults to Cancel and explains other clients briefly reconnect.202 displays reconnecting; a different verified UUID plus fresh settings completes success.",
+    "Status failures disable restart and retain explicitly last-verified details. Old-core errors clear cached details and explain an external updated backend is required.",
+    "All3 saved main pages restore correctly; physical sidebar order is Summary,Notifications,SMS while logical stack indices remain stable. F5/Ctrl+F/Ctrl+N dispatch and Settings reuse are tested."
+  ],
+  "worker_contract": {
+    "commands": [
+      "core_settings",
+      "core_settings_update",
+      "core_restart"
+    ],
+    "results": "Matching command/request_id with data or error; restart response accepted is not completion.",
+    "completion": "Existing verified snapshot instance_id must change, then GET settings must match it.",
+    "notifications": "Checkbox binds optional requested saved intent with enabled fallback; enabled/available/outcome show effective delivery."
+  },
+  "public_hooks": [
+    "window.core_settings",
+    "window.show_settings(\"Core\")",
+    "CoreSettings.refresh()",
+    "notifications_enabled/apply_button/restart_button",
+    "status(coreBackendStatus)/feedback(coreBackendFeedback)",
+    "values dict(instance,uptime,core,web,mode,clients,renew,expiry,grace,application,state,database)",
+    "restart_confirmation()->(QMessageBox,restartButton)",
+    "confirm_restart()->bool",
+    "scroll QScrollArea"
+  ],
+  "isolation": "Private Xvfb only, fresh temporary app/state, dead DBus, fake Qt worker results/mock HTTP transports. No installs, git writes, real wallet/provider/OpenAI, live ports18765/18766, or real database interaction.",
+  "remaining": "Parent/independent verifier will run final integrated backend/worker/UI tests on the combined freeze."
+}

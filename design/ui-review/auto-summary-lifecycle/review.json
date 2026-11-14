@@ -1,0 +1,37 @@
+{
+  "scope": "Native automatic account digest and API model picker; synthetic private-display verification",
+  "changed_files": [
+    "src/pbdesk/desktop/ai.py",
+    "src/pbdesk/desktop/ai_worker.py",
+    "src/pbdesk/desktop/app.py",
+    "tests/test_desktop_ai.py"
+  ],
+  "test_result": {
+    "passed": 48,
+    "command": "xvfb-run -a -s '-screen 0 1440x1000x24 -nolisten tcp' env QT_QPA_PLATFORM=xcb QT_X11_NO_MITSHM=1 WAYLAND_DISPLAY= MOZ_ENABLE_WAYLAND=0 PBDESK_CAPTURE_PRIVATE_DISPLAY=1 PBDESK_APPLICATION_DIR=/tmp/pbdesk-auto-ai-tests-3-app PBDESK_STATE_DIR=/tmp/pbdesk-auto-ai-tests-3-state .venv/bin/pytest -q tests/test_desktop_ai.py tests/test_desktop_chat.py"
+  },
+  "captures": [
+    "design/ui-review/auto-summary-lifecycle/ai-catalog-narrow.png",
+    "design/ui-review/auto-summary-lifecycle/ai-catalog-normal.png",
+    "design/ui-review/auto-summary-lifecycle/ai-settings-narrow.png",
+    "design/ui-review/auto-summary-lifecycle/ai-settings-normal.png",
+    "design/ui-review/auto-summary-lifecycle/summary-error-narrow.png",
+    "design/ui-review/auto-summary-lifecycle/summary-error-normal.png",
+    "design/ui-review/auto-summary-lifecycle/summary-ready-narrow.png",
+    "design/ui-review/auto-summary-lifecycle/summary-ready-normal.png",
+    "design/ui-review/auto-summary-lifecycle/summary-updating-narrow.png",
+    "design/ui-review/auto-summary-lifecycle/summary-updating-normal.png"
+  ],
+  "capture_script": ".runtime/auto-summary-lifecycle/capture_native_ai.py",
+  "reviewed": [
+    "Summary normal and narrow: readable sections, counts/time/cache scope, no preview/generate gate, preserved digest during updating/error",
+    "AI Settings normal and narrow: masked empty key field, editable model catalog and Luna recommendation visible without clipping",
+    "Catalog popup normal and narrow: API returned model IDs visible; existing custom/unsaved models preserved by focused tests",
+    "Existing SMS review/insert/stale-context/native button/composer behavior covered by desktop chat suite"
+  ],
+  "isolation": "Private Xvfb only; fake QObject workers and HTTP mock transports; fresh temporary app/state before imports; no real core, wallet, OpenAI, Pushbullet, database, installs, git writes or commits.",
+  "limitations": [
+    "Synthetic API catalog and digests; no claim of live provider connectivity",
+    "Backend and lifecycle workers continue integration; parent will run final independent integrated review"
+  ]
+}

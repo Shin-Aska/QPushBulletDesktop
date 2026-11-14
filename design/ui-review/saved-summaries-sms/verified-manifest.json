@@ -1,0 +1,713 @@
+{
+  "screens": [
+    {
+      "file": "dark-history-retention.png",
+      "width": 200,
+      "height": 218,
+      "sha256": "e18c0075d2541c2be4378553ac775733daa2d9f575e857dfc644a2cdfa71fcc3",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "dark-narrow-active-preset-editor.png",
+      "width": 380,
+      "height": 520,
+      "sha256": "1f52c7515b47e40e26205d6d3b21ae938c0bea5ced34f470cd65000083293845",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "dark-narrow-history-legacy-metrics.png",
+      "width": 850,
+      "height": 600,
+      "sha256": "3c6306ec3ce7ac335e87e0a7d253f0f6054c2726f11dc318351b0d0a92440d4a",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "dark-narrow-history-pinned-metrics.png",
+      "width": 850,
+      "height": 600,
+      "sha256": "aa00d89370d1bec8d7112136deced14f1d69a9beddf9e76afbb2ee6571b432a8",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "dark-narrow-history.png",
+      "width": 850,
+      "height": 600,
+      "sha256": "aff14a69bad9a59b382b8c63c69cf39fe021d2f0388230acf0a96449c37bd607",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "dark-narrow-latest-details.png",
+      "width": 850,
+      "height": 600,
+      "sha256": "2352e48b199e7d5b053287ac314e47effae04773f6146aaede455e1310c39b1b",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "dark-narrow-latest.png",
+      "width": 850,
+      "height": 600,
+      "sha256": "dd0e756e02f11fcbaf8a63a8a51f92ad75ae86f56a0047d6fe741cddd669f4fb",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "dark-narrow-preset-editor.png",
+      "width": 380,
+      "height": 520,
+      "sha256": "0c645f57fea7768d9d8dfe5e25375b24ef2e7dfce580fd65ec18c3a79804e9e7",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "dark-narrow-sms-context.png",
+      "width": 440,
+      "height": 500,
+      "sha256": "de70cad50486a0fbaa544ecb69d94e1e7998530e1705a68cac49bd9d02072826",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "dark-narrow-sms-editable.png",
+      "width": 440,
+      "height": 500,
+      "sha256": "50e01a87085c9661b60b1e96848d5b0df5dfa5d8a9bf4507021b514f1d06f485",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "dark-narrow-sms-empty.png",
+      "width": 440,
+      "height": 500,
+      "sha256": "7be4748b551e261cb46af1eb5fca6fcbee7bd8949771562acfe8b10608615e77",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "dark-narrow-sms-error.png",
+      "width": 440,
+      "height": 500,
+      "sha256": "242b6049676c52a0c80a64c60216dc63bb349d2fb136feafcd4743cb5e1801d5",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "dark-narrow-sms-generating.png",
+      "width": 440,
+      "height": 500,
+      "sha256": "3939107927a5b53534e83ea3d2dddbbf7640c3f986da8f9ba85cc08b1049c1c0",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "dark-narrow-sms-stale.png",
+      "width": 440,
+      "height": 500,
+      "sha256": "5e423793fc75e26097fade111cd6d1f5af7abbc0cec45e6442b17a33f4c71d1f",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "dark-normal-active-preset-editor.png",
+      "width": 540,
+      "height": 650,
+      "sha256": "7e762ead9f50cab5f75708771f481e841e53170812cb2d9e88ce010e9166e7b7",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "dark-normal-history-legacy-metrics.png",
+      "width": 1120,
+      "height": 800,
+      "sha256": "58551e4426beccd4cfc5b90855ff122254f192a0f3a645bc2bcae4404cdc1601",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "dark-normal-history-pinned-metrics.png",
+      "width": 1120,
+      "height": 800,
+      "sha256": "2a483303043e91ecfb8b30b9bb3205c876ac85bd1faa17172da1faab4f5b387e",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "dark-normal-history.png",
+      "width": 1120,
+      "height": 800,
+      "sha256": "4265f59cffdcd05827fc66cac3df94893725637a38768773c630e5e091abb309",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "dark-normal-latest-details.png",
+      "width": 1120,
+      "height": 800,
+      "sha256": "98beacfc15690371e4d7a3e0cb6fb1974f50102a009ccf578c2ab151d342cf48",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "dark-normal-latest.png",
+      "width": 1120,
+      "height": 800,
+      "sha256": "a1eb25b508bace91abbbb5b20b2b7a8735eaec66d0a5c28fa62131f85bad67ca",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "dark-normal-preset-editor.png",
+      "width": 540,
+      "height": 650,
+      "sha256": "0d43d1de922da0afe934031893d93f6da8795fa5041676a9a44a5fab46f434c8",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "dark-normal-sms-context.png",
+      "width": 640,
+      "height": 500,
+      "sha256": "2f49ccb249621c1fbd2b2a67abf50cfe0d3b3fafe49739e51e3283ba08907589",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "dark-normal-sms-editable.png",
+      "width": 640,
+      "height": 500,
+      "sha256": "cc980a56e0068ddb9f4d972f9bfc661dd7c0ad1049e55560f7ad4a1d11b795d6",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "dark-normal-sms-empty.png",
+      "width": 640,
+      "height": 500,
+      "sha256": "d1d6393a1c4c4cf8c4704dac1a79a26b45196b8460cf3e4d9b47b5462734a646",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "dark-normal-sms-error.png",
+      "width": 640,
+      "height": 500,
+      "sha256": "97cde9149bf152b05ee501b02346d95be9e35b7a011a0b7ffbdee76566891392",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "dark-normal-sms-generating.png",
+      "width": 640,
+      "height": 500,
+      "sha256": "81953ddb31811b2ac83847809608ecd95a6a199c92ac97d97505ca3ad95a02a4",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "dark-normal-sms-stale.png",
+      "width": 640,
+      "height": 500,
+      "sha256": "07465b4c11efdaafea4b3e64b82297011bb29abc85a76e36203a0e6e032e3d27",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "integrated-latest-dark-narrow.png",
+      "width": 850,
+      "height": 540,
+      "sha256": "b487b6d84ec0821f8fc736b0bc59d6ff746d87cc81cf95e89dd64b4c2fef1852",
+      "provenance": "production MainWindow/AiWorker/CoreWorker + authenticated real CLI/CoreAPI; isolated fake OpenAI/wallet/provider"
+    },
+    {
+      "file": "integrated-preset-editor-keyboard.png",
+      "width": 520,
+      "height": 590,
+      "sha256": "d094ef8137b3def9341841ac10ea5cae0800dd53a397092d4787472e807a5949",
+      "provenance": "production MainWindow/AiWorker/CoreWorker + authenticated real CLI/CoreAPI; isolated fake OpenAI/wallet/provider"
+    },
+    {
+      "file": "integrated-sms-composer-after-use.png",
+      "width": 1200,
+      "height": 790,
+      "sha256": "c01377816429ada2f9b432f964830eac8b72d3ce25d775e2dc0fcde6d822286f",
+      "provenance": "production MainWindow/AiWorker/CoreWorker + authenticated real CLI/CoreAPI; isolated fake OpenAI/wallet/provider"
+    },
+    {
+      "file": "integrated-sms-edited.png",
+      "width": 640,
+      "height": 500,
+      "sha256": "8e9695678c5bd757025a6ed6e7ce025ad9e1ea71bdf38791c318c8320086eae2",
+      "provenance": "production MainWindow/AiWorker/CoreWorker + authenticated real CLI/CoreAPI; isolated fake OpenAI/wallet/provider"
+    },
+    {
+      "file": "integrated-sms-empty.png",
+      "width": 640,
+      "height": 500,
+      "sha256": "8cec8482e49672887d8ccce1c77b6ebe9481962c40ff7502e0fb83401a9482c2",
+      "provenance": "production MainWindow/AiWorker/CoreWorker + authenticated real CLI/CoreAPI; isolated fake OpenAI/wallet/provider"
+    },
+    {
+      "file": "integrated-sms-generating.png",
+      "width": 640,
+      "height": 500,
+      "sha256": "837343449a56a7c0fede0f31295a06f0901add48b61a8af67805e3ead720e58d",
+      "provenance": "production MainWindow/AiWorker/CoreWorker + authenticated real CLI/CoreAPI; isolated fake OpenAI/wallet/provider"
+    },
+    {
+      "file": "integrated-sms-stale.png",
+      "width": 640,
+      "height": 500,
+      "sha256": "ecf25ed7c5bd99460e93eb7652b038f0c2fe652a4ff00382d226c4a1725ea28a",
+      "provenance": "production MainWindow/AiWorker/CoreWorker + authenticated real CLI/CoreAPI; isolated fake OpenAI/wallet/provider"
+    },
+    {
+      "file": "light-history-retention.png",
+      "width": 200,
+      "height": 218,
+      "sha256": "9e432d892916623532ffbbd83546f6d81dcbdf3e7c5c08d1335f947969a0db06",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "light-narrow-active-preset-editor.png",
+      "width": 380,
+      "height": 520,
+      "sha256": "5aa0926bf20751d4cc4e0ed804b10b1de73b0a9d05831ead1ffda4d2b6a9860f",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "light-narrow-history-legacy-metrics.png",
+      "width": 850,
+      "height": 600,
+      "sha256": "e0f133d2557a821607e5feba80c61ccd68bf9d21624ac79d0ed57f9ef5821780",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "light-narrow-history-pinned-metrics.png",
+      "width": 850,
+      "height": 600,
+      "sha256": "dc6a5d8ce61c9b4d97fb33e5282918ec2a517b4e7b66a96f0902962142932344",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "light-narrow-history.png",
+      "width": 850,
+      "height": 600,
+      "sha256": "f5a50c65f181ef3ded028c7dd87168225539c5f38fb972c150ab66e4859cb11a",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "light-narrow-latest-details.png",
+      "width": 850,
+      "height": 600,
+      "sha256": "8912014b62e72dd8f1c2254e5c8074b06c0427a5bc8303d222595d18af75971a",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "light-narrow-latest.png",
+      "width": 850,
+      "height": 600,
+      "sha256": "9b4e020e629149aea4e1a4953932043f59995ded9438a79254001eea5102677a",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "light-narrow-preset-editor.png",
+      "width": 380,
+      "height": 520,
+      "sha256": "22d05092e3a1f48def1ba3f1c90e53e32f9781ed4692716a2e8706e45b709a28",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "light-narrow-sms-context.png",
+      "width": 440,
+      "height": 500,
+      "sha256": "0dca44af6a04f6a413628eb8f7b35ac91c7f9cd6a6b2acca2fc00d18017d403d",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "light-narrow-sms-editable.png",
+      "width": 440,
+      "height": 500,
+      "sha256": "62cb85cb46a2a75d82b2d1ae2c759349918acb3363787dd49d05f7fa91d6c5b0",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "light-narrow-sms-empty.png",
+      "width": 440,
+      "height": 500,
+      "sha256": "8c69a1976ffa5fe600b8ebb378ce0113b355c81bc0a692019abddde964a34394",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "light-narrow-sms-error.png",
+      "width": 440,
+      "height": 500,
+      "sha256": "4c9dfb8943978d501f2f438646f018188bb65c14e9e51a48bc7e5b0d73b6c3b1",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "light-narrow-sms-generating.png",
+      "width": 440,
+      "height": 500,
+      "sha256": "a3c5867689993c03e3dd0c89fd86b6a953bccdf5e5e313bdb7fcee7b8aeb4e64",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "light-narrow-sms-stale.png",
+      "width": 440,
+      "height": 500,
+      "sha256": "7bb67c9f15936aa6c1cf108fc56c9aef6fbbfdabc968b419dfde37399718ec63",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "light-normal-active-preset-editor.png",
+      "width": 540,
+      "height": 650,
+      "sha256": "547a46657385d572b4a2c4748a9a4c131a85f5beefcbf4ae67314f5562ee7591",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "light-normal-history-legacy-metrics.png",
+      "width": 1120,
+      "height": 800,
+      "sha256": "32a3f852ec2501d718ba561621a8294dc04bdc71c86d140714adcdedbdbb21d8",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "light-normal-history-pinned-metrics.png",
+      "width": 1120,
+      "height": 800,
+      "sha256": "c00bd88a7a9a0f0a1946e7dacdf89b58b246f25664e3055fbd6f19ba0aaf4add",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "light-normal-history.png",
+      "width": 1120,
+      "height": 800,
+      "sha256": "752a607dfcf4d0c3a5fb9bc6f0841fb56622a7f738287f04a7cd01a3c9fff70e",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "light-normal-latest-details.png",
+      "width": 1120,
+      "height": 800,
+      "sha256": "4c0e259294788a92b6891b9375b4d6867a56fbb973607cbd098a0ffcb805bcc0",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "light-normal-latest.png",
+      "width": 1120,
+      "height": 800,
+      "sha256": "b3980039dfeb76a5beb60174baee8f8828103c357cb935687ea956625b0acac9",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "light-normal-preset-editor.png",
+      "width": 540,
+      "height": 650,
+      "sha256": "a7af3adcff0d8413eec7ce66adf060a7d5792b2b33af15316f17eac4d454cc29",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "light-normal-sms-context.png",
+      "width": 640,
+      "height": 500,
+      "sha256": "01d162576bcb8cc6d72e7caa8cd94bf6dcce50c8f719062c15ddfb203bd567b1",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "light-normal-sms-editable.png",
+      "width": 640,
+      "height": 500,
+      "sha256": "adab459f32f9aecc67a0f5aae958c21b7956e0fb5767752b16b9deaaa17ee617",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "light-normal-sms-empty.png",
+      "width": 640,
+      "height": 500,
+      "sha256": "a114384b91705423040542d2038a0af7467369ed42f27433f62e850c095f0f8f",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "light-normal-sms-error.png",
+      "width": 640,
+      "height": 500,
+      "sha256": "7f7928113f02b921824c1aeb696d0a2e9e78a067ca88db57ab23b5578f49d2ab",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "light-normal-sms-generating.png",
+      "width": 640,
+      "height": 500,
+      "sha256": "6d09945cb640a000241c481a823127c9c656c39395f9183e9743eb92d48187ba",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "light-normal-sms-stale.png",
+      "width": 640,
+      "height": 500,
+      "sha256": "7bf523aa160b9504aee0d9a2e32c4e1ca45ca5adfd09a87c2ceee1ce4103ec2d",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "sms-before.png",
+      "width": 760,
+      "height": 680,
+      "sha256": "790ac0d1c3a2dc1410e0e6d23c6c65f0c9bac2ed631afc7ba69d5c4dd8073bff",
+      "provenance": "historical fictional before-reference; not current source"
+    },
+    {
+      "file": "system-history-retention.png",
+      "width": 200,
+      "height": 218,
+      "sha256": "7b7fb48425f0eca56d9af0874a8ae4bca7d71dd084b7df2fb1adfbee19ea4ded",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "system-narrow-active-preset-editor.png",
+      "width": 380,
+      "height": 520,
+      "sha256": "913026fe65ebfc298f26e918f2f47fc409e5ac073ebb226bec0dc52ec4c4316d",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "system-narrow-history-legacy-metrics.png",
+      "width": 850,
+      "height": 600,
+      "sha256": "57bdd9354d9d8a1537abea41dbcc52b346d41689d72aabebca5ffc507ae88021",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "system-narrow-history-pinned-metrics.png",
+      "width": 850,
+      "height": 600,
+      "sha256": "ba86416af53a5c16905236a4f5152e5a3a24ded3516f15c2e772d40640173414",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "system-narrow-history.png",
+      "width": 850,
+      "height": 600,
+      "sha256": "737b45f97f2458e2e52e78eba6dc4e5811aa05061dadb09936fdb5f603db8edd",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "system-narrow-latest-details.png",
+      "width": 850,
+      "height": 600,
+      "sha256": "7110aed0ae617bc73380a319466ff07d02ba0a386134859f94544c01b94bcf41",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "system-narrow-latest.png",
+      "width": 850,
+      "height": 600,
+      "sha256": "be2ac63b8c8aeab857c9ed5b424465a9f230eefdd1c90d264ce065fe956fb4a7",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "system-narrow-preset-editor.png",
+      "width": 380,
+      "height": 520,
+      "sha256": "1a9422df09894f5e94ab7ca8773183d4154b359c2c11a60c506d1b16ac4d5853",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "system-narrow-sms-context.png",
+      "width": 440,
+      "height": 500,
+      "sha256": "64067a39a6fab90d71bebf73c4f80c697e3ca3926780ddb375ec3c8afb680622",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "system-narrow-sms-editable.png",
+      "width": 440,
+      "height": 500,
+      "sha256": "c84991db7a3dcebe14171f23739b01b9709c8f0efba1fb74b902cb8b63bdc83a",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "system-narrow-sms-empty.png",
+      "width": 440,
+      "height": 500,
+      "sha256": "55cb33b972156567be7df2dd0c4561e72187878e5921bb342202e4eadeb0a8a1",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "system-narrow-sms-error.png",
+      "width": 440,
+      "height": 500,
+      "sha256": "b2f1ec9f094dc8efafe701d670ed1cb81567370f7098689ff2d6479883e5317b",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "system-narrow-sms-generating.png",
+      "width": 440,
+      "height": 500,
+      "sha256": "681528b544fbb7e68ef63cebdbd41ea72bd03021c782f2b6d1f17988bc5df91a",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "system-narrow-sms-stale.png",
+      "width": 440,
+      "height": 500,
+      "sha256": "08d46483874054e7e0ddbeb1b43992977e2e3fac67c4d27e83cdfffd96076ff7",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "system-normal-active-preset-editor.png",
+      "width": 540,
+      "height": 650,
+      "sha256": "71fbea16f4239a819644afda21e771c142184930bda10880e07d681fa3392e37",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "system-normal-history-legacy-metrics.png",
+      "width": 1120,
+      "height": 800,
+      "sha256": "2b2b299b983163c1d594606a990f52e77180864f7c38981b34613916bd3f96d0",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "system-normal-history-pinned-metrics.png",
+      "width": 1120,
+      "height": 800,
+      "sha256": "11789d3dc49972e93fd65efd0c792763058842884d0edbf88a79ab894d6e6cf4",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "system-normal-history.png",
+      "width": 1120,
+      "height": 800,
+      "sha256": "7dfd1b511e3c8cb19f42fbe9e44b44b3ec27d68f4b50a50188d2573c89e7481e",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "system-normal-latest-details.png",
+      "width": 1120,
+      "height": 800,
+      "sha256": "9f5fc018736b94238dbc7c2d7ec7a21e848c788159da949877b7cde7c6727857",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "system-normal-latest.png",
+      "width": 1120,
+      "height": 800,
+      "sha256": "6301c081465d1ec869858b391b169dbf9c227790469d62042764c3a5a307285e",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "system-normal-preset-editor.png",
+      "width": 540,
+      "height": 650,
+      "sha256": "f8d6dc0a496a9e30fe8ab7fd314989ee9a3681d00eecc1161990b59ac448df8b",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "system-normal-sms-context.png",
+      "width": 640,
+      "height": 500,
+      "sha256": "83c598ea7ca33897b90545754961094fbabe76d4c87656ad8719bb4d66853bf2",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "system-normal-sms-editable.png",
+      "width": 640,
+      "height": 500,
+      "sha256": "a641d05b6f3a6de7c2bda5a993b78c774aaf998b53b897100964da9f285720aa",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "system-normal-sms-empty.png",
+      "width": 640,
+      "height": 500,
+      "sha256": "fe46bb2ddd3147cc15e11451ba75cafc782e9fba42bb795b45c5dd39413bd139",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "system-normal-sms-error.png",
+      "width": 640,
+      "height": 500,
+      "sha256": "d6e3ed40bc848e34f830ddc8f192d54d409529640287f689281dbdad436d59a0",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "system-normal-sms-generating.png",
+      "width": 640,
+      "height": 500,
+      "sha256": "8c6de9080fea6de999164e941fcc8078ade257d49dee919f0238c4a9319f3d4d",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    },
+    {
+      "file": "system-normal-sms-stale.png",
+      "width": 640,
+      "height": 500,
+      "sha256": "b738a5cfd1eb6f849d70b8f4563a517e664c5ecc01347c33859d6b4885f90f2f",
+      "provenance": "current production native Qt widgets with fictional fake worker states"
+    }
+  ],
+  "source_sha256": {
+    "src/pbdesk/__init__.py": "df3dc3bef669f594e280a2df05ef144dea23dbaf766b843403d33661e2a61d77",
+    "src/pbdesk/api/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/pbdesk/api/ai.py": "17763247e57f501bcd2b7b1275074356183d78660534e7dabbc5ada29f3ac62d",
+    "src/pbdesk/api/app.py": "7b2bd54ec6b02dd80a8b774f23d9b378667b1816b3bc07bb5c08a35204760cba",
+    "src/pbdesk/api/core_settings.py": "d0892b71c826eab282d94b582c6ffb3a8068f534466308bca5ed2c508940bfde",
+    "src/pbdesk/api/media.py": "e8989159a6c02115eb36637bcf73ff99e4f092399f8a59ca66e239240208dd4c",
+    "src/pbdesk/api/streaming.py": "e30716a3e4aa6e27bbc42d053f1a0e480d03c323cc4218a0381f2fc98e05a665",
+    "src/pbdesk/cli.py": "cd25bff9b0d1ecb65e4bd51642f7779bd471e1d21f8dc143deb1eba561ea8504",
+    "src/pbdesk/config.py": "1c9fdfadba8aebe440bf092a5897037bf606d91c215b12feb75b5e20a3a63197",
+    "src/pbdesk/credentials.py": "9caa5218a6cc913f45a0842f2716d9f63dbdbc0a41a4cadf50ac8125168fb2db",
+    "src/pbdesk/desktop/__init__.py": "c8c30a6789ea7fb50ff10a768d1cf815a946d27fe8f421d8f707935c71633fe7",
+    "src/pbdesk/desktop/__main__.py": "71837522fdbc7a090e37a24901d50f26ecbe0be17aa7c2af5a4ee962f3e986c1",
+    "src/pbdesk/desktop/actions.py": "c1882bcd07a83b45872c1ca785646c72b51b259a548efc7f7bdd1dd3ee0bf2bf",
+    "src/pbdesk/desktop/activity.py": "f660da77cd48e60d1b55cfef99b8f6b95b52e16d00549f02b6ce1af3fe30cd73",
+    "src/pbdesk/desktop/ai.py": "411e741bb85812e9265479df8aaf4878ea2740a8116a61321af3e650929424e2",
+    "src/pbdesk/desktop/ai_worker.py": "7e1351a3d47bcad170e6d4aacbb7fd11f31872db89eb0a6b196944a73a7e3591",
+    "src/pbdesk/desktop/app.py": "87796a69a33a32b6af9e2ac856bd3115cfda5a8949b86725d8db3daebc842b8f",
+    "src/pbdesk/desktop/chat.py": "dc7f3aa43db89cb1ecf487ea6ca745d8c1ade962b4f3cb5151bb07cb69e90a82",
+    "src/pbdesk/desktop/core_settings.py": "11b5f042e143145885b5594aef1c2a00492cc44dc47d158f8b8f3c3c3730093c",
+    "src/pbdesk/desktop/devices.py": "4e698cd7b181f4755517674d96fef04bfd6a9eef7eda6a165ca8a19a347b4866",
+    "src/pbdesk/desktop/media.py": "ae38e3fe17fcb7f6e15fe1831dd932076b1b57c4d302b171bf795f05a103741e",
+    "src/pbdesk/desktop/models.py": "35a6cd683f1c1349421ee14049881ee2dbfbf90e0f14745b2f42b0745abb1bb5",
+    "src/pbdesk/desktop/notification_content.py": "0ae938d232efaff45b74ea19bf10b165523c88eb43ff377b42efdb3be1ac2518",
+    "src/pbdesk/desktop/preferences.py": "104125e6e28746948134935ffc381291ba4ad6753d012da63989f5b7bf2352c0",
+    "src/pbdesk/desktop/status.py": "743d025ac94c3958a4b4569631144a99ecd1bc0b799179ca34b75a090dba92ae",
+    "src/pbdesk/desktop/summary_widgets.py": "1906c0c2172f01c8373eb2cc25eaf6f3bb0dcead19fda4a162da05f270420873",
+    "src/pbdesk/desktop/theme.py": "92191b0f19cdfae96a43cd1f7ef239b5d11b58aa2969d15e538b4b73ede6dc8a",
+    "src/pbdesk/desktop/widgets.py": "d87605d3ae88a661175c0b5661668b447d981cf62ff5552af7d86ca404d32ea5",
+    "src/pbdesk/desktop/worker.py": "f97009d256eee712591325d0f2d0676c7c5a091d644fde3521764d3afec05407",
+    "src/pbdesk/domain/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/pbdesk/domain/actions.py": "670d87fa7077798dc07ac8f0e161e238e812d789516f6c3e3b9f3bb218c7c2e1",
+    "src/pbdesk/mcp_server/__init__.py": "1915f4f2779514e811a73253a149bd703a2427f4fc81fb61e6f848570d40f534",
+    "src/pbdesk/mcp_server/__main__.py": "ddd60a1df996b2b744c45953165711e5afe2711f5f0249f4e98875e1342411df",
+    "src/pbdesk/mcp_server/server.py": "0acf30a43e642d7c12a55020bbaba897ea42a707286659c639a9bb10e6036192",
+    "src/pbdesk/pushbullet/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/pbdesk/pushbullet/crypto.py": "b4b8e31a982c5bd52137915a7247eeb5e0088078a96f0804a3e24092706311b9",
+    "src/pbdesk/pushbullet/normalize.py": "20f7373e0b40a7d9d0a716766f7671364d5158f6234969231ee81d799db8e9c1",
+    "src/pbdesk/pushbullet/provider.py": "23928bb6e5c96253ef29fc970cb06537473393c052df002a58139262678d97cb",
+    "src/pbdesk/pushbullet/sms.py": "b19d61621f5ed29ba74792809461c5e821d27da29f0da1779c8f1a90158ea08a",
+    "src/pbdesk/services/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/pbdesk/services/ai.py": "e9e7607475ccf03b834f4f95d5e27f5601ba80f94b642d65cffb7ef59fd9657b",
+    "src/pbdesk/services/client_lifecycle.py": "fb112c706493aabc00d8e877c68cc6d32a7397eccaf6db291212ca6341edfa3b",
+    "src/pbdesk/services/core_settings.py": "3dc2d1b7417efae01c692b46294a886131be72aad836f935f9c499667a54b9b3",
+    "src/pbdesk/services/instance.py": "2b955aa63d569e60c95f3f0e4d034111bd786a1593a873cc9809e44d7643d657",
+    "src/pbdesk/services/kwallet.py": "48c36c1b06a2d74fef241df4752387c6cc3f0410e8a1bf93528532d98ddbd6c2",
+    "src/pbdesk/services/lifecycle.py": "94c6e03a66f9b76d7de8c00958ef93bb11c8f13ce24e0cc7cc553320f420c428",
+    "src/pbdesk/services/notifications.py": "386c1e9d0d8fa4d365a72c0e818396d962f7ad6b49420962fc4c885adff0e4ed",
+    "src/pbdesk/services/outbox.py": "5d8ac7b9d338aa4904b3fca7007e8985783d93757ee44cabeb1cb9190518c915",
+    "src/pbdesk/services/web_identity.py": "9e7f04b9b03c86fa29989798ffeb706b7ce4118e33402ec57149650e279f97cc",
+    "src/pbdesk/services/webhost.py": "0a2036fb9d896234f964acaf800c8067f9c5373f7061f6ca5321a2368d74d2b4",
+    "src/pbdesk/storage/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/pbdesk/storage/database.py": "92dab1bf93f727be72ed23ce18e678771496a798560107e283351a242ef97179",
+    "src/pbdesk/storage/migrations/env.py": "60e840e320a12b2f5fdf2e6ad0b03ccf70fc7b1d740c1c07035a4e498fbc48d2",
+    "src/pbdesk/storage/migrations/versions/0001_inbox.py": "510f6e1b8c8961f3eb5d5158a66ce202b0bef867f84e669054d95bb292b93fab",
+    "src/pbdesk/storage/migrations/versions/0002_devices_outbox_crypto.py": "00c65e6a7c2f425a22e2be732fb89c5558072fff2ae37277949d803dfb3a3152",
+    "src/pbdesk/storage/migrations/versions/0003_sms_history.py": "15e2e27002e5143c6bc93dac91cd044f2fbefefe3a2f7b2bc22b54b77d9facba",
+    "src/pbdesk/storage/migrations/versions/0004_item_association.py": "763ccb6fd3244731fdbaf35d5ef120a47b0f5c3f3726d4bfdc6e56d32146f30e",
+    "src/pbdesk/storage/migrations/versions/0005_account_partitions.py": "7ee17df8e96a717cde9f67bd62ee646eb5db3cd1ff3e67915031b4e055a073b0",
+    "src/pbdesk/storage/migrations/versions/0006_media.py": "557e458c6286829ce3b6665f954f525e5f4ae1d2d81638cdf38bcaaecd881bb7",
+    "src/pbdesk/storage/migrations/versions/0007_summaries.py": "929be4ab38a04d2dfe957200bf0a72c309360c9229e39f5ff87de8dddcfb1c7d",
+    "src/pbdesk/storage/sms.py": "f9a88e761c2852fa571b001072740a79ef3986e629771ee92dd3a3a09184c1ae",
+    "src/pbdesk/storage/summaries.py": "63ecbf96a4d48b998d76aef4ed637693daa707702e30a8bf1652231a6c81a329",
+    "src/pbdesk/storage/workflows.py": "52e51b7ce999bdc4ab87be71898e15377895ef517b7f8685afda61137b189be5",
+    "src/pbdesk/web/__init__.py": "9e8e6a36ec9de9372cc1f475624b9da3e47ca2d7fefb7016e3dccba7a03d0314",
+    "src/pbdesk/web/__main__.py": "71837522fdbc7a090e37a24901d50f26ecbe0be17aa7c2af5a4ee962f3e986c1",
+    "src/pbdesk/web/app.py": "6369e22b4362e16d7a85106362606755d2f1799f69f452fee5874b188c4ef88e",
+    "src/pbdesk/web/static/css/app.css": "3245930fd4ec614f351599aa534221a29dfaf554e1f1e71b264e70096a19bf20",
+    "src/pbdesk/web/static/js/app.js": "aa81b59967a1f277e3386670e2a58e656e58f89758f26ee28e45a948f14221eb",
+    "src/pbdesk/web/static/vendor/bootstrap/LICENSE": "4620c84ad5ce8602ff65640ed6b7c8b78ebb9e036584f0ebc1ccc88206a4bb51",
+    "src/pbdesk/web/static/vendor/bootstrap/bootstrap.bundle.min.js": "c6f670216aedd2c61ec83102f7e40c1c44114eecd7f37b2edc332757390c386a",
+    "src/pbdesk/web/static/vendor/bootstrap/bootstrap.min.css": "8f8173cb2d8f867274aeb0cb15328e60f490c7f272351e51a55f1dabb486e4ff",
+    "src/pbdesk/web/templates/base.html": "af6bbf1ce11e1c293f418ba12795f985dbab8b341d2bd7ad076a8956460a5db7",
+    "src/pbdesk/web/templates/status.html": "45b29cb5fda6fe781568e460f10be1b92910fefd909d15c4aa18bf069150c4ea",
+    "src/pbdesk/web/vendor-manifest.json": "1a23bb392690e2177beb84c2af90d7191901c844301bcee1e02e0e115e3d8a57",
+    "src/pbdesk.egg-info/PKG-INFO": "0cf9018ddde41952c37aa5d0904498ce6196dbeea83069493459adc4612a8a32",
+    "src/pbdesk.egg-info/SOURCES.txt": "d93af295246dbf620e93d197f3778c45bc718ddf07aee880475d8242717c75d6",
+    "src/pbdesk.egg-info/dependency_links.txt": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+    "src/pbdesk.egg-info/entry_points.txt": "a8e49a2b4ce3735b309265c49ddeaeb51b79ae7bb12ff1e50a2d367f944ce6cc",
+    "src/pbdesk.egg-info/requires.txt": "5c8583e6e6d9c281b176f8b099245d2f58e484ea3abbf1f6a60577af7d8b6f7f",
+    "src/pbdesk.egg-info/top_level.txt": "da1d39978af8d7394001662610a84060eee95cb0db4189ec4c6e110649dc5920"
+  },
+  "live_core_touched": false,
+  "real_openai_calls": false,
+  "real_user_credentials_read": false,
+  "historical_reference": "sms-before.png is before-state, not evidence of current source. All other images use current frozen source."
+}

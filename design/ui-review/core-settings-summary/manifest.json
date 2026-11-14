@@ -1,0 +1,310 @@
+{
+  "screens": [
+    {
+      "file": "core-dark-narrow-storage-notifications.png",
+      "width": 850,
+      "height": 540,
+      "sha256": "6d854d43b4153a36c3d9575910fb3b16896674162563fd181c07b07150570c32",
+      "provenance": "production native Qt widgets, synthetic fake worker state"
+    },
+    {
+      "file": "core-dark-narrow.png",
+      "width": 850,
+      "height": 540,
+      "sha256": "d9e4e01e7a64584a4a690d3b3dc05f88ec59502eea6814e2a94d94fd3e414382",
+      "provenance": "production native Qt widgets, synthetic fake worker state"
+    },
+    {
+      "file": "core-dark-normal-storage-notifications.png",
+      "width": 1000,
+      "height": 700,
+      "sha256": "670c16d0a8bd8cc81b059efb62fb7b766acec9b07c37fdfa69a46361e29ddb00",
+      "provenance": "production native Qt widgets, synthetic fake worker state"
+    },
+    {
+      "file": "core-dark-normal.png",
+      "width": 1000,
+      "height": 700,
+      "sha256": "1714deb460fa9f2989639512d11aab6a133812a7ff578fe7d5b4bf64a1f45a6d",
+      "provenance": "production native Qt widgets, synthetic fake worker state"
+    },
+    {
+      "file": "core-error.png",
+      "width": 1000,
+      "height": 700,
+      "sha256": "dcee62dd2075af3385e55a0c1c73e5dce52a3fccbbd3962e322b3c01f30239f4",
+      "provenance": "production native Qt widgets, synthetic fake worker state"
+    },
+    {
+      "file": "core-light-narrow-storage-notifications.png",
+      "width": 850,
+      "height": 540,
+      "sha256": "98f3b4439e8bcb67e2491e1ec0ed5ee05f6a67a309eacb6ef50a14a1def8e151",
+      "provenance": "production native Qt widgets, synthetic fake worker state"
+    },
+    {
+      "file": "core-light-narrow.png",
+      "width": 850,
+      "height": 540,
+      "sha256": "689c8d944db8aa111ed1771a3cf3afee14eee94e679b68822fa32ad560093242",
+      "provenance": "production native Qt widgets, synthetic fake worker state"
+    },
+    {
+      "file": "core-light-normal-storage-notifications.png",
+      "width": 1000,
+      "height": 700,
+      "sha256": "b4d9d831be7748e1f0ccd82fd3fd413a56db0e714c0ad7d548a76c11ee7ab1c1",
+      "provenance": "production native Qt widgets, synthetic fake worker state"
+    },
+    {
+      "file": "core-light-normal.png",
+      "width": 1000,
+      "height": 700,
+      "sha256": "2bf490a7e88bd6e05b326388cc486743bd5ffea8a36e8434c1a93890f6f5645e",
+      "provenance": "production native Qt widgets, synthetic fake worker state"
+    },
+    {
+      "file": "core-old-backend.png",
+      "width": 1000,
+      "height": 700,
+      "sha256": "fd697adf8976d6694e69f592710a35991505e5e8495002a9553bc099640cbdae",
+      "provenance": "production native Qt widgets, synthetic fake worker state"
+    },
+    {
+      "file": "core-system-narrow-storage-notifications.png",
+      "width": 850,
+      "height": 540,
+      "sha256": "1aadc10f868f890ed27a607a2925b95c366d9ebf6ba351dd6a90cfa017c2a2fb",
+      "provenance": "production native Qt widgets, synthetic fake worker state"
+    },
+    {
+      "file": "core-system-narrow.png",
+      "width": 850,
+      "height": 540,
+      "sha256": "1c52e641a0db735f7abc714f6e4a1d98a29919c23e49b0973b3bd6f7c7259f3b",
+      "provenance": "production native Qt widgets, synthetic fake worker state"
+    },
+    {
+      "file": "core-system-normal-storage-notifications.png",
+      "width": 1000,
+      "height": 700,
+      "sha256": "2619371d49929c4f0365a2890f031c8ed4d890ff9f961253826ffa04c1f519dd",
+      "provenance": "production native Qt widgets, synthetic fake worker state"
+    },
+    {
+      "file": "core-system-normal.png",
+      "width": 1000,
+      "height": 700,
+      "sha256": "f6be68f053da8d5c59b176bc94a81ce64edfc1964b25d6e74ac50cea390b9fdd",
+      "provenance": "production native Qt widgets, synthetic fake worker state"
+    },
+    {
+      "file": "integrated-core-restart-complete.png",
+      "width": 850,
+      "height": 540,
+      "sha256": "19c2031b342f69fd136b194158316349f350b20999c8fcc78e51cedbed196eb6",
+      "provenance": "production MainWindow/CoreWorker authenticated HTTP with real isolated demo core/restart; fake notify-send"
+    },
+    {
+      "file": "integrated-core-restart-confirmation.png",
+      "width": 277,
+      "height": 164,
+      "sha256": "ce705d75cff2a992bef3502e5aa78c7f523789389e7474eee4a4be28d32eeaab",
+      "provenance": "production MainWindow/CoreWorker authenticated HTTP with real isolated demo core/restart; fake notify-send"
+    },
+    {
+      "file": "integrated-core-restart-pending.png",
+      "width": 850,
+      "height": 540,
+      "sha256": "7ad2fb3695185a7a348397515180ab89948f8cd12f2d8634b414ecf2fe94474e",
+      "provenance": "production MainWindow/CoreWorker authenticated HTTP with real isolated demo core/restart; fake notify-send"
+    },
+    {
+      "file": "integrated-dark-core-narrow.png",
+      "width": 850,
+      "height": 540,
+      "sha256": "54346ab3cddadce3148061bd60738fd0cc3ed8ab9bc5c90433a996d35c47945c",
+      "provenance": "production MainWindow/CoreWorker authenticated HTTP with real isolated demo core/restart; fake notify-send"
+    },
+    {
+      "file": "integrated-dark-core-normal.png",
+      "width": 1000,
+      "height": 700,
+      "sha256": "60e8996633f1da77ef0bc300364ee5cba80af4ecc87909236f6b8b8769e37ead",
+      "provenance": "production MainWindow/CoreWorker authenticated HTTP with real isolated demo core/restart; fake notify-send"
+    },
+    {
+      "file": "integrated-light-core-narrow.png",
+      "width": 850,
+      "height": 540,
+      "sha256": "f7405773beddb2d79f65513664906aee7af6a9b855dc6838455cad2b236c15dd",
+      "provenance": "production MainWindow/CoreWorker authenticated HTTP with real isolated demo core/restart; fake notify-send"
+    },
+    {
+      "file": "integrated-light-core-normal.png",
+      "width": 1000,
+      "height": 700,
+      "sha256": "facf42e4cf1344cc39729bba15a1260acd7328a246a0175d6943f14d8cfbe504",
+      "provenance": "production MainWindow/CoreWorker authenticated HTTP with real isolated demo core/restart; fake notify-send"
+    },
+    {
+      "file": "integrated-system-core-narrow.png",
+      "width": 850,
+      "height": 540,
+      "sha256": "06c7d9e195710779dd78271aaf2a76c1418e6e28fd0d5189c847485929d50376",
+      "provenance": "production MainWindow/CoreWorker authenticated HTTP with real isolated demo core/restart; fake notify-send"
+    },
+    {
+      "file": "integrated-system-core-normal.png",
+      "width": 1000,
+      "height": 700,
+      "sha256": "f526e4bb2be0b5366dd3be2cb85bbda6ce8f0a0ae4c8ea2f86a902cc52d30dff",
+      "provenance": "production MainWindow/CoreWorker authenticated HTTP with real isolated demo core/restart; fake notify-send"
+    },
+    {
+      "file": "notifications-off.png",
+      "width": 1000,
+      "height": 700,
+      "sha256": "ee63cef8288427cc9b6389a422dbd8c02775abe979e4e0854fa779630ab33998",
+      "provenance": "production native Qt widgets, synthetic fake worker state"
+    },
+    {
+      "file": "notifications-on.png",
+      "width": 1000,
+      "height": 700,
+      "sha256": "b4d9d831be7748e1f0ccd82fd3fd413a56db0e714c0ad7d548a76c11ee7ab1c1",
+      "provenance": "production native Qt widgets, synthetic fake worker state"
+    },
+    {
+      "file": "notifications-requested-unavailable.png",
+      "width": 1000,
+      "height": 700,
+      "sha256": "e16ac34208a38ecd3f42d3a8ae3ed9a370f8f951b21679990dc0052e04338754",
+      "provenance": "production native Qt widgets, synthetic fake worker state"
+    },
+    {
+      "file": "restart-confirmation.png",
+      "width": 277,
+      "height": 164,
+      "sha256": "a156b105ff2595e334a99992266d3ed390f299d749afbd5bf8186b122692ded5",
+      "provenance": "production native Qt widgets, synthetic fake worker state"
+    },
+    {
+      "file": "restart-reconnecting.png",
+      "width": 1000,
+      "height": 700,
+      "sha256": "1cb7205b7ece4b1b6fba31d25fd58e5abc86cdddd05187bcfa4d97642b104f52",
+      "provenance": "production native Qt widgets, synthetic fake worker state"
+    },
+    {
+      "file": "restart-verified-success.png",
+      "width": 1000,
+      "height": 700,
+      "sha256": "48e2b42afd3531a4b9c034e49aee57deb19b51c18c2a128728b2429c92564045",
+      "provenance": "production native Qt widgets, synthetic fake worker state"
+    },
+    {
+      "file": "sidebar-saved-notifications.png",
+      "width": 1000,
+      "height": 700,
+      "sha256": "17e5e4154192db64b10c065b493149da9145fbe44713bc68c2842a74d7135b47",
+      "provenance": "production native Qt widgets, synthetic fake worker state"
+    },
+    {
+      "file": "sidebar-saved-sms.png",
+      "width": 1000,
+      "height": 700,
+      "sha256": "10936526b8d1ad03f9904383d559c1ab6e6997291630460a3ec216fd7e22172e",
+      "provenance": "production native Qt widgets, synthetic fake worker state"
+    },
+    {
+      "file": "sidebar-saved-summary.png",
+      "width": 1000,
+      "height": 700,
+      "sha256": "107594811b631c094f50d613aec498177abbcf3da7ca59ad732cd95e2fa1d46a",
+      "provenance": "production native Qt widgets, synthetic fake worker state"
+    }
+  ],
+  "source_sha256": {
+    "src/pbdesk/__init__.py": "df3dc3bef669f594e280a2df05ef144dea23dbaf766b843403d33661e2a61d77",
+    "src/pbdesk/api/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/pbdesk/api/ai.py": "e3f6eec60c80bf15f5c402ddc1059737ef9b366c03a14cc7a6fcdc5064943bf1",
+    "src/pbdesk/api/app.py": "300cbcabd75e1103190cd9ee9d485f1c90e8fc3fd67d020a294fbef85178dc81",
+    "src/pbdesk/api/core_settings.py": "d0892b71c826eab282d94b582c6ffb3a8068f534466308bca5ed2c508940bfde",
+    "src/pbdesk/api/media.py": "e8989159a6c02115eb36637bcf73ff99e4f092399f8a59ca66e239240208dd4c",
+    "src/pbdesk/api/streaming.py": "e30716a3e4aa6e27bbc42d053f1a0e480d03c323cc4218a0381f2fc98e05a665",
+    "src/pbdesk/cli.py": "cd25bff9b0d1ecb65e4bd51642f7779bd471e1d21f8dc143deb1eba561ea8504",
+    "src/pbdesk/config.py": "1c9fdfadba8aebe440bf092a5897037bf606d91c215b12feb75b5e20a3a63197",
+    "src/pbdesk/credentials.py": "9caa5218a6cc913f45a0842f2716d9f63dbdbc0a41a4cadf50ac8125168fb2db",
+    "src/pbdesk/desktop/__init__.py": "c8c30a6789ea7fb50ff10a768d1cf815a946d27fe8f421d8f707935c71633fe7",
+    "src/pbdesk/desktop/__main__.py": "71837522fdbc7a090e37a24901d50f26ecbe0be17aa7c2af5a4ee962f3e986c1",
+    "src/pbdesk/desktop/actions.py": "c1882bcd07a83b45872c1ca785646c72b51b259a548efc7f7bdd1dd3ee0bf2bf",
+    "src/pbdesk/desktop/activity.py": "f660da77cd48e60d1b55cfef99b8f6b95b52e16d00549f02b6ce1af3fe30cd73",
+    "src/pbdesk/desktop/ai.py": "f8a4b520f6485c2d6c5f264357e8e9bd9011c356f8640154c7372beda5a53a5b",
+    "src/pbdesk/desktop/ai_worker.py": "e2f8751ae0d143d113d78bb04de576206016a5c9b9fdedfb99f8be2d418f3d70",
+    "src/pbdesk/desktop/app.py": "affae566b3efdf4a48f19053f6733de5edc853def3782f4e5a607a55a173d72e",
+    "src/pbdesk/desktop/chat.py": "fb2718a7e33047d423e123f4dc5d252db900de5aca973d34a3acfaabf362d6f5",
+    "src/pbdesk/desktop/core_settings.py": "11b5f042e143145885b5594aef1c2a00492cc44dc47d158f8b8f3c3c3730093c",
+    "src/pbdesk/desktop/devices.py": "4e698cd7b181f4755517674d96fef04bfd6a9eef7eda6a165ca8a19a347b4866",
+    "src/pbdesk/desktop/media.py": "ae38e3fe17fcb7f6e15fe1831dd932076b1b57c4d302b171bf795f05a103741e",
+    "src/pbdesk/desktop/models.py": "35a6cd683f1c1349421ee14049881ee2dbfbf90e0f14745b2f42b0745abb1bb5",
+    "src/pbdesk/desktop/notification_content.py": "0ae938d232efaff45b74ea19bf10b165523c88eb43ff377b42efdb3be1ac2518",
+    "src/pbdesk/desktop/preferences.py": "104125e6e28746948134935ffc381291ba4ad6753d012da63989f5b7bf2352c0",
+    "src/pbdesk/desktop/status.py": "743d025ac94c3958a4b4569631144a99ecd1bc0b799179ca34b75a090dba92ae",
+    "src/pbdesk/desktop/theme.py": "92191b0f19cdfae96a43cd1f7ef239b5d11b58aa2969d15e538b4b73ede6dc8a",
+    "src/pbdesk/desktop/widgets.py": "d87605d3ae88a661175c0b5661668b447d981cf62ff5552af7d86ca404d32ea5",
+    "src/pbdesk/desktop/worker.py": "f97009d256eee712591325d0f2d0676c7c5a091d644fde3521764d3afec05407",
+    "src/pbdesk/domain/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/pbdesk/domain/actions.py": "670d87fa7077798dc07ac8f0e161e238e812d789516f6c3e3b9f3bb218c7c2e1",
+    "src/pbdesk/mcp_server/__init__.py": "1915f4f2779514e811a73253a149bd703a2427f4fc81fb61e6f848570d40f534",
+    "src/pbdesk/mcp_server/__main__.py": "ddd60a1df996b2b744c45953165711e5afe2711f5f0249f4e98875e1342411df",
+    "src/pbdesk/mcp_server/server.py": "0acf30a43e642d7c12a55020bbaba897ea42a707286659c639a9bb10e6036192",
+    "src/pbdesk/pushbullet/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/pbdesk/pushbullet/crypto.py": "b4b8e31a982c5bd52137915a7247eeb5e0088078a96f0804a3e24092706311b9",
+    "src/pbdesk/pushbullet/normalize.py": "20f7373e0b40a7d9d0a716766f7671364d5158f6234969231ee81d799db8e9c1",
+    "src/pbdesk/pushbullet/provider.py": "23928bb6e5c96253ef29fc970cb06537473393c052df002a58139262678d97cb",
+    "src/pbdesk/pushbullet/sms.py": "b19d61621f5ed29ba74792809461c5e821d27da29f0da1779c8f1a90158ea08a",
+    "src/pbdesk/services/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/pbdesk/services/ai.py": "09001e6e2b1c28f48b406b5179579f98d5e354eea84efe511e770a921486a691",
+    "src/pbdesk/services/client_lifecycle.py": "fb112c706493aabc00d8e877c68cc6d32a7397eccaf6db291212ca6341edfa3b",
+    "src/pbdesk/services/core_settings.py": "3dc2d1b7417efae01c692b46294a886131be72aad836f935f9c499667a54b9b3",
+    "src/pbdesk/services/instance.py": "2b955aa63d569e60c95f3f0e4d034111bd786a1593a873cc9809e44d7643d657",
+    "src/pbdesk/services/kwallet.py": "48c36c1b06a2d74fef241df4752387c6cc3f0410e8a1bf93528532d98ddbd6c2",
+    "src/pbdesk/services/lifecycle.py": "94c6e03a66f9b76d7de8c00958ef93bb11c8f13ce24e0cc7cc553320f420c428",
+    "src/pbdesk/services/notifications.py": "386c1e9d0d8fa4d365a72c0e818396d962f7ad6b49420962fc4c885adff0e4ed",
+    "src/pbdesk/services/outbox.py": "5d8ac7b9d338aa4904b3fca7007e8985783d93757ee44cabeb1cb9190518c915",
+    "src/pbdesk/services/web_identity.py": "9e7f04b9b03c86fa29989798ffeb706b7ce4118e33402ec57149650e279f97cc",
+    "src/pbdesk/services/webhost.py": "0a2036fb9d896234f964acaf800c8067f9c5373f7061f6ca5321a2368d74d2b4",
+    "src/pbdesk/storage/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/pbdesk/storage/database.py": "52c2553a788392d0d297469a3df23e4cf2de8c75b61dbfdcc5b199013191bba2",
+    "src/pbdesk/storage/migrations/env.py": "60e840e320a12b2f5fdf2e6ad0b03ccf70fc7b1d740c1c07035a4e498fbc48d2",
+    "src/pbdesk/storage/migrations/versions/0001_inbox.py": "510f6e1b8c8961f3eb5d5158a66ce202b0bef867f84e669054d95bb292b93fab",
+    "src/pbdesk/storage/migrations/versions/0002_devices_outbox_crypto.py": "00c65e6a7c2f425a22e2be732fb89c5558072fff2ae37277949d803dfb3a3152",
+    "src/pbdesk/storage/migrations/versions/0003_sms_history.py": "15e2e27002e5143c6bc93dac91cd044f2fbefefe3a2f7b2bc22b54b77d9facba",
+    "src/pbdesk/storage/migrations/versions/0004_item_association.py": "763ccb6fd3244731fdbaf35d5ef120a47b0f5c3f3726d4bfdc6e56d32146f30e",
+    "src/pbdesk/storage/migrations/versions/0005_account_partitions.py": "7ee17df8e96a717cde9f67bd62ee646eb5db3cd1ff3e67915031b4e055a073b0",
+    "src/pbdesk/storage/migrations/versions/0006_media.py": "557e458c6286829ce3b6665f954f525e5f4ae1d2d81638cdf38bcaaecd881bb7",
+    "src/pbdesk/storage/sms.py": "f9a88e761c2852fa571b001072740a79ef3986e629771ee92dd3a3a09184c1ae",
+    "src/pbdesk/storage/workflows.py": "52e51b7ce999bdc4ab87be71898e15377895ef517b7f8685afda61137b189be5",
+    "src/pbdesk/web/__init__.py": "9e8e6a36ec9de9372cc1f475624b9da3e47ca2d7fefb7016e3dccba7a03d0314",
+    "src/pbdesk/web/__main__.py": "71837522fdbc7a090e37a24901d50f26ecbe0be17aa7c2af5a4ee962f3e986c1",
+    "src/pbdesk/web/app.py": "6369e22b4362e16d7a85106362606755d2f1799f69f452fee5874b188c4ef88e",
+    "src/pbdesk/web/static/css/app.css": "3245930fd4ec614f351599aa534221a29dfaf554e1f1e71b264e70096a19bf20",
+    "src/pbdesk/web/static/js/app.js": "aa81b59967a1f277e3386670e2a58e656e58f89758f26ee28e45a948f14221eb",
+    "src/pbdesk/web/static/vendor/bootstrap/LICENSE": "4620c84ad5ce8602ff65640ed6b7c8b78ebb9e036584f0ebc1ccc88206a4bb51",
+    "src/pbdesk/web/static/vendor/bootstrap/bootstrap.bundle.min.js": "c6f670216aedd2c61ec83102f7e40c1c44114eecd7f37b2edc332757390c386a",
+    "src/pbdesk/web/static/vendor/bootstrap/bootstrap.min.css": "8f8173cb2d8f867274aeb0cb15328e60f490c7f272351e51a55f1dabb486e4ff",
+    "src/pbdesk/web/templates/base.html": "af6bbf1ce11e1c293f418ba12795f985dbab8b341d2bd7ad076a8956460a5db7",
+    "src/pbdesk/web/templates/status.html": "45b29cb5fda6fe781568e460f10be1b92910fefd909d15c4aa18bf069150c4ea",
+    "src/pbdesk/web/vendor-manifest.json": "1a23bb392690e2177beb84c2af90d7191901c844301bcee1e02e0e115e3d8a57",
+    "src/pbdesk.egg-info/PKG-INFO": "0cf9018ddde41952c37aa5d0904498ce6196dbeea83069493459adc4612a8a32",
+    "src/pbdesk.egg-info/SOURCES.txt": "d93af295246dbf620e93d197f3778c45bc718ddf07aee880475d8242717c75d6",
+    "src/pbdesk.egg-info/dependency_links.txt": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+    "src/pbdesk.egg-info/entry_points.txt": "a8e49a2b4ce3735b309265c49ddeaeb51b79ae7bb12ff1e50a2d367f944ce6cc",
+    "src/pbdesk.egg-info/requires.txt": "5c8583e6e6d9c281b176f8b099245d2f58e484ea3abbf1f6a60577af7d8b6f7f",
+    "src/pbdesk.egg-info/top_level.txt": "da1d39978af8d7394001662610a84060eee95cb0db4189ec4c6e110649dc5920"
+  },
+  "live_core_touched": false,
+  "real_openai_calls": false,
+  "real_user_credentials_read": false
+}
