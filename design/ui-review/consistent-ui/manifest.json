@@ -1,0 +1,1603 @@
+{
+  "captured_at": "2026-11-14T10:09:47.017061+00:00",
+  "data": "fictional fixtures only",
+  "native_platform": "xcb",
+  "native_runtime": {
+    "style": "fusion",
+    "available_style_keys": [
+      "Windows",
+      "Fusion"
+    ],
+    "font": "Sans Serif,9,-1,5,400,0,0,0,0,0,0,0,0,0,0,1,,0,0",
+    "base_color": "#161925"
+  },
+  "capture": "Actual production Qt6 QWidget.grab on private Xvfb",
+  "live_core_touched": false,
+  "credentials_read": false,
+  "screens": [
+    {
+      "file": "system-notifications.png",
+      "title": "System \u00b7 Notifications with full long URL and supplied text",
+      "width": 1280,
+      "height": 850,
+      "sha256": "204455b111c187ff3c10a48791a6b1fe1429c69e60f555eb51d6ca26f9370f59",
+      "window_geometry": {
+        "tab": 0,
+        "tabs": [
+          24,
+          115,
+          1032,
+          675
+        ],
+        "heading": [
+          24,
+          20,
+          189,
+          40
+        ],
+        "status": [
+          902,
+          25,
+          154,
+          29
+        ],
+        "inbox_sync": [
+          0,
+          0,
+          144,
+          23
+        ],
+        "inbox_sync_text": "Last synced 14 Nov, 16:00",
+        "inbox_font_height": 17,
+        "inbox_text_width": 144,
+        "inbox_content_width": 144,
+        "list_main_top": 258,
+        "inbox_refresh_height": 23,
+        "notification_detail": [
+          25,
+          60,
+          604,
+          513
+        ]
+      }
+    },
+    {
+      "file": "system-sms.png",
+      "title": "System \u00b7 SMS conversation and pending request",
+      "width": 1280,
+      "height": 850,
+      "sha256": "c5aad17a16789e683eefdaa3578a97d37983565f0cf5ef9a1b23a895521ec122",
+      "window_geometry": {
+        "tab": 1,
+        "tabs": [
+          24,
+          115,
+          1032,
+          675
+        ],
+        "heading": [
+          24,
+          20,
+          60,
+          40
+        ],
+        "status": [
+          902,
+          25,
+          154,
+          29
+        ],
+        "inbox_sync": [
+          0,
+          0,
+          144,
+          23
+        ],
+        "inbox_sync_text": "Last synced 14 Nov, 16:00",
+        "inbox_font_height": 17,
+        "inbox_text_width": 144,
+        "inbox_content_width": 144,
+        "list_main_top": 258,
+        "inbox_refresh_height": 23,
+        "notification_detail": [
+          25,
+          60,
+          604,
+          513
+        ]
+      }
+    },
+    {
+      "file": "system-devices.png",
+      "title": "System \u00b7 Devices",
+      "width": 1280,
+      "height": 850,
+      "sha256": "62099b9f1e86f1b43a39054001fe480f4361e66e04206e2ac518dfc73e54adec",
+      "window_geometry": {
+        "tab": 2,
+        "tabs": [
+          24,
+          115,
+          1032,
+          675
+        ],
+        "heading": [
+          24,
+          20,
+          110,
+          40
+        ],
+        "status": [
+          902,
+          25,
+          154,
+          29
+        ],
+        "inbox_sync": [
+          0,
+          0,
+          144,
+          23
+        ],
+        "inbox_sync_text": "Last synced 14 Nov, 16:00",
+        "inbox_font_height": 17,
+        "inbox_text_width": 144,
+        "inbox_content_width": 144,
+        "list_main_top": 258,
+        "inbox_refresh_height": 23,
+        "notification_detail": [
+          25,
+          60,
+          604,
+          513
+        ]
+      }
+    },
+    {
+      "file": "system-activity.png",
+      "title": "System \u00b7 Message activity retains accepted and uncertain requests",
+      "width": 1040,
+      "height": 660,
+      "sha256": "3747e9f85bf1a9eec32d35f22d2fffd4802ef9744d62dd9dc3b7b0cd5efaf26a",
+      "window_geometry": {
+        "tab": 2,
+        "tabs": [
+          24,
+          115,
+          1032,
+          675
+        ],
+        "heading": [
+          24,
+          20,
+          110,
+          40
+        ],
+        "status": [
+          902,
+          25,
+          154,
+          29
+        ],
+        "inbox_sync": [
+          0,
+          0,
+          144,
+          23
+        ],
+        "inbox_sync_text": "Last synced 14 Nov, 16:00",
+        "inbox_font_height": 17,
+        "inbox_text_width": 144,
+        "inbox_content_width": 144,
+        "list_main_top": 258,
+        "inbox_refresh_height": 23,
+        "notification_detail": [
+          25,
+          60,
+          604,
+          513
+        ]
+      }
+    },
+    {
+      "file": "system-review.png",
+      "title": "System \u00b7 Exact revision review",
+      "width": 680,
+      "height": 730,
+      "sha256": "ea562737f1917c7e465863978b147caf78ba5cfad63c80d7a36aadc7d9cc6bab",
+      "window_geometry": {
+        "tab": 2,
+        "tabs": [
+          24,
+          115,
+          1032,
+          675
+        ],
+        "heading": [
+          24,
+          20,
+          110,
+          40
+        ],
+        "status": [
+          902,
+          25,
+          154,
+          29
+        ],
+        "inbox_sync": [
+          0,
+          0,
+          144,
+          23
+        ],
+        "inbox_sync_text": "Last synced 14 Nov, 16:00",
+        "inbox_font_height": 17,
+        "inbox_text_width": 144,
+        "inbox_content_width": 144,
+        "list_main_top": 258,
+        "inbox_refresh_height": 23,
+        "notification_detail": [
+          25,
+          60,
+          604,
+          513
+        ]
+      }
+    },
+    {
+      "file": "system-settings.png",
+      "title": "System \u00b7 Settings and Appearance",
+      "width": 520,
+      "height": 460,
+      "sha256": "174c42405ad3184b543332aa14853ddcbc195f9de3eaaf3aa6c7f23ad676770b",
+      "window_geometry": {
+        "tab": 2,
+        "tabs": [
+          24,
+          115,
+          1032,
+          675
+        ],
+        "heading": [
+          24,
+          20,
+          110,
+          40
+        ],
+        "status": [
+          902,
+          25,
+          154,
+          29
+        ],
+        "inbox_sync": [
+          0,
+          0,
+          144,
+          23
+        ],
+        "inbox_sync_text": "Last synced 14 Nov, 16:00",
+        "inbox_font_height": 17,
+        "inbox_text_width": 144,
+        "inbox_content_width": 144,
+        "list_main_top": 258,
+        "inbox_refresh_height": 23,
+        "notification_detail": [
+          25,
+          60,
+          604,
+          513
+        ]
+      }
+    },
+    {
+      "file": "dark-notifications.png",
+      "title": "Dark \u00b7 Notifications with full long URL and supplied text",
+      "width": 1280,
+      "height": 850,
+      "sha256": "5b59795c59317458908d3068940c7c32774707bb3e474907a86c57cb88402659",
+      "window_geometry": {
+        "tab": 0,
+        "tabs": [
+          24,
+          115,
+          1032,
+          675
+        ],
+        "heading": [
+          24,
+          20,
+          189,
+          40
+        ],
+        "status": [
+          902,
+          25,
+          154,
+          29
+        ],
+        "inbox_sync": [
+          0,
+          0,
+          144,
+          23
+        ],
+        "inbox_sync_text": "Last synced 14 Nov, 16:00",
+        "inbox_font_height": 17,
+        "inbox_text_width": 144,
+        "inbox_content_width": 144,
+        "list_main_top": 258,
+        "inbox_refresh_height": 23,
+        "notification_detail": [
+          25,
+          60,
+          604,
+          513
+        ]
+      }
+    },
+    {
+      "file": "dark-sms.png",
+      "title": "Dark \u00b7 SMS conversation and pending request",
+      "width": 1280,
+      "height": 850,
+      "sha256": "273239ea0ceee6af883e80988e8664e42044a392160a506b41c0a39ba2c79b51",
+      "window_geometry": {
+        "tab": 1,
+        "tabs": [
+          24,
+          115,
+          1032,
+          675
+        ],
+        "heading": [
+          24,
+          20,
+          60,
+          40
+        ],
+        "status": [
+          902,
+          25,
+          154,
+          29
+        ],
+        "inbox_sync": [
+          0,
+          0,
+          144,
+          23
+        ],
+        "inbox_sync_text": "Last synced 14 Nov, 16:00",
+        "inbox_font_height": 17,
+        "inbox_text_width": 144,
+        "inbox_content_width": 144,
+        "list_main_top": 258,
+        "inbox_refresh_height": 23,
+        "notification_detail": [
+          25,
+          60,
+          604,
+          513
+        ]
+      }
+    },
+    {
+      "file": "dark-devices.png",
+      "title": "Dark \u00b7 Devices",
+      "width": 1280,
+      "height": 850,
+      "sha256": "4066505aeca79b24a9704bdac2069346310722a6ae71db6b7e260349b597e748",
+      "window_geometry": {
+        "tab": 2,
+        "tabs": [
+          24,
+          115,
+          1032,
+          675
+        ],
+        "heading": [
+          24,
+          20,
+          110,
+          40
+        ],
+        "status": [
+          902,
+          25,
+          154,
+          29
+        ],
+        "inbox_sync": [
+          0,
+          0,
+          144,
+          23
+        ],
+        "inbox_sync_text": "Last synced 14 Nov, 16:00",
+        "inbox_font_height": 17,
+        "inbox_text_width": 144,
+        "inbox_content_width": 144,
+        "list_main_top": 258,
+        "inbox_refresh_height": 23,
+        "notification_detail": [
+          25,
+          60,
+          604,
+          513
+        ]
+      }
+    },
+    {
+      "file": "dark-activity.png",
+      "title": "Dark \u00b7 Message activity retains accepted and uncertain requests",
+      "width": 1040,
+      "height": 660,
+      "sha256": "76c743c1613029189e5253948ef21ef91c3698bb4e659be2e4faf995076f770e",
+      "window_geometry": {
+        "tab": 2,
+        "tabs": [
+          24,
+          115,
+          1032,
+          675
+        ],
+        "heading": [
+          24,
+          20,
+          110,
+          40
+        ],
+        "status": [
+          902,
+          25,
+          154,
+          29
+        ],
+        "inbox_sync": [
+          0,
+          0,
+          144,
+          23
+        ],
+        "inbox_sync_text": "Last synced 14 Nov, 16:00",
+        "inbox_font_height": 17,
+        "inbox_text_width": 144,
+        "inbox_content_width": 144,
+        "list_main_top": 258,
+        "inbox_refresh_height": 23,
+        "notification_detail": [
+          25,
+          60,
+          604,
+          513
+        ]
+      }
+    },
+    {
+      "file": "dark-review.png",
+      "title": "Dark \u00b7 Exact revision review",
+      "width": 680,
+      "height": 730,
+      "sha256": "12b6a5ab947379eb18b428a62a723454545c495581b4e151fbe814e4667324a9",
+      "window_geometry": {
+        "tab": 2,
+        "tabs": [
+          24,
+          115,
+          1032,
+          675
+        ],
+        "heading": [
+          24,
+          20,
+          110,
+          40
+        ],
+        "status": [
+          902,
+          25,
+          154,
+          29
+        ],
+        "inbox_sync": [
+          0,
+          0,
+          144,
+          23
+        ],
+        "inbox_sync_text": "Last synced 14 Nov, 16:00",
+        "inbox_font_height": 17,
+        "inbox_text_width": 144,
+        "inbox_content_width": 144,
+        "list_main_top": 258,
+        "inbox_refresh_height": 23,
+        "notification_detail": [
+          25,
+          60,
+          604,
+          513
+        ]
+      }
+    },
+    {
+      "file": "dark-settings.png",
+      "title": "Dark \u00b7 Settings and Appearance",
+      "width": 520,
+      "height": 460,
+      "sha256": "fb855af91f60855885701f783600c63eedce0b7998b7993b6e7879166e8460a4",
+      "window_geometry": {
+        "tab": 2,
+        "tabs": [
+          24,
+          115,
+          1032,
+          675
+        ],
+        "heading": [
+          24,
+          20,
+          110,
+          40
+        ],
+        "status": [
+          902,
+          25,
+          154,
+          29
+        ],
+        "inbox_sync": [
+          0,
+          0,
+          144,
+          23
+        ],
+        "inbox_sync_text": "Last synced 14 Nov, 16:00",
+        "inbox_font_height": 17,
+        "inbox_text_width": 144,
+        "inbox_content_width": 144,
+        "list_main_top": 258,
+        "inbox_refresh_height": 23,
+        "notification_detail": [
+          25,
+          60,
+          604,
+          513
+        ]
+      }
+    },
+    {
+      "file": "light-notifications-links.png",
+      "title": "Light \u00b7 Safe complete plain and Markdown links",
+      "width": 1280,
+      "height": 850,
+      "sha256": "a72c37c7414fcf9ba35d3320bded8bc7ef2215bacaa193988e3c6cf6ebbdef8e",
+      "window_geometry": {
+        "tab": 0,
+        "tabs": [
+          24,
+          115,
+          1032,
+          675
+        ],
+        "heading": [
+          24,
+          20,
+          189,
+          40
+        ],
+        "status": [
+          902,
+          25,
+          154,
+          29
+        ],
+        "inbox_sync": [
+          0,
+          0,
+          144,
+          23
+        ],
+        "inbox_sync_text": "Last synced 14 Nov, 16:00",
+        "inbox_font_height": 17,
+        "inbox_text_width": 144,
+        "inbox_content_width": 144,
+        "list_main_top": 258,
+        "inbox_refresh_height": 23,
+        "notification_detail": [
+          25,
+          60,
+          604,
+          513
+        ]
+      }
+    },
+    {
+      "file": "light-sms.png",
+      "title": "Light \u00b7 SMS",
+      "width": 1280,
+      "height": 850,
+      "sha256": "6999a528894ef0797dc80e0a19957f5673fb9d0598f617002bda74d49320fce2",
+      "window_geometry": {
+        "tab": 1,
+        "tabs": [
+          24,
+          115,
+          1032,
+          675
+        ],
+        "heading": [
+          24,
+          20,
+          60,
+          40
+        ],
+        "status": [
+          902,
+          25,
+          154,
+          29
+        ],
+        "inbox_sync": [
+          0,
+          0,
+          144,
+          23
+        ],
+        "inbox_sync_text": "Last synced 14 Nov, 16:00",
+        "inbox_font_height": 17,
+        "inbox_text_width": 144,
+        "inbox_content_width": 144,
+        "list_main_top": 258,
+        "inbox_refresh_height": 23,
+        "notification_detail": [
+          25,
+          60,
+          604,
+          513
+        ]
+      }
+    },
+    {
+      "file": "light-settings.png",
+      "title": "Light \u00b7 Settings and Appearance",
+      "width": 520,
+      "height": 460,
+      "sha256": "11d2d17a57cc5b006d40195c8a221777778a579224234832625bd6ca792a38e5",
+      "window_geometry": {
+        "tab": 1,
+        "tabs": [
+          24,
+          115,
+          1032,
+          675
+        ],
+        "heading": [
+          24,
+          20,
+          60,
+          40
+        ],
+        "status": [
+          902,
+          25,
+          154,
+          29
+        ],
+        "inbox_sync": [
+          0,
+          0,
+          144,
+          23
+        ],
+        "inbox_sync_text": "Last synced 14 Nov, 16:00",
+        "inbox_font_height": 17,
+        "inbox_text_width": 144,
+        "inbox_content_width": 144,
+        "list_main_top": 258,
+        "inbox_refresh_height": 23,
+        "notification_detail": [
+          25,
+          60,
+          604,
+          513
+        ]
+      }
+    },
+    {
+      "file": "system-narrow-notifications.png",
+      "title": "System \u00b7 850\u00d7540 literal supplied notification",
+      "width": 850,
+      "height": 540,
+      "sha256": "18474144881dd51f2503fcd58ac29f21f9a881f8bbc6cbbcea6031a55fcad59c",
+      "window_geometry": {
+        "tab": 0,
+        "tabs": [
+          24,
+          115,
+          602,
+          365
+        ],
+        "heading": [
+          24,
+          20,
+          189,
+          40
+        ],
+        "status": [
+          472,
+          25,
+          154,
+          29
+        ],
+        "inbox_sync": [
+          0,
+          0,
+          144,
+          23
+        ],
+        "inbox_sync_text": "Last synced 14 Nov, 16:00",
+        "inbox_font_height": 17,
+        "inbox_text_width": 144,
+        "inbox_content_width": 144,
+        "list_main_top": 258,
+        "inbox_refresh_height": 23,
+        "notification_detail": [
+          25,
+          60,
+          329,
+          203
+        ]
+      }
+    },
+    {
+      "file": "system-narrow-sync-refresh.png",
+      "title": "System \u00b7 850\u00d7540 sustained refresh metadata stays on one stable line",
+      "width": 850,
+      "height": 540,
+      "sha256": "ddbae306fe1642d9598c63e7538f2a02e72a2f1f69bd7a1b1933a6f718d4f4e5",
+      "window_geometry": {
+        "tab": 0,
+        "tabs": [
+          24,
+          115,
+          602,
+          365
+        ],
+        "heading": [
+          24,
+          20,
+          189,
+          40
+        ],
+        "status": [
+          472,
+          25,
+          154,
+          29
+        ],
+        "inbox_sync": [
+          0,
+          0,
+          224,
+          23
+        ],
+        "inbox_sync_text": "Last synced 14 Nov, 16:00 \u00b7 Refreshing\u2026",
+        "inbox_font_height": 17,
+        "inbox_text_width": 224,
+        "inbox_content_width": 224,
+        "list_main_top": 258,
+        "inbox_refresh_height": 23,
+        "notification_detail": [
+          25,
+          60,
+          329,
+          203
+        ]
+      }
+    },
+    {
+      "file": "system-narrow-sync-error.png",
+      "title": "System \u00b7 850\u00d7540 sync error keeps metadata row and body position stable",
+      "width": 850,
+      "height": 540,
+      "sha256": "97e087c153d913dde0e6fae6085616d580b163d5a53191ec8f558377326b4246",
+      "window_geometry": {
+        "tab": 0,
+        "tabs": [
+          24,
+          115,
+          602,
+          365
+        ],
+        "heading": [
+          24,
+          20,
+          189,
+          40
+        ],
+        "status": [
+          472,
+          25,
+          154,
+          29
+        ],
+        "inbox_sync": [
+          0,
+          0,
+          272,
+          23
+        ],
+        "inbox_sync_text": "Last synced 14 Nov, 16:00 \u00b7 Sync needs attention",
+        "inbox_font_height": 17,
+        "inbox_text_width": 271,
+        "inbox_content_width": 272,
+        "list_main_top": 258,
+        "inbox_refresh_height": 23,
+        "notification_detail": [
+          25,
+          60,
+          329,
+          203
+        ]
+      }
+    },
+    {
+      "file": "system-narrow-sms.png",
+      "title": "System \u00b7 850\u00d7540 native SMS",
+      "width": 850,
+      "height": 540,
+      "sha256": "04ad8c45f2b756badbd669055dbc95a2f2f377538cdc4f425304bd0f6f0029c4",
+      "window_geometry": {
+        "tab": 1,
+        "tabs": [
+          24,
+          115,
+          602,
+          365
+        ],
+        "heading": [
+          24,
+          20,
+          60,
+          40
+        ],
+        "status": [
+          472,
+          25,
+          154,
+          29
+        ],
+        "inbox_sync": [
+          0,
+          0,
+          272,
+          23
+        ],
+        "inbox_sync_text": "Last synced 14 Nov, 16:00",
+        "inbox_font_height": 17,
+        "inbox_text_width": 144,
+        "inbox_content_width": 272,
+        "list_main_top": 258,
+        "inbox_refresh_height": 23,
+        "notification_detail": [
+          25,
+          60,
+          329,
+          203
+        ]
+      }
+    },
+    {
+      "file": "system-narrow-devices.png",
+      "title": "System \u00b7 850\u00d7540 native Devices",
+      "width": 850,
+      "height": 540,
+      "sha256": "8807d6a24b285a2fac2c934f10d51a455a2c93919fb637f1d8be561c53aaf348",
+      "window_geometry": {
+        "tab": 2,
+        "tabs": [
+          24,
+          115,
+          602,
+          365
+        ],
+        "heading": [
+          24,
+          20,
+          110,
+          40
+        ],
+        "status": [
+          472,
+          25,
+          154,
+          29
+        ],
+        "inbox_sync": [
+          0,
+          0,
+          272,
+          23
+        ],
+        "inbox_sync_text": "Last synced 14 Nov, 16:00",
+        "inbox_font_height": 17,
+        "inbox_text_width": 144,
+        "inbox_content_width": 272,
+        "list_main_top": 258,
+        "inbox_refresh_height": 23,
+        "notification_detail": [
+          25,
+          60,
+          329,
+          203
+        ]
+      }
+    },
+    {
+      "file": "system-narrow-devices-scrolled.png",
+      "title": "System \u00b7 850\u00d7540 complete device capability columns remain horizontally scrollable",
+      "width": 850,
+      "height": 540,
+      "sha256": "b6bba0caa2bcfdc05f3e593ed9828345a88b67de73ba3d1fcc9673be132b46f2",
+      "window_geometry": {
+        "tab": 2,
+        "tabs": [
+          24,
+          115,
+          602,
+          365
+        ],
+        "heading": [
+          24,
+          20,
+          110,
+          40
+        ],
+        "status": [
+          472,
+          25,
+          154,
+          29
+        ],
+        "inbox_sync": [
+          0,
+          0,
+          272,
+          23
+        ],
+        "inbox_sync_text": "Last synced 14 Nov, 16:00",
+        "inbox_font_height": 17,
+        "inbox_text_width": 144,
+        "inbox_content_width": 272,
+        "list_main_top": 258,
+        "inbox_refresh_height": 23,
+        "notification_detail": [
+          25,
+          60,
+          329,
+          203
+        ]
+      }
+    },
+    {
+      "file": "narrow-notification-long.png",
+      "title": "Dark \u00b7 850\u00d7540 long URL and complete supplied body",
+      "width": 850,
+      "height": 540,
+      "sha256": "aaee4f2005184f8a06817058d02c5f52c8fe61e936b41cc932581d9a4dcc2b1b",
+      "window_geometry": {
+        "tab": 0,
+        "tabs": [
+          24,
+          115,
+          602,
+          365
+        ],
+        "heading": [
+          24,
+          20,
+          189,
+          40
+        ],
+        "status": [
+          472,
+          25,
+          154,
+          29
+        ],
+        "inbox_sync": [
+          0,
+          0,
+          144,
+          23
+        ],
+        "inbox_sync_text": "Last synced 14 Nov, 16:00",
+        "inbox_font_height": 17,
+        "inbox_text_width": 144,
+        "inbox_content_width": 144,
+        "list_main_top": 258,
+        "inbox_refresh_height": 23,
+        "notification_detail": [
+          25,
+          60,
+          329,
+          203
+        ]
+      }
+    },
+    {
+      "file": "narrow-notification-plain.png",
+      "title": "Dark \u00b7 850\u00d7540 plain literal notification",
+      "width": 850,
+      "height": 540,
+      "sha256": "55bb75ff589e207f3d4a83587c2cadaf60af828525f295d9004e114fa0a2ec49",
+      "window_geometry": {
+        "tab": 0,
+        "tabs": [
+          24,
+          115,
+          602,
+          365
+        ],
+        "heading": [
+          24,
+          20,
+          189,
+          40
+        ],
+        "status": [
+          472,
+          25,
+          154,
+          29
+        ],
+        "inbox_sync": [
+          0,
+          0,
+          144,
+          23
+        ],
+        "inbox_sync_text": "Last synced 14 Nov, 16:00",
+        "inbox_font_height": 17,
+        "inbox_text_width": 144,
+        "inbox_content_width": 144,
+        "list_main_top": 258,
+        "inbox_refresh_height": 23,
+        "notification_detail": [
+          25,
+          60,
+          329,
+          203
+        ]
+      }
+    },
+    {
+      "file": "narrow-notification-truncated.png",
+      "title": "Dark \u00b7 Source-shortened URL stays plain text",
+      "width": 850,
+      "height": 540,
+      "sha256": "5b689d664749928bd9f1fcc1c200372b0d2584c3a34bd4262168775adb2891f5",
+      "window_geometry": {
+        "tab": 0,
+        "tabs": [
+          24,
+          115,
+          602,
+          365
+        ],
+        "heading": [
+          24,
+          20,
+          189,
+          40
+        ],
+        "status": [
+          472,
+          25,
+          154,
+          29
+        ],
+        "inbox_sync": [
+          0,
+          0,
+          144,
+          23
+        ],
+        "inbox_sync_text": "Last synced 14 Nov, 16:00",
+        "inbox_font_height": 17,
+        "inbox_text_width": 144,
+        "inbox_content_width": 144,
+        "list_main_top": 258,
+        "inbox_refresh_height": 23,
+        "notification_detail": [
+          25,
+          60,
+          329,
+          203
+        ]
+      }
+    },
+    {
+      "file": "narrow-sms.png",
+      "title": "Dark \u00b7 850\u00d7540 SMS",
+      "width": 850,
+      "height": 540,
+      "sha256": "5b9768c7d1f4736494a167ba7601b20a4fc6c7594c010d248da7f7c856569e96",
+      "window_geometry": {
+        "tab": 1,
+        "tabs": [
+          24,
+          115,
+          602,
+          365
+        ],
+        "heading": [
+          24,
+          20,
+          60,
+          40
+        ],
+        "status": [
+          472,
+          25,
+          154,
+          29
+        ],
+        "inbox_sync": [
+          0,
+          0,
+          144,
+          23
+        ],
+        "inbox_sync_text": "Last synced 14 Nov, 16:00",
+        "inbox_font_height": 17,
+        "inbox_text_width": 144,
+        "inbox_content_width": 144,
+        "list_main_top": 258,
+        "inbox_refresh_height": 23,
+        "notification_detail": [
+          25,
+          60,
+          329,
+          203
+        ]
+      }
+    },
+    {
+      "file": "narrow-devices.png",
+      "title": "Dark \u00b7 850\u00d7540 Devices",
+      "width": 850,
+      "height": 540,
+      "sha256": "f510db8f5606766018782651f8a934dc4f4f329cd513ce30ac8a7fcbfc970735",
+      "window_geometry": {
+        "tab": 2,
+        "tabs": [
+          24,
+          115,
+          602,
+          365
+        ],
+        "heading": [
+          24,
+          20,
+          110,
+          40
+        ],
+        "status": [
+          472,
+          25,
+          154,
+          29
+        ],
+        "inbox_sync": [
+          0,
+          0,
+          144,
+          23
+        ],
+        "inbox_sync_text": "Last synced 14 Nov, 16:00",
+        "inbox_font_height": 17,
+        "inbox_text_width": 144,
+        "inbox_content_width": 144,
+        "list_main_top": 258,
+        "inbox_refresh_height": 23,
+        "notification_detail": [
+          25,
+          60,
+          329,
+          203
+        ]
+      }
+    },
+    {
+      "file": "narrow-devices-scrolled.png",
+      "title": "Dark \u00b7 850\u00d7540 complete device capability columns remain horizontally scrollable",
+      "width": 850,
+      "height": 540,
+      "sha256": "aea0984e875bfcf3ca3a64d3af7846c460558271b4fe1b2e4390517db87a5991",
+      "window_geometry": {
+        "tab": 2,
+        "tabs": [
+          24,
+          115,
+          602,
+          365
+        ],
+        "heading": [
+          24,
+          20,
+          110,
+          40
+        ],
+        "status": [
+          472,
+          25,
+          154,
+          29
+        ],
+        "inbox_sync": [
+          0,
+          0,
+          144,
+          23
+        ],
+        "inbox_sync_text": "Last synced 14 Nov, 16:00",
+        "inbox_font_height": 17,
+        "inbox_text_width": 144,
+        "inbox_content_width": 144,
+        "list_main_top": 258,
+        "inbox_refresh_height": 23,
+        "notification_detail": [
+          25,
+          60,
+          329,
+          203
+        ]
+      }
+    },
+    {
+      "file": "narrow-status-sync.png",
+      "title": "Dark \u00b7 850\u00d7540 longest synchronization status stays readable",
+      "width": 850,
+      "height": 540,
+      "sha256": "092363aa533812be099202eb98f37a06c0610dd81618f6f259e05da5019cbab1",
+      "window_geometry": {
+        "tab": 2,
+        "tabs": [
+          24,
+          115,
+          602,
+          365
+        ],
+        "heading": [
+          24,
+          20,
+          110,
+          40
+        ],
+        "status": [
+          472,
+          25,
+          154,
+          29
+        ],
+        "inbox_sync": [
+          0,
+          0,
+          144,
+          23
+        ],
+        "inbox_sync_text": "Last synced 14 Nov, 16:00 \u00b7 Sync needs attention",
+        "inbox_font_height": 17,
+        "inbox_text_width": 271,
+        "inbox_content_width": 144,
+        "list_main_top": 258,
+        "inbox_refresh_height": 23,
+        "notification_detail": [
+          25,
+          60,
+          329,
+          203
+        ]
+      }
+    },
+    {
+      "file": "narrow-status-backlog.png",
+      "title": "Dark \u00b7 850\u00d7540 encrypted backlog status stays readable",
+      "width": 850,
+      "height": 540,
+      "sha256": "9db815e8d0c6800f00a8b94322c3a1591c46a82e3895974ca48ccd445df94ca4",
+      "window_geometry": {
+        "tab": 2,
+        "tabs": [
+          24,
+          115,
+          602,
+          365
+        ],
+        "heading": [
+          24,
+          20,
+          110,
+          40
+        ],
+        "status": [
+          472,
+          25,
+          154,
+          29
+        ],
+        "inbox_sync": [
+          0,
+          0,
+          144,
+          23
+        ],
+        "inbox_sync_text": "Last synced 14 Nov, 16:00",
+        "inbox_font_height": 17,
+        "inbox_text_width": 144,
+        "inbox_content_width": 144,
+        "list_main_top": 258,
+        "inbox_refresh_height": 23,
+        "notification_detail": [
+          25,
+          60,
+          329,
+          203
+        ]
+      }
+    },
+    {
+      "file": "dark-notification-complete-bottom.png",
+      "title": "Dark \u00b7 Final supplied notification lines remain scrollable",
+      "width": 1280,
+      "height": 850,
+      "sha256": "f2b9033be8ee1a5df81a9aff829a8c619d9e5dee617b9112698f006f7b23e2fa",
+      "window_geometry": {
+        "tab": 0,
+        "tabs": [
+          24,
+          115,
+          1032,
+          675
+        ],
+        "heading": [
+          24,
+          20,
+          189,
+          40
+        ],
+        "status": [
+          902,
+          25,
+          154,
+          29
+        ],
+        "inbox_sync": [
+          0,
+          0,
+          144,
+          23
+        ],
+        "inbox_sync_text": "Last synced 14 Nov, 16:00",
+        "inbox_font_height": 17,
+        "inbox_text_width": 144,
+        "inbox_content_width": 144,
+        "list_main_top": 258,
+        "inbox_refresh_height": 23,
+        "notification_detail": [
+          25,
+          60,
+          604,
+          513
+        ]
+      }
+    },
+    {
+      "file": "dark-status-transient.png",
+      "title": "Dark \u00b7 Brief reconnect stays quiet",
+      "width": 1280,
+      "height": 850,
+      "sha256": "f2b9033be8ee1a5df81a9aff829a8c619d9e5dee617b9112698f006f7b23e2fa",
+      "window_geometry": {
+        "tab": 0,
+        "tabs": [
+          24,
+          115,
+          1032,
+          675
+        ],
+        "heading": [
+          24,
+          20,
+          189,
+          40
+        ],
+        "status": [
+          902,
+          25,
+          154,
+          29
+        ],
+        "inbox_sync": [
+          0,
+          0,
+          144,
+          23
+        ],
+        "inbox_sync_text": "Last synced 14 Nov, 16:00",
+        "inbox_font_height": 17,
+        "inbox_text_width": 144,
+        "inbox_content_width": 144,
+        "list_main_top": 258,
+        "inbox_refresh_height": 23,
+        "notification_detail": [
+          25,
+          60,
+          604,
+          513
+        ]
+      }
+    },
+    {
+      "file": "dark-status-sustained.png",
+      "title": "Dark \u00b7 Sustained reconnect becomes visible without shifting header",
+      "width": 1280,
+      "height": 850,
+      "sha256": "3ff76874d1badb0a3201a6628753df8fd85be20de83b238430df9ec8269897d9",
+      "window_geometry": {
+        "tab": 0,
+        "tabs": [
+          24,
+          115,
+          1032,
+          675
+        ],
+        "heading": [
+          24,
+          20,
+          189,
+          40
+        ],
+        "status": [
+          902,
+          25,
+          154,
+          29
+        ],
+        "inbox_sync": [
+          0,
+          0,
+          144,
+          23
+        ],
+        "inbox_sync_text": "Last synced 14 Nov, 16:00",
+        "inbox_font_height": 17,
+        "inbox_text_width": 144,
+        "inbox_content_width": 144,
+        "list_main_top": 258,
+        "inbox_refresh_height": 23,
+        "notification_detail": [
+          25,
+          60,
+          604,
+          513
+        ]
+      }
+    },
+    {
+      "file": "dark-status-details.png",
+      "title": "Dark \u00b7 User-activated connection, push sync and encryption diagnostics",
+      "width": 510,
+      "height": 330,
+      "sha256": "cbb89f7de26fcdd1c2718e4ffb12f99590d11ea5853c0e70547380aa0a8389a0",
+      "window_geometry": {
+        "tab": 0,
+        "tabs": [
+          24,
+          115,
+          1032,
+          675
+        ],
+        "heading": [
+          24,
+          20,
+          189,
+          40
+        ],
+        "status": [
+          902,
+          25,
+          154,
+          29
+        ],
+        "inbox_sync": [
+          0,
+          0,
+          144,
+          23
+        ],
+        "inbox_sync_text": "Last synced 14 Nov, 16:00",
+        "inbox_font_height": 17,
+        "inbox_text_width": 144,
+        "inbox_content_width": 144,
+        "list_main_top": 258,
+        "inbox_refresh_height": 23,
+        "notification_detail": [
+          25,
+          60,
+          604,
+          513
+        ]
+      }
+    }
+  ],
+  "source_sha256": {
+    "src/pbdesk/__init__.py": "df3dc3bef669f594e280a2df05ef144dea23dbaf766b843403d33661e2a61d77",
+    "src/pbdesk/api/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/pbdesk/api/app.py": "4776a08358e28310e91bfeafc9fc20f5d243aef9f15c7bba681651a8f323744f",
+    "src/pbdesk/api/streaming.py": "e30716a3e4aa6e27bbc42d053f1a0e480d03c323cc4218a0381f2fc98e05a665",
+    "src/pbdesk/cli.py": "9f0b7af19e3dbff7dc479a0524754a238a090bd10455197396109530b29eb2f8",
+    "src/pbdesk/config.py": "1c9fdfadba8aebe440bf092a5897037bf606d91c215b12feb75b5e20a3a63197",
+    "src/pbdesk/credentials.py": "0353bb7c220665084313718233f61c18337cd4916a8035b7e2989ccf26b2c6f3",
+    "src/pbdesk/desktop/__init__.py": "c8c30a6789ea7fb50ff10a768d1cf815a946d27fe8f421d8f707935c71633fe7",
+    "src/pbdesk/desktop/__main__.py": "71837522fdbc7a090e37a24901d50f26ecbe0be17aa7c2af5a4ee962f3e986c1",
+    "src/pbdesk/desktop/actions.py": "c1882bcd07a83b45872c1ca785646c72b51b259a548efc7f7bdd1dd3ee0bf2bf",
+    "src/pbdesk/desktop/activity.py": "f660da77cd48e60d1b55cfef99b8f6b95b52e16d00549f02b6ce1af3fe30cd73",
+    "src/pbdesk/desktop/app.py": "f59506461f8f2fad8b5eeee51c26c29cae219b5a291a624c213b57bad7b820ec",
+    "src/pbdesk/desktop/chat.py": "10ef471cf991698f26bf527855a4725ef6cf9de98f42d3c5b720ca0a9fdfea6f",
+    "src/pbdesk/desktop/devices.py": "4e698cd7b181f4755517674d96fef04bfd6a9eef7eda6a165ca8a19a347b4866",
+    "src/pbdesk/desktop/models.py": "35a6cd683f1c1349421ee14049881ee2dbfbf90e0f14745b2f42b0745abb1bb5",
+    "src/pbdesk/desktop/notification_content.py": "0ae938d232efaff45b74ea19bf10b165523c88eb43ff377b42efdb3be1ac2518",
+    "src/pbdesk/desktop/status.py": "743d025ac94c3958a4b4569631144a99ecd1bc0b799179ca34b75a090dba92ae",
+    "src/pbdesk/desktop/theme.py": "0676e5807438ea1317379ab62ab84e0a219a62954b83fbd095ed2332779abecf",
+    "src/pbdesk/desktop/widgets.py": "6f76e7639fa2e06b190e35fef9e8fda8456bc346292f18d54490322971e7270f",
+    "src/pbdesk/desktop/worker.py": "6b44639c04c1e269126a107fe4b0840d12588942ad1711d9be9845f8587b8014",
+    "src/pbdesk/domain/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/pbdesk/domain/actions.py": "670d87fa7077798dc07ac8f0e161e238e812d789516f6c3e3b9f3bb218c7c2e1",
+    "src/pbdesk/mcp_server/__init__.py": "1915f4f2779514e811a73253a149bd703a2427f4fc81fb61e6f848570d40f534",
+    "src/pbdesk/mcp_server/__main__.py": "ddd60a1df996b2b744c45953165711e5afe2711f5f0249f4e98875e1342411df",
+    "src/pbdesk/mcp_server/server.py": "0acf30a43e642d7c12a55020bbaba897ea42a707286659c639a9bb10e6036192",
+    "src/pbdesk/pushbullet/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/pbdesk/pushbullet/crypto.py": "b4b8e31a982c5bd52137915a7247eeb5e0088078a96f0804a3e24092706311b9",
+    "src/pbdesk/pushbullet/normalize.py": "06941d4f389599008581b370486dc58f5f7f642994977fefbeda6a0c3a04bca6",
+    "src/pbdesk/pushbullet/provider.py": "23928bb6e5c96253ef29fc970cb06537473393c052df002a58139262678d97cb",
+    "src/pbdesk/pushbullet/sms.py": "aec4c4ec9b671c93b2a9377592703ff0b208c1d198be9fb7835d0a8b3ed1bb7d",
+    "src/pbdesk/services/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/pbdesk/services/instance.py": "2b955aa63d569e60c95f3f0e4d034111bd786a1593a873cc9809e44d7643d657",
+    "src/pbdesk/services/kwallet.py": "48c36c1b06a2d74fef241df4752387c6cc3f0410e8a1bf93528532d98ddbd6c2",
+    "src/pbdesk/services/lifecycle.py": "0cdc9f2927066f3aa00053efed97c0f898812d16611ea2957c749827daa47b80",
+    "src/pbdesk/services/notifications.py": "1d55d3e06a8363db07f48c4ff1489c2324ce2ca5affde397a0f17b3210aa34ab",
+    "src/pbdesk/services/outbox.py": "4340894046a4d8ef75663ec22cd4a6f9f9bfd96197ea186d2604749480430aa6",
+    "src/pbdesk/services/webhost.py": "6840e5406a1a7d5083ab8b84469c2981b4ef111a252e5b590f58a55d4c73b532",
+    "src/pbdesk/storage/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/pbdesk/storage/database.py": "3ca2601450ba4f50bfadd5793c000b233c42b56a3ac2f7aedea6122e4abfb2e7",
+    "src/pbdesk/storage/migrations/env.py": "60e840e320a12b2f5fdf2e6ad0b03ccf70fc7b1d740c1c07035a4e498fbc48d2",
+    "src/pbdesk/storage/migrations/versions/0001_inbox.py": "510f6e1b8c8961f3eb5d5158a66ce202b0bef867f84e669054d95bb292b93fab",
+    "src/pbdesk/storage/migrations/versions/0002_devices_outbox_crypto.py": "00c65e6a7c2f425a22e2be732fb89c5558072fff2ae37277949d803dfb3a3152",
+    "src/pbdesk/storage/migrations/versions/0003_sms_history.py": "15e2e27002e5143c6bc93dac91cd044f2fbefefe3a2f7b2bc22b54b77d9facba",
+    "src/pbdesk/storage/migrations/versions/0004_item_association.py": "763ccb6fd3244731fdbaf35d5ef120a47b0f5c3f3726d4bfdc6e56d32146f30e",
+    "src/pbdesk/storage/migrations/versions/0005_account_partitions.py": "7ee17df8e96a717cde9f67bd62ee646eb5db3cd1ff3e67915031b4e055a073b0",
+    "src/pbdesk/storage/sms.py": "8f7338b09a694a0543638fb447a970384415be69e56d8922d97313e6931108a6",
+    "src/pbdesk/storage/workflows.py": "52e51b7ce999bdc4ab87be71898e15377895ef517b7f8685afda61137b189be5",
+    "src/pbdesk/web/__init__.py": "9e8e6a36ec9de9372cc1f475624b9da3e47ca2d7fefb7016e3dccba7a03d0314",
+    "src/pbdesk/web/__main__.py": "71837522fdbc7a090e37a24901d50f26ecbe0be17aa7c2af5a4ee962f3e986c1",
+    "src/pbdesk/web/app.py": "eaeeed8c0f142717d0173d5d60fba82543d76b0641436697d0ec06164dd9399b",
+    "src/pbdesk/web/static/css/app.css": "3245930fd4ec614f351599aa534221a29dfaf554e1f1e71b264e70096a19bf20",
+    "src/pbdesk/web/static/js/app.js": "aa81b59967a1f277e3386670e2a58e656e58f89758f26ee28e45a948f14221eb",
+    "src/pbdesk/web/static/vendor/bootstrap/LICENSE": "4620c84ad5ce8602ff65640ed6b7c8b78ebb9e036584f0ebc1ccc88206a4bb51",
+    "src/pbdesk/web/static/vendor/bootstrap/bootstrap.bundle.min.js": "c6f670216aedd2c61ec83102f7e40c1c44114eecd7f37b2edc332757390c386a",
+    "src/pbdesk/web/static/vendor/bootstrap/bootstrap.min.css": "8f8173cb2d8f867274aeb0cb15328e60f490c7f272351e51a55f1dabb486e4ff",
+    "src/pbdesk/web/templates/base.html": "af6bbf1ce11e1c293f418ba12795f985dbab8b341d2bd7ad076a8956460a5db7",
+    "src/pbdesk/web/templates/status.html": "45b29cb5fda6fe781568e460f10be1b92910fefd909d15c4aa18bf069150c4ea",
+    "src/pbdesk/web/vendor-manifest.json": "1a23bb392690e2177beb84c2af90d7191901c844301bcee1e02e0e115e3d8a57",
+    "src/pbdesk.egg-info/PKG-INFO": "0cf9018ddde41952c37aa5d0904498ce6196dbeea83069493459adc4612a8a32",
+    "src/pbdesk.egg-info/SOURCES.txt": "d93af295246dbf620e93d197f3778c45bc718ddf07aee880475d8242717c75d6",
+    "src/pbdesk.egg-info/dependency_links.txt": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+    "src/pbdesk.egg-info/entry_points.txt": "a8e49a2b4ce3735b309265c49ddeaeb51b79ae7bb12ff1e50a2d367f944ce6cc",
+    "src/pbdesk.egg-info/requires.txt": "5c8583e6e6d9c281b176f8b099245d2f58e484ea3abbf1f6a60577af7d8b6f7f",
+    "src/pbdesk.egg-info/top_level.txt": "da1d39978af8d7394001662610a84060eee95cb0db4189ec4c6e110649dc5920"
+  }
+}

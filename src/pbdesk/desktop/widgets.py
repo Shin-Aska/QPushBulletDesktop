@@ -1,11 +1,14 @@
 """Shared PyQt6 icons, card containers, and custom item delegates for pbdesk."""
 from PyQt6.QtCore import QRect, QRectF, QSize, Qt
-from PyQt6.QtGui import QColor, QFont, QFontMetrics, QIcon, QPainter, QPainterPath, QPen, QPixmap
-from PyQt6.QtWidgets import QFrame, QStyle, QStyledItemDelegate
+from PyQt6.QtGui import QColor, QFont, QFontMetrics, QIcon, QPainter, QPainterPath, QPalette, QPen, QPixmap
+from PyQt6.QtWidgets import QApplication, QFrame, QStyle, QStyleOptionFocusRect, QStyledItemDelegate
+
+from .theme import colors
 
 
-def make_icon(kind, color='#e4edec', size=18):
+def make_icon(kind, color=None, size=18):
     """Draw crisp geometric vector icons via QPainter with no external assets."""
+    color = color or colors()["text"]
     pixmap = QPixmap(size, size)
     pixmap.fill(Qt.GlobalColor.transparent)
     painter = QPainter(pixmap)
@@ -76,10 +79,23 @@ def divider_line():
     return line
 
 
-def _draw_pill(painter, rect, text, bg, fg, border=None, font_size=11):
-    font = QFont(painter.font())
-    font.setPointSize(font_size - 2 if font_size > 10 else font_size)
+def _small_font(source):
+    font = QFont(source)
+    if font.pointSizeF() > 0:
+        font.setPointSizeF(max(8, font.pointSizeF() - 1))
+    elif font.pixelSize() > 0:
+        font.setPixelSize(max(10, font.pixelSize() - 1))
+    return font
+
+
+def _pill_font(source):
+    font = _small_font(source)
     font.setWeight(QFont.Weight.DemiBold)
+    return font
+
+
+def _draw_pill(painter, rect, text, bg, fg, border=None):
+    font = _pill_font(painter.font())
     painter.save()
     painter.setFont(font)
     fm = QFontMetrics(font)
@@ -94,6 +110,33 @@ def _draw_pill(painter, rect, text, bg, fg, border=None, font_size=11):
     painter.drawText(pill_rect, Qt.AlignmentFlag.AlignCenter, fm.elidedText(text, Qt.TextElideMode.ElideRight, int(pill_rect.width() - 8)))
     painter.restore()
     return pill_rect.width()
+
+
+def _row_colors(option):
+    palette = QPalette(option.palette)
+    if not option.state & QStyle.StateFlag.State_Enabled:
+        palette.setCurrentColorGroup(QPalette.ColorGroup.Disabled)
+    c = colors(palette)
+    if option.state & QStyle.StateFlag.State_Selected:
+        c['text'] = c['muted'] = c['highlighted_text']
+    return c
+
+
+def _draw_row(painter, option, c):
+    selected = bool(option.state & QStyle.StateFlag.State_Selected)
+    hovered = bool(option.state & QStyle.StateFlag.State_MouseOver)
+    painter.fillRect(option.rect, QColor(c['highlight'] if selected else c['alternate']
+                     if hovered or option.features & option.ViewItemFeature.Alternate else c['base']))
+    painter.setPen(QColor(c['border']))
+    painter.drawLine(option.rect.left() + 12, option.rect.bottom(), option.rect.right() - 12, option.rect.bottom())
+    if option.state & QStyle.StateFlag.State_HasFocus:
+        focus = QStyleOptionFocusRect()
+        focus.rect = option.rect.adjusted(2, 2, -2, -2)
+        focus.state = option.state
+        focus.palette = option.palette
+        focus.backgroundColor = QColor(c['highlight'] if selected else c['base'])
+        style = option.widget.style() if option.widget else QApplication.style()
+        style.drawPrimitive(QStyle.PrimitiveElement.PE_FrameFocusRect, focus, painter, option.widget)
 
 
 class NotificationDelegate(QStyledItemDelegate):
@@ -114,26 +157,15 @@ class NotificationDelegate(QStyledItemDelegate):
         painter.save()
         rect = option.rect
         selected = bool(option.state & QStyle.StateFlag.State_Selected)
-        hovered = bool(option.state & QStyle.StateFlag.State_MouseOver)
-        if selected:
-            painter.fillRect(rect, QColor('#e3f2ec'))
-            painter.fillRect(QRect(rect.left(), rect.top(), 3, rect.height()), QColor('#008b73'))
-        elif hovered:
-            painter.fillRect(rect, QColor('#f4f8f5'))
-        else:
-            painter.fillRect(rect, QColor('#ffffff'))
-        painter.setPen(QColor('#eceee9'))
-        painter.drawLine(rect.left() + 12, rect.bottom(), rect.right() - 12, rect.bottom())
+        c = _row_colors(option)
+        _draw_row(painter, option, c)
 
         pad_x, pad_y = 14, 11
         inner_w = rect.width() - pad_x * 2
         title_font = QFont(option.font)
         title_font.setWeight(QFont.Weight.DemiBold)
-        title_font.setPixelSize(14)
-        meta_font = QFont(option.font)
-        meta_font.setPixelSize(11)
+        meta_font = _small_font(option.font)
         body_font = QFont(option.font)
-        body_font.setPixelSize(13)
 
         time_text = self._stamp(item.get('created_at'))
         if ',' in time_text:
@@ -141,29 +173,25 @@ class NotificationDelegate(QStyledItemDelegate):
         painter.setFont(meta_font)
         time_fm = QFontMetrics(meta_font)
         time_w = time_fm.horizontalAdvance(time_text) + 8
-        painter.setPen(QColor('#657176'))
+        painter.setPen(QColor(c['muted']))
         painter.drawText(QRect(rect.right() - pad_x - time_w, rect.top() + pad_y, time_w, 20), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, time_text)
 
         title = item.get('title') or '(Untitled)'
         painter.setFont(title_font)
         title_fm = QFontMetrics(title_font)
-        painter.setPen(QColor('#152a30'))
+        painter.setPen(QColor(c['text']))
         title_elided = title_fm.elidedText(title, Qt.TextElideMode.ElideRight, max(40, inner_w - time_w - 6))
         painter.drawText(QRect(rect.left() + pad_x, rect.top() + pad_y, max(40, inner_w - time_w - 6), 20), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, title_elided)
 
         body = ' '.join((item.get('body') or item.get('url') or '').split())
         painter.setFont(body_font)
-        painter.setPen(QColor('#4a5960'))
+        painter.setPen(QColor(c['muted']))
         body_rect = QRect(rect.left() + pad_x, rect.top() + pad_y + 23, inner_w, 36)
         painter.drawText(body_rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop | Qt.TextFlag.TextWordWrap, body)
 
         kind = (item.get('type') or 'note').replace('_', ' ').title()
-        if kind == 'Mirror':
-            bg, fg = ('#d8ebe3', '#155244') if selected else ('#eef2ef', '#44575d')
-        elif kind == 'Link':
-            bg, fg = '#e4eef6', '#21537a'
-        else:
-            bg, fg = '#eff1ec', '#4a5960'
+        bg, fg = ((c['highlight'], c['highlighted_text']) if selected
+                  else (c['alternate'], c['text']))
         _draw_pill(painter, QRectF(rect.left() + pad_x, rect.bottom() - 28, 120, 20), kind, bg, fg)
         painter.restore()
 
@@ -188,45 +216,34 @@ class ConversationDelegate(QStyledItemDelegate):
         painter.save()
         rect = option.rect
         selected = bool(option.state & QStyle.StateFlag.State_Selected)
-        hovered = bool(option.state & QStyle.StateFlag.State_MouseOver)
-        if selected:
-            painter.fillRect(rect, QColor('#e3f2ec'))
-            painter.fillRect(QRect(rect.left(), rect.top(), 3, rect.height()), QColor('#008b73'))
-        elif hovered:
-            painter.fillRect(rect, QColor('#f4f8f5'))
-        else:
-            painter.fillRect(rect, QColor('#ffffff'))
-        painter.setPen(QColor('#eceee9'))
-        painter.drawLine(rect.left() + 12, rect.bottom(), rect.right() - 12, rect.bottom())
+        c = _row_colors(option)
+        _draw_row(painter, option, c)
 
         pad_x, pad_y = 14, 12
         inner_w = rect.width() - pad_x * 2
         title_font = QFont(option.font)
         title_font.setWeight(QFont.Weight.DemiBold)
-        title_font.setPixelSize(14)
-        meta_font = QFont(option.font)
-        meta_font.setPixelSize(11)
+        meta_font = _small_font(option.font)
         body_font = QFont(option.font)
-        body_font.setPixelSize(13)
 
         raw_time = self._time(row.get('last_timestamp'))
         time_text = raw_time.strftime('%H:%M') if hasattr(raw_time, 'strftime') else str(raw_time or '')
         painter.setFont(meta_font)
         time_fm = QFontMetrics(meta_font)
         time_w = time_fm.horizontalAdvance(time_text) + 8
-        painter.setPen(QColor('#657176'))
+        painter.setPen(QColor(c['muted']))
         painter.drawText(QRect(rect.right() - pad_x - time_w, rect.top() + pad_y, time_w, 20), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, time_text)
 
         title = row.get('title') or row.get('id') or 'Conversation'
         painter.setFont(title_font)
         title_fm = QFontMetrics(title_font)
-        painter.setPen(QColor('#152a30'))
+        painter.setPen(QColor(c['text']))
         title_elided = title_fm.elidedText(title, Qt.TextElideMode.ElideRight, max(40, inner_w - time_w - 6))
         painter.drawText(QRect(rect.left() + pad_x, rect.top() + pad_y, max(40, inner_w - time_w - 6), 20), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, title_elided)
 
         preview = ' '.join((row.get('preview') or '').split())
         painter.setFont(body_font)
-        painter.setPen(QColor('#4a5960'))
+        painter.setPen(QColor(c['muted']))
         painter.drawText(QRect(rect.left() + pad_x, rect.top() + pad_y + 24, inner_w, 36), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop | Qt.TextFlag.TextWordWrap, preview)
         painter.restore()
 
@@ -239,18 +256,38 @@ class PillDelegate(QStyledItemDelegate):
         self._pill_columns = set(pill_columns)
         self._multi_columns = set(multi_columns)
 
+    def sizeHint(self, option, index):
+        native = super().sizeHint(option, index)
+        column = index.column()
+        if column not in self._pill_columns and column not in self._multi_columns:
+            return native
+        raw = str(index.data(Qt.ItemDataRole.DisplayRole) or '').strip()
+        if not raw or raw == '—':
+            return native
+        tokens = [part.strip() for part in raw.split(',')] if column in self._multi_columns else [raw]
+        tokens = [token for token in tokens if token]
+        if not tokens:
+            return native
+        metrics = QFontMetrics(_pill_font(option.font))
+        # Match paint's 8px left inset, 6px right inset, and pill text padding.
+        # QRect.right() is inclusive, hence the extra pixel for available width.
+        width = 8 + sum(max(28, metrics.horizontalAdvance(token) + 16) for token in tokens)
+        width += 6 * (len(tokens) - 1) + 6 + 1
+        return QSize(max(native.width(), width), max(native.height(), 22))
+
     @staticmethod
-    def _colors(text):
+    def _colors(text, palette=None):
+        c = colors(palette)
         lower = text.casefold()
-        if any(k in lower for k in ('active', 'accepted', 'supported', 'ready', 'verified')):
-            return '#d9f0e4', '#165b45', None
+        if any(k in lower for k in ('inactive', 'not active', 'unavailable', 'not ready', 'not verified', 'unverified', 'unsupported', 'not supported')):
+            return c['alternate'], c['muted'], None
+        if any(k in lower for k in ('failed', 'expired', 'error', 'locked')):
+            return c['negative_bg'], c['negative_fg'], None
         if any(k in lower for k in ('pending', 'uncertain', 'queued', 'submitting')):
-            return '#fdecc8', '#7d500a', None
-        if any(k in lower for k in ('failed', 'expired', 'error')):
-            return '#fadbd8', '#922b21', None
-        if lower in {'sms', 'note', 'link', 'push'}:
-            return '#ffffff', '#34474e', '#cfd8d3'
-        return '#ecefed', '#526167', None
+            return c['warning_bg'], c['warning_fg'], None
+        if any(k in lower for k in ('active', 'accepted', 'supported', 'ready', 'verified')):
+            return c['positive_bg'], c['positive_fg'], None
+        return c['alternate'], c['text'], c['border']
 
     def paint(self, painter, option, index):
         col = index.column()
@@ -258,19 +295,14 @@ class PillDelegate(QStyledItemDelegate):
             super().paint(painter, option, index)
             return
         painter.save()
+        painter.setFont(option.font)
         selected = bool(option.state & QStyle.StateFlag.State_Selected)
-        if selected:
-            painter.fillRect(option.rect, QColor('#e3f2ec'))
-        elif index.row() % 2 == 1:
-            painter.fillRect(option.rect, QColor('#f8faf8'))
-        else:
-            painter.fillRect(option.rect, QColor('#ffffff'))
-        painter.setPen(QColor('#eceee9'))
-        painter.drawLine(option.rect.left(), option.rect.bottom(), option.rect.right(), option.rect.bottom())
+        c = _row_colors(option)
+        _draw_row(painter, option, c)
 
         raw = str(index.data(Qt.ItemDataRole.DisplayRole) or '').strip()
         if not raw or raw == '—':
-            painter.setPen(QColor('#8b9697'))
+            painter.setPen(QColor(c['muted']))
             painter.drawText(option.rect.adjusted(10, 0, -10, 0), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, raw)
             painter.restore()
             return
@@ -281,7 +313,9 @@ class PillDelegate(QStyledItemDelegate):
         for token in tokens:
             if not token:
                 continue
-            bg, fg, border = self._colors(token)
+            bg, fg, border = self._colors(token, option.palette)
+            if selected:
+                bg, fg, border = c['highlight'], c['highlighted_text'], c['highlighted_text']
             avail = option.rect.right() - x - 6
             if avail < 28:
                 break

@@ -8,27 +8,17 @@ from PyQt6.QtCore import QSize, Qt, QTimer, pyqtSignal
 from PyQt6 import sip
 from PyQt6.QtGui import QKeySequence, QShortcut, QTextOption
 from PyQt6.QtWidgets import (
-    QComboBox, QFrame, QHBoxLayout, QLabel, QLineEdit, QListWidget,
+    QApplication, QComboBox, QFrame, QHBoxLayout, QLabel, QLineEdit, QListWidget,
     QListWidgetItem, QPushButton, QScrollArea, QSizePolicy, QSplitter,
     QTextEdit, QVBoxLayout, QWidget,
 )
 
 from .actions import PLAINTEXT_NOTICE, STATE_LABELS, plain_label
-from .theme import primary
+from .theme import colors, primary, theme_signals
 from .widgets import ConversationDelegate, card_frame, divider_line, make_icon
 
 E164 = re.compile(r"\+[1-9][0-9]{1,14}\Z")
-CHAT_STYLE = """
-QWidget#smsPage { background: #faf9f6; }
-QWidget#smsPage QScrollArea { background: #f7f8f5; border: none; border-radius: 0px; }
-QWidget#smsTimeline { background: #f7f8f5; }
-QFrame#smsIncoming { background: #ffffff; border: 1px solid #e2e8e4; border-radius: 10px; }
-QFrame#smsOutgoing { background: #dcf0e7; border: 1px solid #bfe0d1; border-radius: 10px; }
-QFrame#smsLocal { background: #fff6e5; border: 1px dashed #d3b77f; border-radius: 8px; }
-QWidget#smsPage QLabel#smsMeta { color: #637773; font-size: 12px; }
-QWidget#smsPage QLabel#smsDate { color: #5c6b6f; background: #e8ece6; border-radius: 10px; padding: 3px 12px; font-size: 11px; font-weight: 600; }
-QWidget#smsPage QLabel#smsHeading { color: #152a30; font-size: 18px; font-weight: 700; }
-"""
+
 
 
 def _time(value):
@@ -128,7 +118,6 @@ class SmsPage(QWidget):
         self._rows = []
         self._render_generation = 0
         self.setObjectName("smsPage")
-        self.setStyleSheet(CHAT_STYLE)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(10)
@@ -141,7 +130,7 @@ class SmsPage(QWidget):
         toolbar.addWidget(self.sync_status)
         self.refresh_button = QPushButton("Refresh")
         self.refresh_button.setObjectName("inlineLink")
-        self.refresh_button.setIcon(make_icon("refresh", "#4a5960", 14))
+        self.refresh_button.setIcon(make_icon("refresh", colors()["text"], 14))
         self.refresh_button.setIconSize(QSize(14, 14))
         self.refresh_button.clicked.connect(self.refresh)
         toolbar.addWidget(self.refresh_button)
@@ -270,6 +259,13 @@ class SmsPage(QWidget):
         self.enter_shortcut.activated.connect(self.submit)
         worker.result.connect(self.handle_result)
         self._update_controls()
+        theme_signals(QApplication.instance()).changed.connect(self._refresh_theme)
+
+    def _refresh_theme(self):
+        # Global semantic QSS repaints existing bubbles without rebuilding the
+        # timeline, so drafts, selections, and scroll anchors remain intact.
+        self.refresh_button.setIcon(make_icon("refresh", colors()["text"], 14))
+        self.threads.viewport().update()
 
     def _key(self):
         if self.current_thread is None or not self.selected_device_id:

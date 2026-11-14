@@ -5,9 +5,10 @@ from urllib.parse import urlsplit
 import uuid
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from .theme import primary
+from .theme import colors, primary, theme_signals
 from .widgets import card_frame
-from PyQt6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QTextBrowser, QTextEdit, QVBoxLayout)
+from PyQt6.QtGui import QTextCursor
+from PyQt6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QTextBrowser, QTextEdit, QVBoxLayout)
 
 PLAINTEXT_NOTICE = "Pushbullet can process this content. SMS carrier delivery is not end-to-end encrypted."
 STATE_LABELS = {
@@ -313,8 +314,10 @@ class ReviewDialog(QDialog):
         worker.snapshot.connect(self.handle_snapshot)
         self.finished.connect(self.disconnect_worker)
         self.render()
+        theme_signals(QApplication.instance()).changed.connect(self._render_preview)
 
     def disconnect_worker(self):
+        theme_signals(QApplication.instance()).changed.disconnect(self._render_preview)
         self.worker.result.disconnect(self.handle_result)
         self.worker.snapshot.disconnect(self.handle_snapshot)
 
@@ -329,28 +332,43 @@ class ReviewDialog(QDialog):
         self.readiness.setText("The original destination is unavailable or no longer supports this action. Choose Edit to explicitly select a destination." if not destination_ready else "Ready to submit after approval." if self.capabilities.get("send_ready") else (self.capabilities.get("send_unavailable_reason") or "Sending is currently unavailable. Check provider connection and credentials."))
 
     def render(self):
+        self._render_preview()
+        self.advanced.setPlainText(action_preview(self.action, self.devices))
+        self.update_controls()
+
+    def _render_preview(self):
         action = self.action
+        c = colors(self.palette())
         device = next((item for item in self.devices if item['id'] == action['device_id']), {})
         state_text = STATE_LABELS.get(action['state'], action['state'])
-        badge_bg, badge_fg = ('#fadbd8', '#922b21') if action['state'] in {'failed', 'expired'} else ('#d9f0e4', '#165b45') if action['state'] == 'upstream_accepted' else ('#fdecc8', '#7d500a')
+        tone = 'negative' if action['state'] in {'failed', 'expired'} else 'positive' if action['state'] == 'upstream_accepted' else 'warning'
         document = (
-            f'<p style="margin:0 0 8px 0;"><span style="background:{badge_bg}; color:{badge_fg}; padding:3px 10px; border-radius:10px; font-size:12px; font-weight:600;">{escape(state_text)}</span></p>'
-            + '<h2 style="margin:4px 0; font-size:20px; color:#152a30;">' + escape('SMS' if action['kind'] == 'sms' else action['kind'].title()) + ' to ' + escape(action.get('recipient') or device.get('nickname') or action['device_id']) + '</h2>'
-            + '<p style="color:#657176; margin:0 0 12px 0;">Via ' + escape(device.get('nickname') or '(unnamed)') + ' · ' + escape(action['device_id']) + '</p>'
+            f'<p style="margin:0 0 8px 0;"><span style="background:{c[tone + "_bg"]}; color:{c[tone + "_fg"]}; font-weight:600;">{escape(state_text)}</span></p>'
+            + f'<h2 style="margin:4px 0; color:{c["text"]};">' + escape('SMS' if action['kind'] == 'sms' else action['kind'].title()) + ' to ' + escape(action.get('recipient') or device.get('nickname') or action['device_id']) + '</h2>'
+            + f'<p style="color:{c["muted"]}; margin:0 0 12px 0;">Via ' + escape(device.get('nickname') or '(unnamed)') + ' · ' + escape(action['device_id']) + '</p>'
         )
         if action.get('title'):
-            document += '<h3 style="margin:10px 0 6px 0; color:#152a30;">' + escape(action['title']) + '</h3>'
-        document += '<div style="background:#f7f8f5; border:1px solid #e6eae4; border-radius:6px; padding:12px; margin:12px 0; color:#24343b;">' + escape(action.get('body') or '').replace('\n', '<br>') + '</div>'
+            document += f'<h3 style="margin:10px 0 6px 0; color:{c["text"]};">' + escape(action['title']) + '</h3>'
+        document += f'<div style="background:{c["alternate"]}; margin:12px 0; color:{c["text"]};">' + escape(action.get('body') or '').replace('\n', '<br>') + '</div>'
         if action.get('url'):
-            document += '<p style="color:#00765f;">' + escape(action['url']) + '</p>'
-        document += '<p style="margin:10px 0 2px 0; color:#4a5960;">Expires: ' + escape(action['expires_at']) + '</p><p style="color:#657176; font-size:12px; margin:2px 0;">Not end-to-end encrypted; sent over HTTPS to Pushbullet</p>'
+            document += f'<p style="color:{c["link"]};">' + escape(action['url']) + '</p>'
+        document += f'<p style="margin:10px 0 2px 0; color:{c["muted"]};">Expires: ' + escape(action['expires_at']) + f'</p><p style="color:{c["muted"]}; margin:2px 0;">Not end-to-end encrypted; sent over HTTPS to Pushbullet</p>'
         if action['state'] == 'uncertain':
-            document += '<p style="background-color:#fff4df; border:1px solid #e5c58b; border-radius:6px; padding:8px; color:#785117;">Pushbullet may already have accepted this message. Check the destination before creating another action. No automatic retry is offered.</p>'
+            document += f'<p style="background-color:{c["warning_bg"]}; color:{c["warning_fg"]};">Pushbullet may already have accepted this message. Check the destination before creating another action. No automatic retry is offered.</p>'
         if action.get('error_message'):
-            document += '<p style="color:#922b21;">' + escape(action['error_message']) + '</p>'
+            document += f'<p style="color:{c["negative_fg"]};">' + escape(action['error_message']) + '</p>'
+        cursor = self.preview.textCursor()
+        anchor, position = cursor.anchor(), cursor.position()
+        scroll = self.preview.verticalScrollBar().value()
         self.preview.setHtml(document)
-        self.advanced.setPlainText(action_preview(action, self.devices))
-        self.update_controls()
+        # Reformat the same payload without losing the user's selected text or
+        # reading position. Consent, request state and controls are untouched.
+        limit = self.preview.document().characterCount() - 1
+        restored = self.preview.textCursor()
+        restored.setPosition(min(anchor, limit))
+        restored.setPosition(min(position, limit), QTextCursor.MoveMode.KeepAnchor)
+        self.preview.setTextCursor(restored)
+        self.preview.verticalScrollBar().setValue(scroll)
 
     def handle_snapshot(self, data):
         self.capabilities = data.get("capabilities", self.capabilities)

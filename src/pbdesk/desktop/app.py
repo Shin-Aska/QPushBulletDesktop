@@ -13,7 +13,9 @@ from .actions import ComposeDialog, ReviewDialog, action_preview, plain_label
 from .models import DeviceModel
 from .activity import ActivityDialog
 from .chat import SmsPage
-from .theme import apply_theme, primary
+from .theme import apply_theme, primary, colors, current_scheme, set_color_scheme, theme_signals
+from .status import DesktopStatus, merge_capabilities
+from .notification_content import NotificationBrowser, notification_html, valid_http_url
 from .widgets import NotificationDelegate, PillDelegate, card_frame, divider_line, make_icon
 from .devices import AddDeviceDialog, EncryptionDialog, RemoveDeviceDialog, request
 
@@ -70,6 +72,11 @@ class MainWindow(QMainWindow):
         self.account_known = False
         self.selected_device_id = None
         self.capabilities = {}
+        self.connection_status = DesktopStatus()
+        self.status_dialog = None
+        self.status_timer = QTimer(self)
+        self.status_timer.setSingleShot(True)
+        self.status_timer.timeout.connect(self.update_status)
         self.dialogs = []
         self.command_error = False
         self.registration_pending = None
@@ -90,18 +97,17 @@ class MainWindow(QMainWindow):
         brand_row = QHBoxLayout()
         brand_row.setContentsMargins(10, 6, 10, 18)
         brand_row.setSpacing(10)
-        brand_icon = QLabel()
-        brand_icon.setPixmap(make_icon('brand', '#ffffff', 22).pixmap(22, 22))
+        self.brand_icon = QLabel()
         brand = QLabel('pbdesk')
         brand.setObjectName('brand')
         brand.setStyleSheet('padding: 0px;')
-        brand_row.addWidget(brand_icon)
+        brand_row.addWidget(self.brand_icon)
         brand_row.addWidget(brand, 1)
         rail.addLayout(brand_row)
         self.navigation = []
         for index, (icon_kind, text) in enumerate((('notifications', 'Notifications'), ('sms', 'SMS'), ('devices', 'Devices'))):
             button = QPushButton(text)
-            button.setIcon(make_icon(icon_kind, '#e4edec', 18))
+            button.setProperty('iconKind', icon_kind)
             button.setIconSize(QSize(18, 18))
             button.setCheckable(True)
             button.clicked.connect(lambda checked=False, index=index: self.navigate(index))
@@ -111,9 +117,8 @@ class MainWindow(QMainWindow):
         self.web_label = plain_label('Local web: off')
         self.web_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         rail.addWidget(self.web_label)
-        settings_button = QPushButton('Settings')
+        self.settings_button = settings_button = QPushButton('Settings')
         settings_button.setObjectName('sidebarSettings')
-        settings_button.setIcon(make_icon('settings', '#e4edec', 16))
         settings_button.setIconSize(QSize(16, 16))
         settings_button.clicked.connect(self.show_settings)
         rail.addWidget(settings_button)
@@ -127,9 +132,10 @@ class MainWindow(QMainWindow):
         self.subtitle = plain_label('Retained on this computer')
         self.subtitle.setObjectName('subtitle')
         self.subtitle.hide()
-        self.provider_status = plain_label('Pushbullet: waiting · Incoming decryption: unknown')
-        self.provider_status.setWordWrap(False)
+        self.provider_status = QPushButton('Checking updates')
         self.provider_status.setObjectName('statusPill')
+        self.provider_status.setFixedWidth(154)
+        self.provider_status.clicked.connect(self.show_status_details)
         self.compose_button = primary(QPushButton('+ Compose'))
         self.compose_button.setEnabled(False)
         self.compose_button.clicked.connect(lambda: self.compose())
@@ -144,11 +150,14 @@ class MainWindow(QMainWindow):
         header.addWidget(self.provider_status)
         self.activity_button = QPushButton('Message activity…')
         self.activity_button.clicked.connect(self.show_activity)
-        header.addWidget(self.activity_button)
-        header.addWidget(self.compose_button)
-        header.addWidget(self.new_sms_button)
-        header.addWidget(self.add_device_button)
         layout.addLayout(header)
+        actions_row = QHBoxLayout()
+        actions_row.addStretch(1)
+        actions_row.addWidget(self.activity_button)
+        actions_row.addWidget(self.compose_button)
+        actions_row.addWidget(self.new_sms_button)
+        actions_row.addWidget(self.add_device_button)
+        layout.addLayout(actions_row)
         self.error = plain_label()
         self.error.setObjectName('errorBanner')
         self.error.hide()
@@ -189,16 +198,19 @@ class MainWindow(QMainWindow):
             self.tray.activated.connect(lambda reason: self.show_from_tray() if reason == QSystemTrayIcon.ActivationReason.Trigger else None)
             self.tray.show()
         worker.snapshot.connect(self.apply_snapshot)
-        worker.connection.connect(self.statusBar().showMessage)
-        worker.failed.connect(self.show_error)
+        worker.connection.connect(self.worker_connection)
+        worker.failed.connect(self.worker_failed)
         worker.stopped_all.connect(self.exit_desktop)
         if hasattr(worker, 'result'):
             worker.result.connect(self.command_result)
+        theme_signals(QApplication.instance()).changed.connect(self.refresh_theme)
         self.navigate(0)
+        self.refresh_theme()
+        self.update_status()
 
     def build_menu(self):
         menu = self.menuBar().addMenu('Application')
-        menu.addAction('Web interface settings…', self.show_settings)
+        menu.addAction('Settings…', self.show_settings)
         refresh = menu.addAction('Refresh current view', self.refresh_current)
         refresh.setShortcut(QKeySequence.StandardKey.Refresh)
         find = QAction(self)
@@ -226,6 +238,7 @@ class MainWindow(QMainWindow):
         self.new_sms_button.setVisible(index == 1)
         self.add_device_button.setVisible(index == 2)
         self.compose_button.setEnabled(index == 1 or bool(self.capabilities.get("features", {}).get("send")))
+        self.refresh_navigation_icons()
 
     def build_inbox_tab(self):
         page = QWidget()
@@ -238,9 +251,8 @@ class MainWindow(QMainWindow):
         self.inbox_sync = plain_label('Stored on this computer')
         self.inbox_sync.setWordWrap(False)
         self.inbox_sync.setObjectName('muted')
-        refresh_btn = QPushButton('Refresh')
+        self.refresh_inbox_button = refresh_btn = QPushButton('Refresh')
         refresh_btn.setObjectName('inlineLink')
-        refresh_btn.setIcon(make_icon('refresh', '#4a5960', 14))
         refresh_btn.setIconSize(QSize(14, 14))
         refresh_btn.clicked.connect(self.refresh_current)
         sync_row.addWidget(self.inbox_sync)
@@ -296,9 +308,9 @@ class MainWindow(QMainWindow):
         badge_row.addWidget(self.item_decrypt_badge)
         badge_row.addStretch()
         right_layout.addLayout(badge_row)
-        self.detail = QTextBrowser()
+        self.detail = NotificationBrowser()
         self.detail.setObjectName('plainDetail')
-        self.detail.setOpenExternalLinks(False)
+        self.detail.anchorClicked.connect(self.open_notification_link)
         self.detail.setAccessibleName('Selected item details')
         right_layout.addWidget(self.detail, 1)
         right_layout.addWidget(divider_line())
@@ -356,7 +368,6 @@ class MainWindow(QMainWindow):
         self.devices_status.setObjectName('muted')
         self.refresh_devices_button = QPushButton('Refresh from Pushbullet')
         self.refresh_devices_button.setObjectName('inlineLink')
-        self.refresh_devices_button.setIcon(make_icon('refresh', '#4a5960', 14))
         self.refresh_devices_button.setIconSize(QSize(14, 14))
         self.refresh_devices_button.clicked.connect(self.refresh_devices)
         sync_row.addWidget(self.devices_status)
@@ -398,7 +409,6 @@ class MainWindow(QMainWindow):
         info.setSpacing(10)
         self.device_detail = QTextBrowser()
         self.device_detail.setObjectName('plainDetail')
-        self.device_detail.document().setDefaultStyleSheet("body {font-size:13px; color:#24343b;} h2 {font-size:20px; color:#152a30; margin-top:0px; margin-bottom:4px;} h3 {font-size:14px; color:#152a30; margin-top:10px; margin-bottom:4px;} p {margin-top:4px; margin-bottom:4px;} td {padding:3px 2px;}")
         self.device_detail.setOpenExternalLinks(False)
         info.addWidget(self.device_detail, 1)
         info.addWidget(divider_line())
@@ -476,12 +486,13 @@ class MainWindow(QMainWindow):
     def sync_text(self):
         sync = self.capabilities.get('push_sync')
         if not sync:
-            return 'Stored on this computer · Refresh reads service state'
+            return 'Stored on this computer'
         text = 'Last synced ' + stamp(sync.get('last_success_at'))
-        if sync.get('state') in {'refreshing', 'queued', 'syncing'}:
-            text += '  ·  ↻ Refreshing…'
-        if sync.get('error'):
-            text += '  ·  ' + str(sync['error']) + ' · Stored records remain available.'
+        presentation = self.connection_status.view(stamp)
+        if presentation.label == 'Refreshing…':
+            text += ' · Refreshing…'
+        elif sync.get('error') or sync.get('state') in {'error', 'rate_limited'}:
+            text += ' · Sync needs attention'
         return text
 
     def replace_list(self, view, model, rows, render):
@@ -517,14 +528,7 @@ class MainWindow(QMainWindow):
         kind = item.get('type', 'message').replace('_', ' ').upper()
         self.item_type_badge.setText(kind)
         self.item_decrypt_badge.setVisible(bool(item.get('decrypted')))
-        document = (
-            '<h2 style="margin:0 0 4px 0; font-size:21px; color:#152a30;">' + escape(item.get('title') or '(Untitled)') + '</h2>'
-            + '<p style="color:#657176; margin:0 0 12px 0; font-size:13px;">' + escape(stamp(item.get('created_at'))) + '</p>'
-            + '<p style="line-height:1.55; color:#24343b; font-size:14px; margin-top:10px;">' + escape(item.get('body', '')).replace('\n', '<br>') + '</p>'
-        )
-        if item.get('url'):
-            document += '<p style="margin-top:10px; color:#00765f;">' + escape(item['url']) + '</p>'
-        self.detail.setHtml(document)
+        self.detail.setHtml(notification_html(item, stamp, colors(self.palette())))
         self.item_source_label.setText('Source device: ' + str(item.get('source_device_id') or item.get('device_id') or 'Unassociated'))
         self.copy_item_button.setEnabled(bool(item.get('title') or item.get('body') or item.get('url')))
 
@@ -550,7 +554,7 @@ class MainWindow(QMainWindow):
         encryption, history = device.get('encryption', {}), device.get('history', {})
         state = {'verified': 'Verified · sample decrypted locally', 'key_ready': 'Key ready · not yet verified', 'locked': 'Key unavailable or could not decrypt', 'unconfigured': 'Not configured', 'error': 'Decryption needs attention'}.get(encryption.get('state'), 'Not configured')
         rows = [('Registration', 'Active' if device.get('active') else 'Inactive'), ('Connectivity', 'Unknown'), ('Push', 'Supported' if device.get('can_push') else '—'), ('SMS', 'Supported' if device.get('can_sms') else '—')]
-        document = '<h2>' + escape(device.get('nickname') or '(unnamed)') + '</h2><p style="color:#657176">' + escape(' '.join(str(device.get(key) or '') for key in ('manufacturer', 'model')).strip()) + '<br>' + escape(device['id']) + '</p><hr><table width="100%" cellpadding="1">'
+        document = '<h2>' + escape(device.get('nickname') or '(unnamed)') + '</h2><p style="color:' + colors(self.palette())['muted'] + '">' + escape(' '.join(str(device.get(key) or '') for key in ('manufacturer', 'model')).strip()) + '<br>' + escape(device['id']) + '</p><hr><table width="100%" cellpadding="1">'
         for label, value in rows:
             document += '<tr><td>' + label + '</td><td>' + value + '</td></tr>'
         document += '</table><hr><h3>Incoming encryption</h3><p>' + escape(state) + '</p><p>Key source: ' + escape('Shared default · KWallet' if encryption.get('mode', 'shared') == 'shared' else str(encryption.get('entry', 'Device-specific · KWallet'))) + '</p>'
@@ -728,10 +732,20 @@ class MainWindow(QMainWindow):
                 self.activity.reject()
                 self.selected_device_id = None
                 self.items, self.actions, self.devices = [], [], []
+                self.capabilities = {}
+                self.connection_status.reset()
+                self.status_timer.stop()
+                self.command_error = False
+                self.error.hide()
+                self.registration_pending = None
+                self.registration_recovery.hide()
+                self.devices_status.setText('Device cache has not been loaded.')
                 self.account_id, self.account_known = account_id, True
         if 'web' in data:
             self.web_state = data['web']
-        self.capabilities = data.get('capabilities', self.capabilities)
+        if 'capabilities' in data:
+            self.capabilities = merge_capabilities(self.capabilities, data['capabilities'])
+            self.connection_status.snapshot(data['capabilities'])
         self.devices = data.get('devices', {}).get('devices', self.devices)
         if 'devices' in data:
             self.registration_pending = data['devices'].get('registration_pending')
@@ -744,18 +758,7 @@ class MainWindow(QMainWindow):
         self.update_messages()
         cap = self.capabilities
         self.compose_button.setEnabled(self.tabs.currentIndex() == 1 or bool(cap.get('features', {}).get('send')))
-        p_state = str(cap.get('provider_state', 'unknown'))
-        e_state = str(cap.get('encryption_state', 'unknown'))
-        pending = int(cap.get('encrypted_pending', 0) or 0)
-        if p_state == 'connected' and e_state in {'ready', 'key_ready', 'verified'} and pending == 0:
-            label = 'Decryption ready' if e_state == 'ready' else 'Key ready' if e_state == 'key_ready' else 'Decryption verified'
-            self.provider_status.setText(f'●  Connected · {label}')
-            self.provider_status.setProperty('tone', '')
-        else:
-            self.provider_status.setText(f'Pushbullet: {p_state}  ·  Decryption: {e_state}  ·  {pending} encrypted items waiting')
-            self.provider_status.setProperty('tone', 'warn')
-        self.provider_status.style().unpolish(self.provider_status)
-        self.provider_status.style().polish(self.provider_status)
+        self.update_status()
         if 'devices' in data:
             self.devices_status.setText('Last refreshed ' + stamp(data['devices'].get('synced_at')))
         self.web_label.setText('Local web: ' + ('on' if self.web_state.get('enabled') else 'off'))
@@ -764,9 +767,22 @@ class MainWindow(QMainWindow):
 
     def show_settings(self):
         dialog = QDialog(self)
-        dialog.setWindowTitle("Local web interface")
-        dialog.resize(520, 360)
+        dialog.setWindowTitle("Settings")
+        dialog.resize(520, 460)
         layout = QVBoxLayout(dialog)
+        appearance_title = QLabel("Appearance")
+        appearance_title.setObjectName("pageTitle")
+        layout.addWidget(appearance_title)
+        appearance = QComboBox()
+        appearance.setObjectName('appearanceScheme')
+        appearance.setAccessibleName('Color scheme')
+        for label, value in [('System (KDE / desktop)', 'system'), ('Light', 'light'), ('Dark', 'dark')]:
+            appearance.addItem(label, value)
+        appearance.setCurrentIndex(appearance.findData(current_scheme(QApplication.instance())))
+        appearance.currentIndexChanged.connect(lambda: set_color_scheme(QApplication.instance(), appearance.currentData()))
+        layout.addWidget(appearance)
+        layout.addWidget(plain_label("System follows your desktop palette. Light and Dark override the application color scheme."))
+        layout.addWidget(divider_line())
         title = QLabel("Local status page")
         title.setObjectName("pageTitle")
         layout.addWidget(title)
@@ -797,8 +813,96 @@ class MainWindow(QMainWindow):
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         buttons.rejected.connect(dialog.reject)
         layout.addWidget(buttons)
-        dialog.exec()
-        self.worker.snapshot.disconnect(update)
+        dialog.finished.connect(lambda: self.worker.snapshot.disconnect(update))
+        self.track_dialog(dialog)
+
+    def open_notification_link(self, url):
+        value = url.toString()
+        if valid_http_url(value) and url.isValid():
+            QDesktopServices.openUrl(url)
+
+    def refresh_navigation_icons(self):
+        palette = colors(self.palette())
+        for button in self.navigation:
+            ink = palette['highlighted_text'] if button.isChecked() else palette['text']
+            button.setIcon(make_icon(button.property('iconKind'), ink, 18))
+
+    def refresh_theme(self):
+        palette = colors(self.palette())
+        self.brand_icon.setPixmap(make_icon('brand', palette['text'], 22).pixmap(22, 22))
+        self.settings_button.setIcon(make_icon('settings', palette['text'], 16))
+        self.refresh_inbox_button.setIcon(make_icon('refresh', palette['muted'], 14))
+        self.refresh_devices_button.setIcon(make_icon('refresh', palette['muted'], 14))
+        self.refresh_navigation_icons()
+        css = ("body {font-size:13px; color:" + palette['text'] + ";} "
+               "h2 {font-size:20px; margin-top:0px; margin-bottom:4px;} "
+               "h3 {font-size:14px; margin-top:10px; margin-bottom:4px;} "
+               "p {margin-top:4px; margin-bottom:4px;} td {padding:3px 2px;} "
+               "a {color:" + palette['link'] + ";}")
+        self.detail.document().setDefaultStyleSheet(css)
+        self.device_detail.document().setDefaultStyleSheet(css)
+        # Rerender the existing selection only; do not reset models, drafts,
+        # scroll positions or synchronization state when appearance changes.
+        for browser, render, index in ((self.detail, self.show_item, self.list.currentIndex()),
+                                       (self.device_detail, self.show_device, self.devices_view.currentIndex())):
+            scroll = browser.verticalScrollBar().value()
+            render(index)
+            browser.verticalScrollBar().setValue(scroll)
+        self.update_status()
+
+    def worker_connection(self, message):
+        self.connection_status.connection(message)
+        self.update_status()
+        # Raw reconnect diagnostics belong to the accessible details surface.
+        self.statusBar().clearMessage()
+
+    def worker_failed(self, message):
+        self.connection_status.failed(message)
+        self.update_status()
+
+    def update_status(self):
+        view = self.connection_status.view(stamp)
+        self.provider_status.setText(view.label)
+        self.provider_status.setProperty('tone', view.tone)
+        self.provider_status.setAccessibleName('Connection status: ' + view.label + '. Open details')
+        self.provider_status.setAccessibleDescription(view.diagnostics)
+        # Qt may auto-detect tooltip HTML. Escape all diagnostic text inside a
+        # controlled wrapper so even hostile error text stays literal.
+        self.provider_status.setToolTip('<qt>' + escape(view.diagnostics).replace('\n', '<br>') + '</qt>')
+        palette = colors(self.palette())
+        bg, fg = {'positive': ('positive_bg', 'positive_fg'), 'warn': ('warning_bg', 'warning_fg'),
+                  'error': ('negative_bg', 'negative_fg')}.get(view.tone, ('alternate', 'text'))
+        self.provider_status.setStyleSheet('QPushButton {background:' + palette[bg] + ';color:' + palette[fg]
+                                          + ';border:1px solid ' + palette['border'] + ';border-radius:12px;'
+                                          + 'padding:5px 8px;font-size:12px;} QPushButton:focus {border:2px solid '
+                                          + palette['highlight'] + ';}')
+        self.status_timer.stop()
+        if view.next_update is not None:
+            self.status_timer.start(max(1, int((view.next_update - self.connection_status.clock()) * 1000) + 1))
+        if hasattr(self, 'inbox_sync'):
+            self.inbox_sync.setText(self.sync_text())
+        if self.status_dialog is not None:
+            self.status_dialog.setPlainText(view.diagnostics)
+
+    def show_status_details(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle('Connection details')
+        dialog.resize(510, 330)
+        layout = QVBoxLayout(dialog)
+        detail = QTextBrowser()
+        detail.setOpenLinks(False)
+        detail.setOpenExternalLinks(False)
+        detail.setAccessibleName('Connection diagnostics')
+        self.status_dialog = detail
+        self.update_status()
+        layout.addWidget(detail, 1)
+        note = plain_label('Live updates describes the provider stream. Retained history and synchronization are reported separately.')
+        layout.addWidget(note)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+        dialog.finished.connect(lambda: setattr(self, 'status_dialog', None) if self.status_dialog is detail else None)
+        self.track_dialog(dialog)
 
     def stop_all(self):
         box = QMessageBox(self)
