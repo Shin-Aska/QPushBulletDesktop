@@ -144,6 +144,8 @@ def use_kwallet(settings, folder="Pushbullet", entry="api-key", wallet=None):
         raise ValueError("KWallet folder and entry must be nonempty names")
     if wallet is not None and (not isinstance(wallet, str) or not wallet or len(wallet) > 1024):
         raise ValueError("KWallet name must be nonempty")
+    if folder == 'Pushbullet' and entry == 'ai-openai-api-key':
+        raise ValueError('The AI credential entry is reserved for OpenAI')
     try:
         token = read_password(folder, entry, wallet)
         if not token or not token.strip():
@@ -157,6 +159,8 @@ def provider_token(settings=None):
     try:
         reference = provider_credential_source(settings)
         if reference["backend"] == "kwallet":
+            if reference.get('folder') == 'Pushbullet' and reference.get('entry') == 'ai-openai-api-key':
+                raise CredentialLocked('The AI credential entry is reserved for OpenAI')
             from pbdesk.services.kwallet import read_password
             token = read_password(reference["folder"], reference["entry"], reference.get("wallet"))
             if not token or not token.strip():
@@ -245,6 +249,8 @@ def e2e_password(settings=None):
 
 def device_e2e_password(settings, entry='e2e-password'):
     """Local incoming-key reference in the established wallet/folder only."""
+    if entry == 'ai-openai-api-key':
+        raise CredentialLocked('The AI credential entry cannot be used for device encryption')
     from pbdesk.services.kwallet import read_password
     try:
         reference=provider_credential_source(settings)
@@ -256,7 +262,7 @@ def device_e2e_password(settings, entry='e2e-password'):
 
 def create_device_e2e_password(settings,entry,password):
     from pbdesk.services.kwallet import write_new_password
-    if not isinstance(entry,str) or not entry.strip() or len(entry)>256 or entry in {'api-key','e2e-password'}:
+    if not isinstance(entry,str) or not entry.strip() or len(entry)>256 or entry in {'api-key','e2e-password','ai-openai-api-key'}:
         raise ValueError('Choose a new device-specific KWallet entry name')
     if not isinstance(password,str) or not password or len(password)>16384:
         raise ValueError('An encryption password is required')

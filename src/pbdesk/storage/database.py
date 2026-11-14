@@ -16,6 +16,7 @@ from sqlalchemy import (create_engine, event, MetaData, Table, Column, Integer,
 from pbdesk.credentials import private_dir
 from pbdesk.storage.workflows import WorkflowStore
 from pbdesk.storage.sms import SmsStore
+from pbdesk.storage.summaries import SummaryRepository
 
 metadata = MetaData()
 items = Table("items", metadata,
@@ -23,12 +24,13 @@ items = Table("items", metadata,
     Column("type", Text, nullable=False), Column("title", Text, nullable=False),
     Column("body", Text, nullable=False), Column("url", Text), Column("device_id", Text),
     Column("source_device_id",Text),Column("target_device_id",Text),Column("decrypted",Integer,default=0),
+    *(Column(k, Text) for k in ("application_name", "icon", "file_name", "file_type", "file_url")),
     Column("created_at", Text, nullable=False), Column("fingerprint", Text, nullable=False),
     Column("notification_claimed", Integer, nullable=False, default=0))
 events = Table("events", metadata, Column("sequence", Integer, primary_key=True, autoincrement=True),
     Column("type", Text, nullable=False), Column("item_id", ForeignKey("items.id"), nullable=False))
 settings_table = Table("settings", metadata, Column("key", Text, primary_key=True), Column("value", Text, nullable=False))
-PUBLIC = ("id", "source_id", "type", "title", "body", "url", "device_id", "created_at", "source_device_id", "target_device_id", "decrypted")
+PUBLIC = ("id", "source_id", "type", "title", "body", "url", "device_id", "created_at", "source_device_id", "target_device_id", "decrypted", "application_name", "icon", "file_name", "file_type", "file_url")
 
 class Store(WorkflowStore, SmsStore):
     def __init__(self, settings):
@@ -119,6 +121,7 @@ class Store(WorkflowStore, SmsStore):
             config.attributes["connection"] = conn
             command.upgrade(config, "head")
         self.path.chmod(0o600)
+        self.summaries = SummaryRepository(self)
         self.instance_id = str(uuid.uuid4())
         current=self.sms_account()
         if current:

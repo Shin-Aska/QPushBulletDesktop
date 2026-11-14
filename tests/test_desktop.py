@@ -1,9 +1,32 @@
 import threading
 
+import pytest
+from PyQt6.QtGui import QPalette
+from pbdesk.desktop.theme import apply_theme, theme_signals
+
 from PyQt6.QtCore import QObject, Qt, pyqtSignal
 from pbdesk.desktop.app import InboxModel, MainWindow
 from pbdesk.desktop.worker import CoreWorker
 from pbdesk.config import Settings
+
+
+@pytest.fixture(autouse=True)
+def isolated_desktop_preferences(qapp, tmp_path, monkeypatch):
+    monkeypatch.setenv('PBDESK_STATE_DIR', str(tmp_path / 'ui-state'))
+    monkeypatch.setenv('PBDESK_APPLICATION_DIR', str(tmp_path / 'ui-app'))
+    manager = theme_signals(qapp)
+    old = (QPalette(qapp.palette()), qapp.styleSheet(), manager.scheme, manager._last_colors)
+    apply_theme(qapp, 'system')
+    yield
+    manager._updating = True
+    try:
+        qapp.setStyleSheet(old[1])
+        qapp.setPalette(old[0])
+        qapp.processEvents()
+        manager.scheme, manager._last_colors = old[2:]
+        manager._scheduled = False
+    finally:
+        manager._updating = False
 
 
 ITEM = {"id": 1, "title": "Sanitized stored note", "body": "Hello <b>world</b>", "type": "stored_note", "created_at": "2026-11-13T00:00:00Z", "url": None}
@@ -55,7 +78,7 @@ def test_startup_error_off_gui_thread(qtbot, tmp_path, monkeypatch):
     def fail(*args, **kwargs):
         calls.append(threading.get_ident())
         raise RuntimeError("Port conflict: choose PBDESK_CORE_PORT")
-    monkeypatch.setattr("pbdesk.desktop.worker.ensure_core", fail)
+    monkeypatch.setattr("pbdesk.desktop.worker.ClientLease.start", fail)
     worker = CoreWorker(Settings(tmp_path))
     with qtbot.waitSignal(worker.failed, timeout=2000) as result:
         worker.start()
@@ -74,7 +97,7 @@ def test_worker_authenticated_snapshot_and_stop(qtbot, tmp_path, monkeypatch):
     import httpx
     from pbdesk.credentials import health_response
     settings = Settings(tmp_path)
-    monkeypatch.setattr("pbdesk.desktop.worker.ensure_core", lambda *args, **kwargs: None)
+    monkeypatch.setattr("pbdesk.desktop.worker.ClientLease.start", lambda *args, **kwargs: None)
     actual = httpx.Client
     seen = []
     def handle(request):
@@ -110,7 +133,7 @@ def test_stop_all_does_not_respawn_from_another_desktop(qtbot, tmp_path, monkeyp
     starts = []
     online = threading.Event()
     online.set()
-    monkeypatch.setattr("pbdesk.desktop.worker.ensure_core", lambda *args, **kwargs: starts.append(threading.get_ident()))
+    monkeypatch.setattr("pbdesk.desktop.worker.ClientLease.start", lambda *args, **kwargs: starts.append(threading.get_ident()))
     actual = httpx.Client
     def handle(request):
         if not online.is_set():

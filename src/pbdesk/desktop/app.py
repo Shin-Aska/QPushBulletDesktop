@@ -4,15 +4,20 @@ from datetime import datetime, timezone
 from html import escape
 import sys
 from PyQt6 import sip
-from PyQt6.QtCore import QAbstractListModel, QModelIndex, QSize, Qt, QTimer, QUrl
+from PyQt6.QtCore import QAbstractListModel, QEvent, QModelIndex, QSize, Qt, QTimer, QUrl
 from PyQt6.QtGui import QAction, QDesktopServices, QIcon, QKeySequence
-from PyQt6.QtWidgets import (QApplication, QCheckBox, QDialog, QDialogButtonBox, QHBoxLayout, QLabel, QLineEdit, QListView, QMainWindow, QMenu, QMessageBox, QPushButton, QSplitter, QSystemTrayIcon, QTextBrowser, QVBoxLayout, QWidget, QComboBox, QTableView, QAbstractItemView, QHeaderView, QStackedWidget, QInputDialog)
+from PyQt6.QtWidgets import (QApplication, QCheckBox, QDialog, QDialogButtonBox, QHBoxLayout, QLabel, QLineEdit, QListView, QMainWindow, QMenu, QMessageBox, QPushButton, QSplitter, QSystemTrayIcon, QTextBrowser, QVBoxLayout, QWidget, QComboBox, QTableView, QAbstractItemView, QHeaderView, QStackedWidget, QInputDialog, QTabWidget, QScrollArea)
 from pbdesk.config import Settings
 from .worker import CoreWorker
+from .core_settings import CoreSettings
 from .actions import ComposeDialog, ReviewDialog, action_preview, plain_label
 from .models import DeviceModel
+from .media import RemoteImage, media_icon, attachment_revision
 from .activity import ActivityDialog
+from .ai import SummaryPage, AISettings, SmsAiAssistant
+from .ai_worker import AiWorker
 from .chat import SmsPage
+from .preferences import read_preferences, update_preferences
 from .theme import apply_theme, primary, colors, current_scheme, set_color_scheme, theme_signals
 from .status import DesktopStatus, merge_capabilities
 from .notification_content import NotificationBrowser, notification_html, valid_http_url
@@ -48,6 +53,8 @@ class InboxModel(QAbstractListModel):
         item = self.items[index.row()]
         if role == Qt.ItemDataRole.DisplayRole:
             return f"{item.get('title') or '(Untitled)'}\n{item.get('body', '')[:110].replace(chr(10), ' ')}"
+        if role == Qt.ItemDataRole.DecorationRole:
+            return media_icon(item)
         if role == Qt.ItemDataRole.UserRole:
             return item
         if role == Qt.ItemDataRole.ToolTipRole:
@@ -62,10 +69,11 @@ class InboxModel(QAbstractListModel):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, worker):
+    def __init__(self, worker, ai_client=None):
         super().__init__()
         apply_theme(QApplication.instance())
         self.worker = worker
+        self.ai_client = ai_client
         self._exiting = False
         self.devices, self.actions, self.items = [], [], []
         self.account_id = None
@@ -74,6 +82,7 @@ class MainWindow(QMainWindow):
         self.capabilities = {}
         self.connection_status = DesktopStatus()
         self.status_dialog = None
+        self.settings_dialog = None
         self.status_timer = QTimer(self)
         self.status_timer.setSingleShot(True)
         self.status_timer.timeout.connect(self.update_status)
@@ -105,14 +114,16 @@ class MainWindow(QMainWindow):
         brand_row.addWidget(brand, 1)
         rail.addLayout(brand_row)
         self.navigation = []
-        for index, (icon_kind, text) in enumerate((('notifications', 'Notifications'), ('sms', 'SMS'), ('devices', 'Devices'))):
+        for index, (icon_kind, text) in enumerate((('notifications', 'Notifications'), ('sms', 'SMS'), ('summary', 'Summary'))):
             button = QPushButton(text)
             button.setProperty('iconKind', icon_kind)
             button.setIconSize(QSize(18, 18))
             button.setCheckable(True)
             button.clicked.connect(lambda checked=False, index=index: self.navigate(index))
             self.navigation.append(button)
-            rail.addWidget(button)
+        # Keep logical indices stable; the sidebar has its own visual order.
+        for index in (2, 0, 1):
+            rail.addWidget(self.navigation[index])
         rail.addStretch()
         self.web_label = plain_label('Local web: off')
         self.web_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -156,10 +167,10 @@ class MainWindow(QMainWindow):
         actions_row.addWidget(self.activity_button)
         actions_row.addWidget(self.compose_button)
         actions_row.addWidget(self.new_sms_button)
-        actions_row.addWidget(self.add_device_button)
         layout.addLayout(actions_row)
         self.error = plain_label()
         self.error.setObjectName('errorBanner')
+        self.error.setWordWrap(True)
         self.error.hide()
         layout.addWidget(self.error)
         self.tabs = QStackedWidget()
@@ -169,7 +180,33 @@ class MainWindow(QMainWindow):
         self.sms_page.review_requested.connect(self.review_sms_action)
         self.sms_page.action_created.connect(self.merge_action)
         self.sms_page.activity_requested.connect(self.show_activity)
-        self.tabs.addWidget(self.sms_page)
+        # Keep the SMS page's native minimum geometry when a real error banner
+        # reduces the viewport. Scroll the page instead of crushing its composer.
+        self.sms_scroll = QScrollArea()
+        self.sms_scroll.setObjectName('smsPageScroll')
+        self.sms_scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        self.sms_scroll.setWidgetResizable(True)
+        self.sms_scroll.setWidget(self.sms_page)
+        self.tabs.addWidget(self.sms_scroll)
+        self.sms_ai = SmsAiAssistant(ai_client, self.sms_page, self)
+        self.sms_ai_dialog = QDialog(self)
+        self.sms_ai_dialog.setWindowTitle('Draft SMS reply')
+        self.sms_ai_dialog.resize(640, 500)
+        self.sms_ai_dialog.setMinimumSize(420, 380)
+        ai_layout = QVBoxLayout(self.sms_ai_dialog)
+        ai_layout.setContentsMargins(8, 8, 8, 8)
+        ai_layout.addWidget(self.sms_ai, 1)
+        self.sms_ai.used.connect(self.finish_ai_draft)
+        self.sms_ai_dialog.finished.connect(self.sms_ai.closed)
+        self.sms_ai_dialog.finished.connect(lambda: self.dialogs.remove(self.sms_ai_dialog) if self.sms_ai_dialog in self.dialogs else None)
+        self.sms_ai_button = QPushButton('AI Draft reply…')
+        self.sms_ai_button.clicked.connect(self.show_ai_assistant)
+        self.sms_page.assistant_layout.addWidget(self.sms_ai_button)
+        for button in (self.sms_ai_button, self.sms_page.send_button):
+            button.installEventFilter(self)
+        self.refresh_sms_control_geometry()
+        self.summary_page = SummaryPage(ai_client, self)
+        self.tabs.addWidget(self.summary_page)
         self.activity = ActivityDialog(self)
         self.activity.review_requested.connect(self.review)
         self.action_model = self.activity.model
@@ -177,6 +214,7 @@ class MainWindow(QMainWindow):
         self.action_detail = self.activity.detail
         self.review_button = self.activity.review_button
         self.build_device_tab()
+        self.build_settings()
         layout.addWidget(self.tabs, 1)
         outer.addWidget(content, 1)
         self.setCentralWidget(root)
@@ -204,7 +242,8 @@ class MainWindow(QMainWindow):
         if hasattr(worker, 'result'):
             worker.result.connect(self.command_result)
         theme_signals(QApplication.instance()).changed.connect(self.refresh_theme)
-        self.navigate(0)
+        page = read_preferences().get('main_page', 'notifications')
+        self.navigate(('notifications', 'sms', 'summary').index(page) if page in ('notifications', 'sms', 'summary') else 0)
         self.refresh_theme()
         self.update_status()
 
@@ -227,16 +266,23 @@ class MainWindow(QMainWindow):
         exit_action.setShortcut(QKeySequence.StandardKey.Quit)
 
     def navigate(self, index):
+        if index not in range(len(self.navigation)):
+            return
         self.tabs.setCurrentIndex(index)
+        if index == 2:
+            self.update_summary_context()
+        try:
+            update_preferences({'main_page': ('notifications', 'sms', 'summary')[index]})
+        except OSError as error:
+            self.show_error('Could not save the startup page: ' + str(error))
         for i, button in enumerate(self.navigation):
             button.setChecked(i == index)
-        title, subtitle = [('Notifications', 'Pushbullet messages and mirrored notifications'), ('SMS', 'Conversations from your selected phone'), ('Devices', 'Registrations, capabilities and local encryption')][index]
+        title, subtitle = [('Notifications', 'Pushbullet messages and mirrored notifications'), ('SMS', 'Conversations from your selected phone'), ('Summary', 'Automatic highlights from recent notifications and SMS')][index]
         self.heading.setText(title)
         self.subtitle.setText(subtitle)
         self.setWindowTitle('pbdesk — ' + title)
         self.compose_button.setVisible(index == 0)
         self.new_sms_button.setVisible(index == 1)
-        self.add_device_button.setVisible(index == 2)
         self.compose_button.setEnabled(index == 1 or bool(self.capabilities.get("features", {}).get("send")))
         self.refresh_navigation_icons()
 
@@ -298,6 +344,9 @@ class MainWindow(QMainWindow):
         right_layout.setSpacing(10)
         badge_row = QHBoxLayout()
         badge_row.setSpacing(8)
+        self.item_icon = QLabel()
+        self.item_icon.setAccessibleName('Notification source icon')
+        badge_row.addWidget(self.item_icon)
         self.item_type_badge = QLabel('NOTE')
         self.item_type_badge.setObjectName('badge')
         self.item_decrypt_badge = QLabel('Decrypted locally')
@@ -313,6 +362,10 @@ class MainWindow(QMainWindow):
         self.detail.anchorClicked.connect(self.open_notification_link)
         self.detail.setAccessibleName('Selected item details')
         right_layout.addWidget(self.detail, 1)
+        self.item_image = RemoteImage(self.worker, {}, valid=self.notification_media_valid)
+        self.item_image.set_preview_bounds(320, 160)
+        self.item_image.hide()
+        right_layout.addWidget(self.item_image)
         right_layout.addWidget(divider_line())
         footer_row = QHBoxLayout()
         self.item_source_label = plain_label('Source device: Unassociated')
@@ -373,6 +426,7 @@ class MainWindow(QMainWindow):
         sync_row.addWidget(self.devices_status)
         sync_row.addWidget(self.refresh_devices_button)
         sync_row.addStretch()
+        sync_row.addWidget(self.add_device_button)
         layout.addLayout(sync_row)
         self.registration_recovery = QPushButton('Review uncertain registration…')
         self.registration_recovery.clicked.connect(self.resolve_registration)
@@ -434,8 +488,9 @@ class MainWindow(QMainWindow):
         layout.addWidget(split, 1)
         note = plain_label('Active describes registration. Current connectivity is unknown. Phones and browsers register through their Pushbullet client.')
         note.setObjectName('muted')
+        note.setWordWrap(True)
         layout.addWidget(note)
-        self.tabs.addWidget(page)
+        self.devices_page = page
 
     def selected_device(self):
         return next((device for device in self.devices if device['id'] == self.selected_device_id), None)
@@ -461,20 +516,80 @@ class MainWindow(QMainWindow):
         self.update_messages()
 
     def focus_search(self):
-        if self.tabs.currentIndex() == 1:
+        if self.settings_has_focus():
+            self.settings_find()
+            return
+        if self.tabs.currentIndex() == 2:
+            self.summary_page.focus_search()
+        elif self.tabs.currentIndex() == 1:
             self.sms_page.focus_search()
-        elif self.tabs.currentIndex() == 2:
-            self.device_filter.setFocus()
         else:
             self.search.setFocus()
 
     def refresh_current(self):
+        if self.settings_has_focus():
+            self.settings_refresh()
+            return
         if self.tabs.currentIndex() == 2:
-            self.refresh_devices()
+            self.update_summary_context()
+            self.summary_page.refresh()
         elif self.tabs.currentIndex() == 1:
             self.sms_page.refresh()
         else:
             self.worker.request('search', self.search.text())
+
+    def refresh_sms_control_geometry(self):
+        # A wrapped contact header can exceed the splitter's static size hint.
+        # Preserve the native action targets; the outer SMS viewport can scroll.
+        if sip.isdeleted(self) or sip.isdeleted(self.sms_ai_button) or sip.isdeleted(self.sms_page.send_button):
+            return
+        for button in (self.sms_ai_button, self.sms_page.send_button):
+            button.setMinimumHeight(button.sizeHint().height())
+
+    def eventFilter(self, watched, event):
+        if (watched in (getattr(self, 'sms_ai_button', None),
+                        getattr(getattr(self, 'sms_page', None), 'send_button', None))
+                and event.type() in (QEvent.Type.FontChange, QEvent.Type.StyleChange)):
+            QTimer.singleShot(0, self.refresh_sms_control_geometry)
+        return super().eventFilter(watched, event)
+
+    def show_ai_assistant(self):
+        self.sms_ai.open_context()
+        if self.sms_ai_dialog not in self.dialogs:
+            self.dialogs.append(self.sms_ai_dialog)
+        self.sms_ai_dialog.show()
+        self.sms_ai_dialog.raise_()
+        self.sms_ai_dialog.activateWindow()
+
+    def finish_ai_draft(self):
+        # Insertion changes the token. Capture that completed edit, then restore
+        # focus only after hiding the assistant has released its active window.
+        context = self.sms_page.ai_context()
+        instance_id = getattr(self.worker, 'instance_id', None)
+        self.sms_ai_dialog.accept()
+        if not context:
+            return
+
+        def restore_composer():
+            if (not self.isVisible() or self.sms_ai_dialog.isVisible() or
+                    self.tabs.currentWidget() is not self.sms_scroll or
+                    getattr(self.worker, 'instance_id', None) != instance_id or
+                    self.sms_page.ai_context() != context or
+                    not self.sms_page.composer.isVisible() or not self.sms_page.composer.isEnabled()):
+                return
+            active = QApplication.activeWindow()
+            if active not in (None, self, self.sms_ai_dialog):
+                return
+            self.raise_()
+            self.activateWindow()
+            self.sms_page.composer.setFocus(Qt.FocusReason.OtherFocusReason)
+
+        self.defer_current_account(restore_composer)
+
+    def update_summary_context(self):
+        self.summary_page.set_context(self.account_id if self.account_known else None,
+                                      self.items, {'messages': [message for cache in self.sms_page.sms_cache.values()
+                                                                for message in cache.get('messages', [])]})
 
     def search_changed(self):
         self.update_messages()
@@ -511,6 +626,8 @@ class MainWindow(QMainWindow):
                 detail.verticalScrollBar().setValue(detail_scroll)
         else:
             detail.setPlainText('No stored messages in this view. New messages appear here after synchronization.')
+            self.item_icon.clear()
+            self.item_image.set_reference(None)
 
     def update_messages(self):
         query = self.search.text().casefold()
@@ -520,6 +637,7 @@ class MainWindow(QMainWindow):
         self.inbox_empty.setVisible(not rows)
         self.list.setVisible(bool(rows))
         self.inbox_sync.setText(self.sync_text())
+        self.update_summary_context()
 
     def show_item(self, current, previous=QModelIndex()):
         item = current.data(Qt.ItemDataRole.UserRole)
@@ -527,10 +645,22 @@ class MainWindow(QMainWindow):
             return
         kind = item.get('type', 'message').replace('_', ' ').upper()
         self.item_type_badge.setText(kind)
+        self.item_icon.setPixmap(media_icon(item).pixmap(32, 32))
+        image_type = str(item.get('file_type') or '').lower()
+        if self.account_known and self.account_id and item.get('file_url') and image_type in {'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/bmp'}:
+            self.item_image.set_reference({'account_id': self.account_id, 'kind': 'item', 'item_id': item['id'], 'index': 0, 'revision': attachment_revision(item['file_url'])})
+        else:
+            self.item_image.set_reference(None)
         self.item_decrypt_badge.setVisible(bool(item.get('decrypted')))
         self.detail.setHtml(notification_html(item, stamp, colors(self.palette())))
         self.item_source_label.setText('Source device: ' + str(item.get('source_device_id') or item.get('device_id') or 'Unassociated'))
         self.copy_item_button.setEnabled(bool(item.get('title') or item.get('body') or item.get('url')))
+
+    def notification_media_valid(self):
+        item = self.list.currentIndex().data(Qt.ItemDataRole.UserRole)
+        reference = self.item_image.reference
+        return bool(item and self.account_known and self.account_id == reference.get('account_id')
+                    and item.get('id') == reference.get('item_id'))
 
     def update_devices(self):
         mode = self.device_filter.currentIndex()
@@ -567,7 +697,7 @@ class MainWindow(QMainWindow):
         self.track_dialog(dialog)
 
     def registered_device(self, device_id):
-        self.navigate(2)
+        self.show_settings('Devices')
         row = next((i for i, device in enumerate(self.device_model.records) if device['id'] == device_id), None)
         if row is not None:
             self.devices_view.setCurrentIndex(self.device_model.index(row, 0))
@@ -650,6 +780,8 @@ class MainWindow(QMainWindow):
         dialog.open()
 
     def compose(self, action=None):
+        if action is None and (self.settings_has_focus() or self.tabs.currentIndex() == 2):
+            return
         if action is None and self.tabs.currentIndex() == 1:
             self.sms_page.start_new()
             return
@@ -693,6 +825,10 @@ class MainWindow(QMainWindow):
 
     def command_result(self, result):
         command = result['command']
+        # These surfaces own their inline status and recovery controls. They
+        # must neither raise a global banner nor clear an unrelated command error.
+        if command in {'media_image', 'core_settings', 'core_settings_update', 'core_restart'}:
+            return
         if command == 'refresh_devices':
             self.refresh_devices_button.setEnabled(True)
         if result.get('error') and command not in {'create_action', 'edit_action', 'approve_action', 'cancel_action'}:
@@ -743,6 +879,7 @@ class MainWindow(QMainWindow):
                 self.account_id, self.account_known = account_id, True
         if 'web' in data:
             self.web_state = data['web']
+            self.update_web_settings()
         if 'capabilities' in data:
             self.capabilities = merge_capabilities(self.capabilities, data['capabilities'])
             self.connection_status.snapshot(data['capabilities'])
@@ -759,62 +896,136 @@ class MainWindow(QMainWindow):
         cap = self.capabilities
         self.compose_button.setEnabled(self.tabs.currentIndex() == 1 or bool(cap.get('features', {}).get('send')))
         self.update_status()
+        ai_snapshot = {'capabilities': self.capabilities}
+        self.summary_page.apply_snapshot(ai_snapshot)
+        self.sms_ai.apply_snapshot(ai_snapshot)
+        self.ai_settings.apply_snapshot(ai_snapshot)
+        self.core_settings.apply_snapshot(dict(data, capabilities=self.capabilities))
         if 'devices' in data:
             self.devices_status.setText('Last refreshed ' + stamp(data['devices'].get('synced_at')))
         self.web_label.setText('Local web: ' + ('on' if self.web_state.get('enabled') else 'off'))
         if 'items' in data and not self.command_error:
             self.error.hide()
 
-    def show_settings(self):
-        dialog = QDialog(self)
-        dialog.setWindowTitle("Settings")
-        dialog.resize(520, 460)
+    def build_settings(self):
+        # These pages live for the window lifetime, preserving device selection
+        # and ensuring reentry never duplicates worker connections.
+        self.settings_dialog = dialog = QDialog(self)
+        dialog.setWindowTitle('Settings')
+        dialog.resize(1000, 700)
+        dialog.setMinimumSize(850, 540)
         layout = QVBoxLayout(dialog)
-        appearance_title = QLabel("Appearance")
-        appearance_title.setObjectName("pageTitle")
-        layout.addWidget(appearance_title)
-        appearance = QComboBox()
+        self.settings_tabs = QTabWidget()
+        layout.addWidget(self.settings_tabs, 1)
+        appearance_page = QWidget()
+        appearance_layout = QVBoxLayout(appearance_page)
+        title = QLabel('Appearance')
+        title.setObjectName('pageTitle')
+        appearance_layout.addWidget(title)
+        self.appearance = appearance = QComboBox()
         appearance.setObjectName('appearanceScheme')
         appearance.setAccessibleName('Color scheme')
         for label, value in [('System (KDE / desktop)', 'system'), ('Light', 'light'), ('Dark', 'dark')]:
             appearance.addItem(label, value)
         appearance.setCurrentIndex(appearance.findData(current_scheme(QApplication.instance())))
-        appearance.currentIndexChanged.connect(lambda: set_color_scheme(QApplication.instance(), appearance.currentData()))
-        layout.addWidget(appearance)
-        layout.addWidget(plain_label("System follows your desktop palette. Light and Dark override the application color scheme."))
-        layout.addWidget(divider_line())
-        title = QLabel("Local status page")
-        title.setObjectName("pageTitle")
-        layout.addWidget(title)
-        layout.addWidget(plain_label("A service-status companion. Use the desktop app for notifications, conversations and message activity."))
-        enabled = QCheckBox("Enable local web status page")
-        enabled.setChecked(bool(self.web_state["enabled"]))
-        state = QLabel()
-        state.setWordWrap(True)
-        open_button = primary(QPushButton("Open web interface"))
-        def update(data=None):
-            value = self.web_state
-            enabled.blockSignals(True)
-            enabled.setChecked(bool(value["enabled"]))
-            enabled.blockSignals(False)
-            state.setText(f"{'Enabled' if value['enabled'] else 'Disabled'} · {value['host']}:{value['port']}\n{value.get('error') or 'Loopback only · this computer'}")
-            open_button.setEnabled(bool(value["enabled"]) and not value.get("error"))
-        update()
-        enabled.toggled.connect(lambda checked: self.worker.request("web", checked))
-        self.worker.snapshot.connect(update)
-        open_button.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(self.web_state["url"])))
-        layout.addWidget(enabled)
-        layout.addWidget(state)
-        layout.addWidget(open_button)
-        layout.addWidget(plain_label("Credentials are read locally from kdewallet → Pushbullet. api-key and the shared e2e-password stay in KWallet."))
-        notice = QLabel("Login autostart is not enabled. Closing this window leaves the core and any enabled web host running.")
+        appearance.currentIndexChanged.connect(self.change_appearance)
+        appearance_layout.addWidget(appearance)
+        description = plain_label('System follows your desktop palette. Light and Dark override the application color scheme.')
+        description.setWordWrap(True)
+        appearance_layout.addWidget(description)
+        appearance_layout.addStretch()
+        self.settings_tabs.addTab(appearance_page, 'Appearance')
+        self.settings_tabs.addTab(self.devices_page, 'Devices')
+        self.ai_settings = AISettings(self.ai_client, self.settings_dialog)
+        self.settings_tabs.addTab(self.ai_settings, 'AI')
+        self.ai_settings.configuration_changed.connect(self.summary_page.configuration_changed)
+        self.summary_page.settings_requested.connect(lambda: self.show_settings('AI'))
+        web_page = QWidget()
+        web_layout = QVBoxLayout(web_page)
+        title = QLabel('Local status page')
+        title.setObjectName('pageTitle')
+        web_layout.addWidget(title)
+        description = plain_label('A service-status companion. Use the desktop app for notifications, conversations and message activity.')
+        description.setWordWrap(True)
+        web_layout.addWidget(description)
+        self.web_enabled = QCheckBox('Enable local web status page')
+        self.web_enabled.toggled.connect(lambda checked: self.worker.request('web', checked))
+        self.web_settings_state = plain_label()
+        self.web_settings_state.setWordWrap(True)
+        self.web_open_button = primary(QPushButton('Open web interface'))
+        self.web_open_button.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(self.web_state['url'])))
+        for widget in (self.web_enabled, self.web_settings_state, self.web_open_button):
+            web_layout.addWidget(widget)
+        credentials = plain_label('Pushbullet credentials are read locally from kdewallet → Pushbullet. api-key and the shared e2e-password stay in KWallet.')
+        credentials.setWordWrap(True)
+        web_layout.addWidget(credentials)
+        notice = plain_label('In coupled mode, desktop and local web server processes keep the core alive. '
+                             'After the last client closes, the core stops after its grace period. '
+                             'Browser tabs do not keep it alive.')
         notice.setWordWrap(True)
-        layout.addWidget(notice)
+        web_layout.addWidget(notice)
+        web_layout.addStretch()
+        self.settings_tabs.addTab(web_page, 'Local Web')
+        self.core_settings = CoreSettings(self.worker, self.settings_dialog)
+        self.settings_tabs.addTab(self.core_settings, 'Core')
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         buttons.rejected.connect(dialog.reject)
         layout.addWidget(buttons)
-        dialog.finished.connect(lambda: self.worker.snapshot.disconnect(update))
-        self.track_dialog(dialog)
+        dialog.finished.connect(lambda: self.dialogs.remove(dialog) if dialog in self.dialogs else None)
+        # Window-local actions continue to work while Settings owns focus. Never
+        # let Ctrl+N compose an invisible message behind this dialog.
+        for shortcut, callback in ((QKeySequence.StandardKey.Refresh, self.settings_refresh),
+                                   (QKeySequence.StandardKey.Find, self.settings_find),
+                                   (QKeySequence('Ctrl+N'), lambda: None)):
+            action = QAction(dialog)
+            action.setShortcut(shortcut)
+            action.triggered.connect(callback)
+            dialog.addAction(action)
+        self.update_web_settings()
+
+    def change_appearance(self):
+        try:
+            set_color_scheme(QApplication.instance(), self.appearance.currentData())
+        except OSError as error:
+            self.show_error('Could not save the color scheme: ' + str(error))
+
+    def update_web_settings(self):
+        value = self.web_state
+        self.web_enabled.blockSignals(True)
+        self.web_enabled.setChecked(bool(value.get('enabled')))
+        self.web_enabled.blockSignals(False)
+        self.web_settings_state.setText(f"{'Enabled' if value.get('enabled') else 'Disabled'} · {value.get('host', '127.0.0.1')}:{value.get('port', 8766)}\n{value.get('error') or 'Loopback only · this computer'}")
+        self.web_open_button.setEnabled(bool(value.get('enabled')) and not value.get('error'))
+
+    def settings_has_focus(self):
+        active = QApplication.activeWindow()
+        return bool(self.settings_dialog and self.settings_dialog.isVisible() and
+                    (active is self.settings_dialog or
+                     (active is not None and self.settings_dialog.isAncestorOf(active))))
+
+    def settings_refresh(self):
+        if self.settings_tabs.currentWidget() is self.devices_page:
+            self.refresh_devices()
+        elif self.settings_tabs.currentWidget() is self.core_settings:
+            self.core_settings.refresh()
+
+    def settings_find(self):
+        if self.settings_tabs.currentWidget() is self.devices_page:
+            self.device_filter.setFocus()
+        elif self.settings_tabs.currentWidget() is self.core_settings:
+            self.core_settings.focus_details()
+
+    def show_settings(self, tab=None):
+        if isinstance(tab, str):
+            for index in range(self.settings_tabs.count()):
+                if self.settings_tabs.tabText(index) == tab:
+                    self.settings_tabs.setCurrentIndex(index)
+                    break
+        if self.settings_dialog not in self.dialogs:
+            self.dialogs.append(self.settings_dialog)
+        self.settings_dialog.show()
+        self.settings_dialog.raise_()
+        self.settings_dialog.activateWindow()
 
     def open_notification_link(self, url):
         value = url.toString()
@@ -828,6 +1039,10 @@ class MainWindow(QMainWindow):
             button.setIcon(make_icon(button.property('iconKind'), ink, 18))
 
     def refresh_theme(self):
+        self.refresh_sms_control_geometry()
+        self.appearance.blockSignals(True)
+        self.appearance.setCurrentIndex(self.appearance.findData(current_scheme(QApplication.instance())))
+        self.appearance.blockSignals(False)
         palette = colors(self.palette())
         self.brand_icon.setPixmap(make_icon('brand', palette['text'], 22).pixmap(22, 22))
         self.settings_button.setIcon(make_icon('settings', palette['text'], 16))
@@ -851,12 +1066,14 @@ class MainWindow(QMainWindow):
         self.update_status()
 
     def worker_connection(self, message):
+        self.core_settings.connection_changed(message)
         self.connection_status.connection(message)
         self.update_status()
         # Raw reconnect diagnostics belong to the accessible details surface.
         self.statusBar().clearMessage()
 
     def worker_failed(self, message):
+        self.core_settings.connection_error(message)
         self.connection_status.failed(message)
         self.update_status()
 
@@ -909,7 +1126,7 @@ class MainWindow(QMainWindow):
         box.setWindowTitle('Stop all pbdesk services?')
         box.setIcon(QMessageBox.Icon.Warning)
         box.setText('Stop the shared services?')
-        box.setInformativeText('This stops the private core and web host. Other desktop windows and MCP clients will disconnect.\n\nTo leave services running, choose Exit desktop instead.')
+        box.setInformativeText('This stops the private core and web host. Other desktop windows and MCP clients will disconnect.\n\nExit desktop leaves other active clients running. The core stops after the last desktop and web server exits. Hiding to the tray keeps this desktop active.')
         keep = box.addButton('Keep running', QMessageBox.ButtonRole.RejectRole)
         stop = box.addButton('Stop all services', QMessageBox.ButtonRole.DestructiveRole)
         stop.setProperty('danger', True)
@@ -919,7 +1136,6 @@ class MainWindow(QMainWindow):
             self.worker.request('shutdown')
 
     def show_from_tray(self):
-        self.navigate(0)
         self.showNormal()
         self.raise_()
         self.activateWindow()
@@ -939,6 +1155,11 @@ class MainWindow(QMainWindow):
         for dialog in list(self.dialogs):
             dialog.reject()
         self.activity.close()
+        self.summary_page.stop()
+        self.core_settings.restart_timer.stop()
+        if self.ai_client is not None:
+            self.ai_client.stop()
+            self.ai_client.wait(3000)
         self.worker.stop()
         if not self.worker.isRunning():
             QApplication.instance().quit()
@@ -952,13 +1173,18 @@ def main():
     app = QApplication(sys.argv[:1])
     app.setApplicationName("pbdesk")
     app.setQuitOnLastWindowClosed(False)
-    worker = CoreWorker(Settings.from_env(), demo=args.demo)
-    window = MainWindow(worker)
+    settings = Settings.from_env()
+    worker = CoreWorker(settings, demo=args.demo)
+    ai_client = AiWorker(settings)
+    window = MainWindow(worker, ai_client)
     # On startup failure keep the actionable error window open until the user exits.
     worker.finished.connect(lambda: app.quit() if window._exiting else None)
     window.show()
     worker.start()
+    ai_client.start()
     exit_code = app.exec()
+    ai_client.stop()
+    ai_client.wait(3000)
     worker.stop()
     worker.wait()
     raise SystemExit(exit_code)

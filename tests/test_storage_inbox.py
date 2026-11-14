@@ -21,7 +21,7 @@ def test_migration_search_restart_and_identity(tmp_path):
     mirror["push"]["notification_tag"]="B"
     assert store.ingest(normalize(mirror))["item_id"] == 3
     with store.engine.connect() as conn:
-        assert conn.exec_driver_sql("SELECT version_num FROM alembic_version").scalar() == "0005"
+        assert conn.exec_driver_sql("SELECT version_num FROM alembic_version").scalar() == "0007"
         assert conn.exec_driver_sql("PRAGMA foreign_keys").scalar() == 1
         assert conn.exec_driver_sql("PRAGMA journal_mode").scalar() == "wal"
         assert conn.exec_driver_sql("PRAGMA busy_timeout").scalar() == 5000

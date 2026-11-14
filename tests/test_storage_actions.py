@@ -112,7 +112,7 @@ def test_migration_from_frozen_v1_preserves_history_and_search(tmp_path):
     store=Store(settings)
     assert store.list_items('retained')[0]['source_id']=='stored:existing'
     with store.engine.connect() as conn:
-        assert conn.exec_driver_sql('SELECT version_num FROM alembic_version').scalar()=='0005'
+        assert conn.exec_driver_sql('SELECT version_num FROM alembic_version').scalar()=='0007'
         assert {'devices','actions','action_audit','locked_envelopes'} <= set(inspect(conn).get_table_names())
     store.close()
 

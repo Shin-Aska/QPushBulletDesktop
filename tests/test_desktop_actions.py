@@ -1,3 +1,4 @@
+from test_desktop import isolated_desktop_preferences
 import json
 import threading
 import uuid
@@ -54,6 +55,10 @@ def test_native_devices_filters_encryption_and_outbox_states(qtbot, monkeypatch)
     qtbot.addWidget(window)
     worker.snapshot.emit(snapshot([action(state="upstream_accepted", upstream_id="accepted-id")]))
     assert window.tabs.count() == 3
+    window.show()
+    window.show_settings('Devices')
+    assert window.settings_tabs.currentWidget() is window.devices_page
+    assert window.devices_view.isVisible() and window.add_device_button.isVisible()
     assert window.device_model.rowCount() == 3
     window.device_filter.setCurrentIndex(1)
     assert window.device_model.rowCount() == 2
@@ -62,6 +67,7 @@ def test_native_devices_filters_encryption_and_outbox_states(qtbot, monkeypatch)
     window.device_filter.setCurrentIndex(3)
     assert [item["id"] for item in window.device_model.records] == ["inactive-c"]
     assert "Connectivity" in window.device_detail.toPlainText() and "Unknown" in window.device_detail.toPlainText()
+    window.settings_dialog.reject()
     window.navigate(1)
     assert "delivery not confirmed" in window.action_model.index(0, 3).data()
     worker.snapshot.emit(snapshot([action(state="uncertain")], dict(CAPABILITIES, encryption_state="locked", encrypted_pending=2)))
@@ -292,7 +298,7 @@ def test_worker_mutations_off_gui_thread_timeout_and_rejection_are_not_disconnec
     actual = httpx.Client
     gui_thread = threading.get_ident()
     calls, requests, statuses, results = [], [], [], []
-    monkeypatch.setattr("pbdesk.desktop.worker.ensure_core", lambda *args, **kwargs: None)
+    monkeypatch.setattr("pbdesk.desktop.worker.ClientLease.start", lambda *args, **kwargs: None)
     def handle(request):
         calls.append(threading.get_ident())
         requests.append(request)
@@ -435,7 +441,7 @@ def test_sms_refresh_preserves_selection_draft_and_errors(qtbot, monkeypatch):
     worker.snapshot.emit(sms_snapshot('phone-a', messages + [sms_message(30, conversation='new')], error='Connection interrupted'))
     assert page.current_thread == selected
     assert page.composer.toPlainText() == 'Unsaved conversation reply'
-    assert 'refresh unavailable' in page.sync_status.text()
+    assert 'Refresh unavailable' in page.sync_status.text()
     assert page.sms_cache['phone-a']['sync']['error'] == 'Connection interrupted'
     assert 'Long message' in timeline_text(page)
     changed = snapshot()
@@ -480,7 +486,7 @@ def test_old_core_feature_gate_preserves_sms_cache_without_new_routes(qtbot, tmp
     settings = Settings(tmp_path)
     actual = httpx.Client
     seen = []
-    monkeypatch.setattr('pbdesk.desktop.worker.ensure_core', lambda *args, **kwargs: None)
+    monkeypatch.setattr('pbdesk.desktop.worker.ClientLease.start', lambda *args, **kwargs: None)
     old_cap = dict(CAPABILITIES, features={'devices': True, 'send': True})
     def handle(request):
         seen.append(request)
@@ -630,7 +636,7 @@ def test_worker_discards_mixed_account_aggregate_before_ui_emission(qtbot, tmp_p
     actual = httpx.Client
     account = ['account-a']
     seen_items, published = [], []
-    monkeypatch.setattr('pbdesk.desktop.worker.ensure_core', lambda *args, **kwargs: None)
+    monkeypatch.setattr('pbdesk.desktop.worker.ClientLease.start', lambda *args, **kwargs: None)
     def handle(request):
         if request.url.path.endswith('health'):
             return httpx.Response(200, json=health_response(settings, request.headers, '11111111-1111-1111-1111-111111111111', True))
@@ -687,7 +693,7 @@ def test_shell_navigation_activity_all_actions_and_snapshot_once(qtbot, monkeypa
     worker = FakeWorker()
     window = MainWindow(worker)
     qtbot.addWidget(window)
-    assert [button.text() for button in window.navigation] == ['Notifications', 'SMS', 'Devices']
+    assert [button.text() for button in window.navigation] == ['Notifications', 'SMS', 'Summary']
     originals = []
     apply = window.sms_page.apply_snapshot
     def observe(data):
@@ -739,7 +745,7 @@ def test_worker_checks_fresh_account_before_queued_create_and_tags_result(qtbot,
     actual = httpx.Client
     account = ['account-a']
     seen, results = [], []
-    monkeypatch.setattr('pbdesk.desktop.worker.ensure_core', lambda *args, **kwargs: None)
+    monkeypatch.setattr('pbdesk.desktop.worker.ClientLease.start', lambda *args, **kwargs: None)
     def handle(request):
         seen.append(request)
         path = request.url.path

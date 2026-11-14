@@ -1,6 +1,7 @@
 """Version 1 authenticated, scoped internal API."""
 import asyncio
 from contextlib import asynccontextmanager
+from functools import wraps
 import json
 import os
 from pathlib import Path
@@ -20,10 +21,12 @@ from pbdesk.services.outbox import Dispatcher
 from pbdesk.services.instance import InstanceLock
 from pbdesk.services.notifications import Notifier
 from pbdesk.services.webhost import WebHost
+from pbdesk.services.client_lifecycle import LeaseRegistry, stop_generation
+from pbdesk.services.core_settings import CoreSettingsService, cancel_restart, finish_mutation
 from pbdesk.storage.database import Store
 
 
-def create_app(settings=None, fixture_path=None, notifier=None, demo=False, notifications=False, provider_factory=None):
+def create_app(settings=None, fixture_path=None, notifier=None, demo=False, notifications=False, provider_factory=None, standalone=False, lease_timing=None, launch_generation=None, restart_launcher=None):
     settings = settings or Settings.from_env()
 
     @asynccontextmanager
@@ -38,12 +41,16 @@ def create_app(settings=None, fixture_path=None, notifier=None, demo=False, noti
                 await asyncio.to_thread(service_token, settings, role)
             store = await asyncio.to_thread(Store, settings)
             host.store = store
+            app.state.clients = LeaseRegistry(store.instance_id, launch_generation or await asyncio.to_thread(stop_generation, settings),
+                lambda: app.state.shutdown_callback and app.state.shutdown_callback(), standalone=standalone, timing=lease_timing)
+            tasks.append(asyncio.create_task(app.state.clients.run()))
             app.state.store = store
             app.state.host = host
             app.state.provider_state = "demo" if demo or fixture_path else "unconfigured"
             app.state.provider = None
             app.state.ready = True
-            adapter = notifier or Notifier(notifications)
+            saved_notifications = await asyncio.to_thread(store.get_setting, "core_notifications_enabled", notifications)
+            adapter = notifier or Notifier(saved_notifications if type(saved_notifications) is bool else notifications)
             app.state.notifier = adapter
             async def consume_plain(payload):
                 push=payload.get('push') if isinstance(payload,dict) and payload.get('type')=='push' else payload
@@ -74,6 +81,13 @@ def create_app(settings=None, fixture_path=None, notifier=None, demo=False, noti
             dispatcher=Dispatcher(store,lambda:app.state.provider)
             app.state.dispatcher=dispatcher
             app.state.provider_reload_lock=asyncio.Lock()
+            timing = app.state.clients.timing
+            profile = None if provider_factory is not None or notifier is not None else {
+                'demo': demo, 'fixture': str(Path(fixture_path).resolve()) if fixture_path else None,
+                'standalone': standalone, 'notifications': notifications,
+                'timing': {'renew': timing.renew, 'expiry': timing.expiry,
+                    'release_grace': timing.release_grace, 'startup_grace': timing.startup_grace}}
+            app.state.core_settings = CoreSettingsService(app, settings, profile, launcher=restart_launcher)
             app.state.provider_task=None
             if demo:
                 await ingest(DEMO)
@@ -102,6 +116,7 @@ def create_app(settings=None, fixture_path=None, notifier=None, demo=False, noti
             except CredentialLocked:
                 app.state.provider_state="locked"
             tasks.append(asyncio.create_task(dispatcher.run()))
+            tasks.append(asyncio.create_task(host.watch()))
             if await asyncio.to_thread(store.get_setting, "web_enabled", False):
                 tasks.append(asyncio.create_task(host.set_enabled(True)))
             yield
@@ -110,9 +125,12 @@ def create_app(settings=None, fixture_path=None, notifier=None, demo=False, noti
             for task in tasks:
                 task.cancel()
             await asyncio.gather(*tasks, return_exceptions=True)
-            await host.set_enabled(False)
+            if not app.state.restart_intent:
+                await host.set_enabled(False)
             if getattr(app.state,"provider",None):
                 await app.state.provider.close()
+            if getattr(app.state, "ai", None):
+                await app.state.ai.close()
             if store:
                 await asyncio.to_thread(store.close)
             lock.close()
@@ -121,6 +139,8 @@ def create_app(settings=None, fixture_path=None, notifier=None, demo=False, noti
     app.state.settings = settings
     app.state.ready = False
     app.state.shutdown_callback = None
+    app.state.restart_intent = False
+    app.state.core_settings = None
 
     @app.exception_handler(RequestValidationError)
     async def invalid_request(request,exc):
@@ -135,11 +155,25 @@ def create_app(settings=None, fixture_path=None, notifier=None, demo=False, noti
         if role is None:
             raise HTTPException(401, "Invalid service credential")
         path = request.url.path
-        if role == "web" and not (request.method == "GET" and path in {"/api/v1/health", "/api/v1/capabilities"}):
+        if role == "web" and not ((request.method == "GET" and path in {"/api/v1/health", "/api/v1/capabilities"}) or path == "/api/v1/clients" or path.startswith("/api/v1/clients/")):
             raise HTTPException(403, "Web inbox is unavailable in this slice")
         if role == "mcp" and not (request.method == "GET" and (path in {"/api/v1/health", "/api/v1/capabilities", "/api/v1/items", "/api/v1/events", "/api/v1/devices", "/api/v1/actions"} or path.startswith("/api/v1/items/") or path.startswith("/api/v1/actions/"))) and not (request.method=="POST" and path=="/api/v1/actions"):
             raise HTTPException(403, "MCP may read or request an action; local desktop approval is required")
         return role
+
+    def guard_mutation(function):
+        @wraps(function)
+        async def guarded(*args, **kwargs):
+            async with app.state.core_settings.gate.operation():
+                return await finish_mutation(function(*args, **kwargs))
+        return guarded
+
+    from pbdesk.api.core_settings import install_core_settings_routes
+    install_core_settings_routes(app, authorization)
+    from pbdesk.api.ai import install_ai_routes
+    from pbdesk.api.media import install_media_routes
+    install_ai_routes(app, authorization, settings)
+    install_media_routes(app, authorization, settings)
 
     @app.middleware("http")
     async def protect_origin(request, call_next):
@@ -155,6 +189,7 @@ def create_app(settings=None, fixture_path=None, notifier=None, demo=False, noti
         body = await asyncio.to_thread(health_response, settings, request.headers, app.state.store.instance_id, app.state.ready)
         if body is None:
             raise HTTPException(401, "Signed service identity required")
+        body["client_lifecycle"] = 1
         return body
 
     @app.get("/api/v1/capabilities", dependencies=[Depends(authorization)])
@@ -164,7 +199,7 @@ def create_app(settings=None, fixture_path=None, notifier=None, demo=False, noti
         send_ready=bool(selected and selected.send_ready)
         devices=await asyncio.to_thread(app.state.store.device_list)
         return {"account_id":await asyncio.to_thread(app.state.store.sms_account),"features":{"inbox":True,"search":True,"send":True,"send_note":True,"send_link":True,
-                "send_sms":any(device["can_sms"] for device in devices),"sms_history":True,"device_management":True,"devices":True,"e2e_decrypt":True,"ai":False,"web_inbox":False},
+                "send_sms":any(device["can_sms"] for device in devices),"sms_history":True,"device_management":True,"devices":True,"e2e_decrypt":True,"ai":True,"ai_summary":True,"ai_draft_reply":True,"ai_saved_summaries":True,"media_images":True,"web_inbox":False,"client_lifecycle":True,"core_settings":True,"core_restart":True},
             "provider_state":provider_state,"push_sync":await asyncio.to_thread(app.state.store.get_setting,"push_sync",{"state":"idle","last_success_at":None,"error":None}),"encryption_state":app.state.encryption.state,
             "encrypted_pending":await app.state.encryption.pending_count(),"send_ready":send_ready,
             "send_unavailable_reason":None if send_ready else "Provider is not connected; sending is unavailable"}
@@ -189,6 +224,7 @@ def create_app(settings=None, fixture_path=None, notifier=None, demo=False, noti
         return await device_response()
 
     @app.post('/api/v1/devices/refresh', dependencies=[Depends(authorization)])
+    @guard_mutation
     async def device_refresh():
         async with app.state.provider_reload_lock:
             return await refresh_device_list()
@@ -246,6 +282,7 @@ def create_app(settings=None, fixture_path=None, notifier=None, demo=False, noti
         return await device_response()
 
     @app.post('/api/v1/devices',dependencies=[Depends(authorization)])
+    @guard_mutation
     async def device_add(value:Nickname):
         return await mutate_device('register_device',value.nickname)
 
@@ -255,6 +292,7 @@ def create_app(settings=None, fixture_path=None, notifier=None, demo=False, noti
         acknowledge_unknown_outcome: StrictBool
 
     @app.post('/api/v1/devices/registration/resolve',dependencies=[Depends(authorization)])
+    @guard_mutation
     async def resolve_device_registration(value:RegistrationResolution):
         async with app.state.provider_reload_lock:
             return await resolve_registration(value)
@@ -267,16 +305,19 @@ def create_app(settings=None, fixture_path=None, notifier=None, demo=False, noti
         return await device_response()
 
     @app.patch('/api/v1/devices/{device_id}',dependencies=[Depends(authorization)])
+    @guard_mutation
     async def device_rename(device_id:str,value:Nickname):
         await require_device(device_id)
         return await mutate_device('rename_device',device_id,value.nickname)
 
     @app.delete('/api/v1/devices/{device_id}',dependencies=[Depends(authorization)])
+    @guard_mutation
     async def device_remove(device_id:str):
         await require_device(device_id)
         return await mutate_device('remove_device',device_id)
 
     @app.post('/api/v1/devices/{device_id}/encryption',dependencies=[Depends(authorization)])
+    @guard_mutation
     async def device_encryption_select(device_id:str,value:EncryptionSelection):
         async with app.state.provider_reload_lock:
             return await select_encryption(device_id,value)
@@ -288,7 +329,7 @@ def create_app(settings=None, fixture_path=None, notifier=None, demo=False, noti
         if value.mode not in ('shared','device'):
             raise HTTPException(422,'Choose shared or device encryption mode')
         entry='e2e-password' if value.mode=='shared' else value.entry
-        if not entry or not entry.strip() or entry=='api-key' or (value.mode=='device' and entry=='e2e-password'):
+        if not entry or not entry.strip() or entry in {'api-key','ai-openai-api-key'} or (value.mode=='device' and entry=='e2e-password'):
             raise HTTPException(422,'Choose a device-specific KWallet entry')
         if value.password is not None and value.mode!='device':
             raise HTTPException(422,'Shared default credentials are preserved; choose a new device entry')
@@ -312,6 +353,7 @@ def create_app(settings=None, fixture_path=None, notifier=None, demo=False, noti
         return {'encryption':await encryption_response(device_id)}
 
     @app.post('/api/v1/devices/{device_id}/encryption/test',dependencies=[Depends(authorization)])
+    @guard_mutation
     async def device_encryption_test(device_id:str):
         async with app.state.provider_reload_lock:
             return await test_device_encryption(device_id)
@@ -334,6 +376,7 @@ def create_app(settings=None, fixture_path=None, notifier=None, demo=False, noti
         return await asyncio.to_thread(app.state.store.sms_snapshot,device_id,direction)
 
     @app.post('/api/v1/sms/refresh',dependencies=[Depends(authorization)])
+    @guard_mutation
     async def sms_refresh(value:DeviceSelection):
         await require_device(value.device_id)
         selected=app.state.provider
@@ -345,6 +388,7 @@ def create_app(settings=None, fixture_path=None, notifier=None, demo=False, noti
         return await asyncio.to_thread(app.state.store.sms_snapshot,value.device_id)
 
     @app.post("/api/v1/provider/reload", dependencies=[Depends(authorization)])
+    @guard_mutation
     async def provider_reload():
         async with app.state.provider_reload_lock:
             async with app.state.dispatcher.lock:
@@ -386,6 +430,7 @@ def create_app(settings=None, fixture_path=None, notifier=None, demo=False, noti
             raise HTTPException(422,str(exc)) from None
 
     @app.post("/api/v1/actions")
+    @guard_mutation
     async def action_create(value:ActionRequest,role:str=Depends(authorization)):
         return await action_call(app.state.store.create_action,value,role)
 
@@ -398,14 +443,17 @@ def create_app(settings=None, fixture_path=None, notifier=None, demo=False, noti
         return action_result(await asyncio.to_thread(app.state.store.action,action_id))
 
     @app.patch("/api/v1/actions/{action_id}")
+    @guard_mutation
     async def action_edit(action_id:int,value:ActionEdit,role:str=Depends(authorization)):
         return await action_call(app.state.store.edit_action,action_id,value,role)
 
     @app.post("/api/v1/actions/{action_id}/approve")
+    @guard_mutation
     async def action_approve(action_id:int,value:Approval,role:str=Depends(authorization)):
         return await action_call(app.state.store.approve_action,action_id,value,role)
 
     @app.post("/api/v1/actions/{action_id}/cancel")
+    @guard_mutation
     async def action_cancel(action_id:int,value:Cancellation,role:str=Depends(authorization)):
         return await action_call(app.state.store.cancel_action,action_id,value.revision,role)
 
@@ -471,11 +519,55 @@ def create_app(settings=None, fixture_path=None, notifier=None, demo=False, noti
         return app.state.host.status()
 
     @app.post("/api/v1/web", dependencies=[Depends(authorization)])
+    @guard_mutation
     async def web_setting(value: WebSetting):
         return await app.state.host.set_enabled(value.enabled, persist=True)
 
+    class ClientRegistration(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+        instance_id: str = Field(max_length=64)
+        generation: str = Field(min_length=64, max_length=64)
+
+    class ClientInstance(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+        instance_id: str = Field(max_length=64)
+
+    def client_role(role):
+        if role not in {"desktop", "web"}:
+            raise HTTPException(403, "Only desktop and web processes hold client leases")
+
+    @app.post("/api/v1/clients")
+    async def register_client(value: ClientRegistration, role: str = Depends(authorization)):
+        client_role(role)
+        try:
+            return app.state.clients.register(role, value.instance_id, value.generation)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from None
+
+    @app.put("/api/v1/clients/{lease_id}")
+    async def renew_client(lease_id: str, value: ClientInstance, role: str = Depends(authorization)):
+        client_role(role)
+        try:
+            return app.state.clients.update(role, value.instance_id, lease_id)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from None
+
+    @app.delete("/api/v1/clients/{lease_id}")
+    async def release_client(lease_id: str, instance_id: str, role: str = Depends(authorization)):
+        client_role(role)
+        try:
+            return app.state.clients.update(role, instance_id, lease_id, release=True)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from None
+
     @app.post("/api/v1/shutdown", dependencies=[Depends(authorization)])
     async def shutdown():
+        # Persist before stopping either process. Existing clients cannot undo Stop All.
+        await asyncio.to_thread(stop_generation, settings, advance=True)
+        await asyncio.to_thread(cancel_restart, settings, app.state.store.instance_id)
+        app.state.restart_intent = False
+        app.state.clients.stopping = True
+        await app.state.host.set_enabled(False)
         if app.state.shutdown_callback:
             asyncio.get_running_loop().call_later(.2, app.state.shutdown_callback)
         return {"stopping": app.state.shutdown_callback is not None}
