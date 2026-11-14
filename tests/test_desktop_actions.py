@@ -3,6 +3,7 @@ import threading
 import uuid
 
 import httpx
+import pytest
 from PyQt6.QtCore import QObject, Qt, pyqtSignal
 from pbdesk.config import Settings
 from pbdesk.credentials import health_response
@@ -155,6 +156,114 @@ def test_review_exact_payload_unchecked_ack_and_matching_approval(qtbot):
     worker.result.emit({"request_id": request["request_id"], "data": action(state="ready")})
     assert not dialog.ack.isChecked()
     assert not dialog.approve_button.isEnabled()
+    dialog.reject()
+
+
+def test_review_closes_on_send_acceptance_and_keeps_chat_open(qtbot, monkeypatch):
+    monkeypatch.setattr("pbdesk.desktop.app.QSystemTrayIcon.isSystemTrayAvailable", lambda: False)
+    worker = FakeWorker()
+    window = MainWindow(worker)
+    qtbot.addWidget(window)
+    window.show()
+    worker.snapshot.emit(snapshot([action()]))
+    window.navigate(1)
+    window.review(action())
+    dialog = window.dialogs[-1]
+    closed = []
+    dialog.accepted.connect(lambda: closed.append(True))
+    dialog.ack.setChecked(True)
+    dialog.approve_button.click()
+    request = worker.requests[-1][1]
+    worker.result.emit({"command": "approve_action", "request_id": request["request_id"],
+                        "data": action(state="ready")})
+    assert dialog.isVisible() and not closed
+    worker.snapshot.emit(snapshot([action(state="submitting")]))
+    assert dialog.isVisible() and not closed
+    accepted = action(state="upstream_accepted", upstream_id="fictional-acceptance")
+    worker.snapshot.emit(snapshot([accepted]))
+    assert closed == [True]
+    assert not window.dialogs
+    assert window.isVisible() and window.tabs.currentIndex() == 1
+    assert window.action_model.records == [accepted]
+    assert len([request for request in worker.requests if request[0] == "approve_action"]) == 1
+    window.exit_desktop()
+
+
+def test_review_closes_when_approval_response_already_contains_acceptance(qtbot):
+    worker = FakeWorker()
+    dialog = ReviewDialog(worker, action(), DEVICES, CAPABILITIES)
+    qtbot.addWidget(dialog)
+    dialog.show()
+    closed = []
+    dialog.accepted.connect(lambda: closed.append(True))
+    dialog.ack.setChecked(True)
+    dialog.approve_button.click()
+    request = worker.requests[-1][1]
+    worker.result.emit({"request_id": request["request_id"],
+                        "data": action(state="upstream_accepted")})
+    assert closed == [True] and not dialog.isVisible()
+    # Closing disconnects from later updates rather than accepting twice.
+    worker.snapshot.emit(snapshot([action(state="upstream_accepted")]))
+    assert closed == [True]
+
+
+@pytest.mark.parametrize("state", ["failed", "uncertain"])
+def test_review_stays_open_when_send_fails_or_is_uncertain(qtbot, state):
+    worker = FakeWorker()
+    dialog = ReviewDialog(worker, action(), DEVICES, CAPABILITIES)
+    qtbot.addWidget(dialog)
+    dialog.show()
+    dialog.ack.setChecked(True)
+    dialog.approve_button.click()
+    request = worker.requests[-1][1]
+    worker.result.emit({"request_id": request["request_id"], "data": action(state="ready")})
+    worker.snapshot.emit(snapshot([action(state=state)]))
+    assert dialog.isVisible() and dialog.action["state"] == state
+    assert not dialog.approve_button.isEnabled()
+    assert len(worker.requests) == 1
+    dialog.reject()
+
+
+def test_review_stays_open_on_approval_error(qtbot):
+    worker = FakeWorker()
+    dialog = ReviewDialog(worker, action(), DEVICES, CAPABILITIES)
+    qtbot.addWidget(dialog)
+    dialog.show()
+    dialog.ack.setChecked(True)
+    dialog.approve_button.click()
+    request = worker.requests[-1][1]
+    worker.result.emit({"request_id": request["request_id"], "error": "Result could not be confirmed",
+                        "ambiguous": True})
+    assert dialog.isVisible() and dialog.awaiting_refresh
+    assert "could not be confirmed" in dialog.feedback.text()
+    assert len(worker.requests) == 1
+    dialog.reject()
+
+
+def test_review_of_previously_accepted_action_stays_open_for_inspection(qtbot):
+    worker = FakeWorker()
+    dialog = ReviewDialog(worker, action(state="upstream_accepted"), DEVICES, CAPABILITIES)
+    qtbot.addWidget(dialog)
+    dialog.show()
+    worker.snapshot.emit(snapshot([action(state="upstream_accepted")]))
+    assert dialog.isVisible()
+    assert "Accepted by Pushbullet" in dialog.preview.toPlainText()
+    assert not worker.requests
+    dialog.reject()
+
+
+def test_review_does_not_close_for_acceptance_of_another_revision(qtbot):
+    worker = FakeWorker()
+    dialog = ReviewDialog(worker, action(), DEVICES, CAPABILITIES)
+    qtbot.addWidget(dialog)
+    dialog.show()
+    dialog.ack.setChecked(True)
+    dialog.approve_button.click()
+    request = worker.requests[-1][1]
+    worker.result.emit({"request_id": request["request_id"], "data": action(state="ready")})
+    worker.snapshot.emit(snapshot([action(state="upstream_accepted", revision=2, fingerprint="new-version")]))
+    assert dialog.isVisible()
+    assert len(worker.requests) == 1
     dialog.reject()
 
 

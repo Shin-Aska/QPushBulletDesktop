@@ -60,3 +60,19 @@ The runner sets fresh temporary `PBDESK_APPLICATION_DIR` and `PBDESK_STATE_DIR` 
 Source identity remained unchanged through the complete suite, no-Node suite, HTTP checks, package verification and final captures. The final report links the exact commands, XML, logs, source inventory, integration report and package evidence in `.runtime/notifications-sms/`. Documentation was then updated to record those outcomes; production sources and verified artifacts were not changed.
 
 The existing visible desktop, its drafts, the running editor core and production database were not read or modified by the final verifier. No installation, real provider/wallet operation, real SMS, device mutation or service restart occurred. Relaunch the existing **pbdesk: Desktop** profile in VS Code/Zed to load the new frontend; keep the established data profile, root SQLite database and KWallet defaults. No shared-core restart or new installation is required. A live send or phone delivery check remains outside this fake-provider verification.
+
+## Accepted SMS request display correction
+
+On 2026-11-14, a follow-up fix removes `upstream_accepted` SMS request cards from the conversation. Phone history supplies the incoming/outgoing message bubbles; every accepted request remains available in Message activity, including requests whose phone history has not arrived. Acceptance still does not imply carrier delivery. Other request states remain visible, and no body/time comparison is used to infer delivery or merge messages.
+
+If the selected local-request thread becomes empty, the page keeps the recipient context: it selects a unique matching phone-history thread when available, or opens New message for the same valid recipient. Existing recipient and conversation drafts are preserved.
+
+The [follow-up verification report](../.runtime/sms-request-cards/verification.json) records **26 focused SMS tests passed** and **159 complete regression tests passed**, including the installed Firefox case, on private Xvfb/xcb with temporary application/state directories. The regressions cover accepted-card removal, complete Activity retention, pending/queued/submitting/failed/uncertain visibility, missing phone history, recipient focus and draft preservation. The [capture manifest](../.runtime/sms-request-cards/capture-manifest.json) records three new native Qt captures with fictional fixtures: pending request, [accepted send](../.runtime/sms-request-cards/accepted-send.png), and accepted Activity. The latter two were visually inspected. Historical redesign reports and galleries above remain separate.
+
+No packages were installed and no live messages, credentials, shared database, core service or visible desktop windows were used for this correction. Relaunch **pbdesk: Desktop** to load it.
+
+## Review dialog closes after an accepted send
+
+The review dialog now closes automatically when a send approved in that dialog reaches `upstream_accepted`. It stays open while queued/submitting and on failed, uncertain or rejected outcomes. Reviewing an older accepted action in Message activity remains open for inspection. Automatic closure is tied to the approved revision and fingerprint; the main SMS window stays open and the Activity record remains available.
+
+The [verification report](../.runtime/review-auto-close/verification.json) records **34 focused desktop-action tests passed** and **166 complete regression tests passed**, including installed Firefox, on private Xvfb with temporary state and fake send results. Coverage includes asynchronous acceptance, immediate acceptance in the approval response, failure/uncertainty/error handling, historical inspection and revision changes. No installation, real message, credential access, live core restart or visible desktop interaction was performed. Relaunch **pbdesk: Desktop** to load the change.

@@ -1,9 +1,12 @@
 """Fake-worker checks: no network, provider account, SMS, or persistent database."""
 from copy import deepcopy
 
+import pytest
+
 from PyQt6.QtCore import QObject, Qt, pyqtSignal
 from PyQt6.QtWidgets import QFrame, QLabel
 
+from pbdesk.desktop.activity import ActivityDialog
 from pbdesk.desktop.chat import MessageText, SmsPage
 
 
@@ -68,7 +71,8 @@ def create_request(widget, worker, body="Hello"):
 def successful_action(request, **changes):
     value = dict(request["payload"], id=71, revision=1, state="pending_approval",
                  fingerprint="f" * 64, account_id=request["account_id"],
-                 created_at="2026-11-14T00:00:00Z")
+                 created_at="2026-11-14T00:00:00Z", updated_at="2026-11-14T00:00:00Z",
+                 expires_at="2026-11-14T01:00:00Z")
     value.update(changes)
     return value
 
@@ -160,6 +164,112 @@ def test_pending_create_uses_review_pipeline_no_approval_and_separate_local_card
     assert widget.findChild(QFrame, "smsLocal")
     assert len(widget._threads[("history", "one")]["messages"]) == 1
     assert not any(command == "approve_action" for command, _ in worker.requests)
+
+
+def test_accepted_request_disappears_from_chat_but_remains_in_activity(qtbot):
+    widget, worker = page(qtbot)
+    request = create_request(widget, worker, "A fictional reply")
+    succeed(worker, request)
+    assert widget.findChild(QFrame, "smsLocal")
+    actions = [successful_action(request, state="upstream_accepted",
+        upstream_id="fictional-acceptance")]
+    # A second accepted request has no matching history. Visibility depends on
+    # acceptance state alone, never a guessed body/time delivery correlation.
+    actions.append(dict(actions[0], id=72, body="Another fictional reply"))
+    history = [message(), message(2, direction="outgoing", body="A fictional reply")]
+    requests = deepcopy(worker.requests)
+    widget.apply_snapshot(snapshot(history, actions=actions))
+    assert widget.current_thread == ("history", "one")
+    assert widget.findChild(QFrame, "smsLocal") is None
+    assert len(widget.findChildren(QFrame, "smsOutgoing")) == 1
+    assert [text.toPlainText() for text in widget.timeline_content.findChildren(MessageText)] == [
+        "Message 1", "A fictional reply"]
+    assert widget.actions == actions
+    assert widget._threads[("history", "one")]["actions"] == []
+    assert worker.requests == requests
+    activity = ActivityDialog(widget)
+    qtbot.addWidget(activity)
+    activity.apply_actions(widget.actions, PHONES)
+    assert activity.model.rowCount() == 2
+    assert "Accepted by Pushbullet" in activity.detail.toPlainText()
+    assert "delivery not confirmed" in activity.detail.toPlainText()
+
+
+@pytest.mark.parametrize("state", ["pending_approval", "ready", "submitting", "failed", "uncertain"])
+def test_unresolved_request_stays_visible_even_with_matching_phone_history(qtbot, state):
+    widget, worker = page(qtbot, [message(direction="outgoing", body="A fictional reply")])
+    action = successful_action({"account_id": "acct", "payload": {
+        "kind": "sms", "device_id": "a", "recipient": "+639171234567",
+        "body": "A fictional reply", "transport": "provider_plaintext"}}, state=state)
+    requests = deepcopy(worker.requests)
+    widget.apply_snapshot(snapshot([message(direction="outgoing", body="A fictional reply")], actions=[action]))
+    assert widget.findChild(QFrame, "smsLocal")
+    assert len(widget.findChildren(QFrame, "smsOutgoing")) == 1
+    assert widget._threads[("history", "one")]["actions"] == [action]
+    assert worker.requests == requests
+
+
+def test_accepted_request_without_phone_history_is_activity_only(qtbot):
+    widget, worker = page(qtbot, [])
+    action = successful_action({"account_id": "acct", "payload": {
+        "kind": "sms", "device_id": "a", "recipient": "+12025550123",
+        "body": "A fictional reply", "transport": "provider_plaintext"}}, state="upstream_accepted")
+    requests = deepcopy(worker.requests)
+    widget.apply_snapshot(snapshot(actions=[action]))
+    assert widget.actions == [action]
+    assert widget.threads.count() == 0 and not widget._threads
+    assert widget.current_thread is None
+    assert widget.findChild(QFrame, "smsLocal") is None
+    assert worker.requests == requests
+
+
+def test_last_local_request_accepted_keeps_recipient_and_other_drafts(qtbot):
+    widget, worker = page(qtbot)
+    widget.composer.setPlainText("Unrelated conversation draft")
+    widget.start_new()
+    widget.recipient.setText("+12025550123")
+    widget.composer.setPlainText("Saved recipient draft")
+    action = successful_action({"account_id": "acct", "payload": {
+        "kind": "sms", "device_id": "a", "recipient": "+12025550123",
+        "body": "A fictional reply", "transport": "provider_plaintext"}})
+    widget.open_action(action)
+    assert widget.current_thread == ("local", "+12025550123")
+    requests = deepcopy(worker.requests)
+    accepted = dict(action, state="upstream_accepted")
+    widget.apply_snapshot(snapshot([message()], actions=[accepted]))
+    assert widget.current_thread == ("new", "+12025550123")
+    assert widget.recipient.text() == "+12025550123" and widget.recipient.isVisible()
+    assert widget.composer.toPlainText() == "Saved recipient draft"
+    assert ("local", "+12025550123") not in widget._threads
+    assert widget.findChild(QFrame, "smsLocal") is None
+    assert widget.actions == [accepted]
+    assert worker.requests == requests
+    widget._activate_thread(("history", "one"))
+    assert widget.composer.toPlainText() == "Unrelated conversation draft"
+
+
+def test_local_request_accepted_with_new_history_restores_its_reply_draft(qtbot):
+    widget, worker = page(qtbot)
+    widget.composer.setPlainText("Unrelated conversation draft")
+    action = successful_action({"account_id": "acct", "payload": {
+        "kind": "sms", "device_id": "a", "recipient": "+12025550123",
+        "body": "A fictional reply", "transport": "provider_plaintext"}})
+    widget.open_action(action)
+    assert widget.current_thread == ("local", "+12025550123")
+    widget._drafts[("acct", "a", ("history", "two"))] = ("Saved phone-history draft", 3)
+    requests = deepcopy(worker.requests)
+    history = [message(), message(2, conversation="two", direction="outgoing",
+        addresses=["+12025550123"], body="A fictional reply")]
+    widget.apply_snapshot(snapshot(history, actions=[dict(action, state="upstream_accepted")]))
+    assert widget.current_thread == ("history", "two")
+    assert widget.composer.toPlainText() == "Saved phone-history draft"
+    assert widget._route() == "+12025550123"
+    assert not widget.recipient.isVisible()
+    assert widget.findChild(QFrame, "smsLocal") is None
+    assert len(widget.findChildren(QFrame, "smsOutgoing")) == 1
+    assert worker.requests == requests
+    widget._activate_thread(("history", "one"))
+    assert widget.composer.toPlainText() == "Unrelated conversation draft"
 
 
 def test_ambiguous_creation_locks_exact_payload_and_uuid_until_explicit_reconcile(qtbot):

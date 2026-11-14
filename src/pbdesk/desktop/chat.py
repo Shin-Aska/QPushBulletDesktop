@@ -404,13 +404,33 @@ class SmsPage(QWidget):
             thread["messages"].sort(key=lambda item: (_order(item.get("timestamp")), str(item.get("id", ""))))
             thread["recipient"] = _recipient(thread["messages"])
         for action in self.actions:
-            if action.get("kind") != "sms" or action.get("device_id") != self.selected_device_id:
+            # Accepted requests remain in Message activity. They are not phone
+            # messages, and keeping them here duplicates the synchronized SMS.
+            # In particular, do not infer delivery by matching body/time text.
+            if (action.get("kind") != "sms" or action.get("device_id") != self.selected_device_id
+                    or action.get("state") == "upstream_accepted"):
                 continue
             recipient = action.get("recipient")
             matches = [key for key, thread in threads.items() if key[0] == "history" and thread["recipient"] == recipient and recipient]
             key = matches[0] if len(matches) == 1 else ("local", str(recipient or "Unknown recipient"))
             threads.setdefault(key, {"messages": [], "actions": [], "recipient": None})["actions"].append(action)
         self._threads = threads
+        if self.current_thread and self.current_thread[0] == "local" and self.current_thread not in threads:
+            # The last local request can finish before phone history arrives.
+            # Keep focus on the same recipient, rather than jumping to another
+            # person's conversation or leaving an empty local-request thread.
+            recipient = self.current_thread[1]
+            matches = [key for key, thread in threads.items()
+                       if key[0] == "history" and recipient and thread.get("recipient") == recipient]
+            self.current_thread = matches[0] if len(matches) == 1 else ("new", recipient if E164.fullmatch(recipient) else "")
+            if self.current_thread[0] == "new":
+                self._new_recipients[(self.account_id, self.selected_device_id)] = self.current_thread[1]
+                self._loading = True
+                self.recipient.setText(self.current_thread[1])
+                self._loading = False
+            self._contexts[(self.account_id, self.selected_device_id)] = self.current_thread
+            self._load_draft()
+            new_context = True
         self._populate_threads()
         if self.current_thread is None and threads:
             self._activate_thread(self.threads.item(0).data(Qt.ItemDataRole.UserRole) if self.threads.count() else next(iter(threads)), True)

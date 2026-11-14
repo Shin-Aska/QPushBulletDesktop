@@ -247,6 +247,7 @@ class ReviewDialog(QDialog):
         self.request_id = None
         self.busy = False
         self.awaiting_refresh = False
+        self._approved_revision = None
         self.setWindowTitle(f"Review action #{action['id']}")
         self.resize(680, 730)
         layout = QVBoxLayout(self)
@@ -338,6 +339,14 @@ class ReviewDialog(QDialog):
             self.action = dict(latest)
             self.awaiting_refresh = False
         self.render()
+        self._close_if_sent()
+
+    def _close_if_sent(self):
+        # Only a send approved in this dialog should close it. Opening an
+        # already accepted action in Activity must still allow inspection.
+        if (self.action["state"] == "upstream_accepted"
+                and self._approved_revision == (self.action["revision"], self.action["fingerprint"])):
+            self.accept()
 
     def edit(self):
         if not self.edit_button.isEnabled():
@@ -354,6 +363,7 @@ class ReviewDialog(QDialog):
             payload.update(fingerprint=self.action["fingerprint"], allow_provider_plaintext=True)
         self.request_id = str(uuid.uuid4())
         self.busy = True
+        self._approved_revision = (self.action["revision"], self.action["fingerprint"]) if command == "approve_action" else None
         self.feedback.setText("Submitting approval…" if command == "approve_action" else "Cancelling pending action…")
         value = {"request_id": self.request_id, "action_id": self.action["id"], "payload": payload}
         if "account_id" in self.capabilities:
@@ -373,3 +383,4 @@ class ReviewDialog(QDialog):
             self.awaiting_refresh = True
             self.feedback.setText(result["error"])
         self.render()
+        self._close_if_sent()
