@@ -13,8 +13,9 @@ from pbdesk.config import Settings
 
 
 def core_main(argv=None):
-    parser = argparse.ArgumentParser(description="Run one standalone private pbdesk core")
+    parser = argparse.ArgumentParser(description="Run the private pbdesk core (coupled to desktop/web clients)")
     parser.add_argument("--foreground", action="store_true", help="Run in foreground (default)")
+    parser.add_argument("--standalone", action="store_true", help="Keep core running without desktop/web clients (debug/service use)")
     parser.add_argument("--demo", action="store_true", help="Replay one fixed sanitized note; no provider connection")
     parser.add_argument("--fixture", type=Path, help="Replay a sanitized JSON event array without provider connection")
     parser.add_argument("--notifications", action="store_true", help="Enable core-owned KDE notification submission")
@@ -22,7 +23,7 @@ def core_main(argv=None):
     from pbdesk.api.app import create_app
     import uvicorn
     settings = Settings.from_env()
-    app = create_app(settings, demo=args.demo, fixture_path=args.fixture, notifications=args.notifications)
+    app = create_app(settings, demo=args.demo, fixture_path=args.fixture, notifications=args.notifications, standalone=args.standalone, launch_generation=os.environ.get("PBDESK_STOP_GENERATION"))
     config = uvicorn.Config(app, host=settings.core_host, port=settings.core_port, workers=1,
                             access_log=False, log_level="warning", timeout_graceful_shutdown=5)
     server = uvicorn.Server(config)
@@ -106,10 +107,10 @@ def admin_main(argv=None):
         root.mkdir(parents=True, exist_ok=True)
         def quote(value):
             return '"' + str(value).replace('\\', '\\\\').replace('"', '\\"').replace('%', '%%') + '"'
-        unit = "[Unit]\nDescription=pbdesk private inbox core\n\n[Service]\nType=simple\nExecStart=" + quote(sys.executable) + " -m pbdesk.cli --foreground\n"
+        unit = "[Unit]\nDescription=pbdesk private inbox core\n\n[Service]\nType=simple\nExecStart=" + quote(sys.executable) + " -m pbdesk.cli --foreground --standalone\n"
         for key, value in {"PBDESK_APPLICATION_DIR": str(settings.application_dir), "PBDESK_STATE_DIR": str(settings.state_dir), "PBDESK_CORE_PORT": str(settings.core_port), "PBDESK_WEB_PORT": str(settings.web_port)}.items():
             unit += "Environment=" + quote(key + "=" + value) + "\n"
-        unit += "Restart=on-failure\nRestartSec=3\nUMask=0077\n\n[Install]\nWantedBy=default.target\n"
+        unit += "Restart=on-failure\nRestartSec=3\nKillMode=process\nUMask=0077\n\n[Install]\nWantedBy=default.target\n"
         path = root / "pbdesk-core.service"
         path.write_text(unit)
         result = subprocess.run(["systemctl", "--user", "daemon-reload"], check=False)

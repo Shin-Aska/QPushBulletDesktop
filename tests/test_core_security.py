@@ -42,7 +42,7 @@ def test_bootstrap_and_roles(settings):
         assert client.get("/api/v1/items",headers=old).status_code == 401
         assert client.get("/api/v1/items",headers=auth(settings)).status_code == 200
         assert client.post("/api/v1/send",headers=auth(settings)).status_code == 404
-        assert client.get("/api/v1/capabilities",headers=auth(settings)).json()["features"] == {"inbox":True,"search":True,"send":True,"send_note":True,"send_link":True,"send_sms":False,"sms_history":True,"device_management":True,"devices":True,"e2e_decrypt":True,"ai":False,"web_inbox":False}
+        assert client.get("/api/v1/capabilities",headers=auth(settings)).json()["features"] == {"inbox":True,"search":True,"send":True,"send_note":True,"send_link":True,"send_sms":False,"sms_history":True,"device_management":True,"devices":True,"e2e_decrypt":True,"ai":True,"ai_summary":True,"ai_draft_reply":True,"ai_saved_summaries":True,"media_images":True,"web_inbox":False,"client_lifecycle":True,"core_settings":True,"core_restart":True}
 
 def test_credentials_permissions(settings):
     assert len({service_token(settings, role) for role in ("desktop","web","mcp")}) == 3

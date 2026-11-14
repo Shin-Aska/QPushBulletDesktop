@@ -7,9 +7,10 @@ import httpx
 from PyQt6.QtCore import QThread, pyqtSignal
 from pbdesk.config import Settings
 from pbdesk.credentials import service_token, health_headers, verify_health
-from pbdesk.services.lifecycle import ensure_core
+from pbdesk.services.client_lifecycle import ClientLease
 
-MUTATIONS = {"web", "shutdown", "refresh_devices", "reload_provider", "create_action", "edit_action", "approve_action", "cancel_action", "refresh_sms", "add_device", "rename_device", "remove_device", "encryption", "test_encryption", "resolve_registration"}
+CORE_COMMANDS = {"core_settings", "core_settings_update", "core_restart"}
+MUTATIONS = {"core_settings_update", "core_restart", "web", "shutdown", "refresh_devices", "reload_provider", "create_action", "edit_action", "approve_action", "cancel_action", "refresh_sms", "add_device", "rename_device", "remove_device", "encryption", "test_encryption", "resolve_registration"}
 
 
 class AccountChangedError(ValueError):
@@ -27,6 +28,7 @@ class CoreWorker(QThread):
         super().__init__()
         self.settings = settings
         self.demo = demo
+        self.lease = None
         self.commands = queue.Queue()
         self.stop_event = threading.Event()
         self.query = ""
@@ -37,6 +39,7 @@ class CoreWorker(QThread):
         self.device_request_id = None
         self.account_id = None
         self.account_known = False
+        self.pending_restart = None
 
     def request(self, action, value=None):
         self.commands.put((action, value))
@@ -44,6 +47,8 @@ class CoreWorker(QThread):
     def stop(self):
         self.stop_event.set()
         self.commands.put(("wake", None))
+        if self.lease:
+            self.lease.stop_event.set()
 
     def _account(self, data):
         if 'account_id' not in data:
@@ -87,7 +92,13 @@ class CoreWorker(QThread):
             if capabilities.get("account_id") != value["account_id"]:
                 raise AccountChangedError("The account changed before this action could be saved. Review message activity in the current account; the original conversation draft is kept.")
         method, payload = "POST", None
-        if command == "web":
+        if command == "core_settings_update":
+            method, path = "PATCH", "/api/v1/core/settings"
+            payload = {key: value[key] for key in ("expected_instance_id", "notifications_enabled")}
+        elif command == "core_restart":
+            path = "/api/v1/core/restart"
+            payload = {key: value[key] for key in ("expected_instance_id", "request_id")}
+        elif command == "web":
             path, payload = "/api/v1/web", {"enabled": bool(value)}
         elif command == "shutdown":
             path = "/api/v1/shutdown"
@@ -131,6 +142,17 @@ class CoreWorker(QThread):
     def _mutation_error(exc, command="create_action"):
         if isinstance(exc, AccountChangedError):
             return str(exc), False, 409
+        if command in {"core_settings", "core_settings_update", "core_restart"}:
+            status = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
+            if status == 404:
+                return "Core settings require an updated core. Restart the existing core process once, then refresh settings.", False, status
+            if isinstance(exc, httpx.HTTPStatusError) and status < 500 and status != 408:
+                try:
+                    detail = exc.response.json().get("detail")
+                except ValueError:
+                    detail = None
+                return detail if isinstance(detail, str) else "The core rejected this settings change. Refresh settings before trying again.", False, status
+            return "The core could not confirm this operation. Wait for reconnection and refresh settings; the request will not be repeated automatically.", True, status
         if command not in {"create_action", "edit_action", "approve_action", "cancel_action"}:
             status = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
             detail = None
@@ -160,9 +182,21 @@ class CoreWorker(QThread):
         return "The result could not be confirmed. Refresh message activity before taking another action. A create request can be reconciled using the same request ID; sending is never automatically retried.", True, None
 
     def run(self):
+        try:
+            self._run_client()
+        finally:
+            if self.lease:
+                self.lease.close()
+
+    def _run_client(self):
+        if self.stop_event.is_set():
+            return
         self.connection.emit("Starting private core…")
         try:
-            ensure_core(self.settings, timeout=12, demo=self.demo)
+            self.lease = ClientLease(self.settings, demo=self.demo)
+            if self.stop_event.is_set():
+                self.lease.stop_event.set()
+            self.lease.start()
             token = service_token(self.settings, "desktop")
         except Exception as exc:
             self.failed.emit(str(exc))
@@ -186,7 +220,7 @@ class CoreWorker(QThread):
                 if command == "search":
                     self.query = value
                     next_poll = 0
-                if command not in MUTATIONS and time.monotonic() < next_poll:
+                if command not in MUTATIONS and command not in CORE_COMMANDS and command != "media_image" and time.monotonic() < next_poll:
                     continue
                 request_id = value.get("request_id") if isinstance(value, dict) else None
                 origin = {"account_id": value["account_id"]} if isinstance(value, dict) and "account_id" in value else {}
@@ -194,14 +228,18 @@ class CoreWorker(QThread):
                     identity = self._identity(client)
                 except (httpx.HTTPError, ValueError, KeyError) as exc:
                     self.connection.emit("Disconnected · waiting for core")
-                    message = f"Core connection failed: {exc}. Run pbdesk-diagnostics, or relaunch the desktop to start the core."
-                    self.failed.emit(message)
-                    if command in MUTATIONS:
+                    detail = self.lease.error if self.lease and self.lease.error else str(exc)
+                    message = f"Core connection failed: {detail}. Recovery continues while this client remains open; relaunch after Stop All."
+                    if not self.pending_restart:
+                        self.failed.emit(message)
+                    if command in MUTATIONS or command in CORE_COMMANDS or command == "media_image":
                         self.result.emit({**origin, "command": command, "request_id": request_id, "error": message, "ambiguous": False, "status": None})
-                    next_poll = time.monotonic() + 2
+                    next_poll = time.monotonic() + (.2 if self.pending_restart else 2)
                     continue
                 if identity['instance_id'] != self.instance_id:
                     self.instance_id = identity['instance_id']
+                    if self.lease:
+                        self.lease.wake()
                     try:
                         response = client.get('/api/v1/capabilities', headers=authorization)
                         response.raise_for_status()
@@ -210,6 +248,79 @@ class CoreWorker(QThread):
                         self.features = capability_data.get('features', {})
                     except (httpx.HTTPError, ValueError):
                         self.features = {}
+                if command in CORE_COMMANDS:
+                    required = 'core_restart' if command == 'core_restart' else 'core_settings'
+                    if not self.features.get(required):
+                        self.result.emit({'command': command, 'request_id': request_id, 'status': None, 'ambiguous': False,
+                            'error': 'Core settings require an updated core. Restart the existing core process once, then refresh settings.'})
+                        continue
+                    if command == 'core_restart' and self.pending_restart:
+                        pending = self.pending_restart
+                        if value.get('expected_instance_id') == pending['instance_id'] and request_id == pending['request_id'] and pending.get('confirmed'):
+                            self.result.emit({'command': command, 'request_id': request_id, 'data': {'accepted': True, 'instance_id': pending['instance_id'], 'request_id': pending['request_id']}})
+                        else:
+                            self.result.emit({'command': command, 'request_id': request_id, 'status': 409, 'ambiguous': False,
+                                'error': 'A core restart is already in progress; wait for reconnection.'})
+                        continue
+                    try:
+                        if command == 'core_settings':
+                            response = client.get('/api/v1/core/settings', headers=authorization)
+                            response.raise_for_status()
+                            data = response.json()
+                            pending = self.pending_restart
+                            if (pending and not pending.get('confirmed') and
+                                    time.monotonic() - pending.get('started', time.monotonic()) >= 20 and
+                                    identity['instance_id'] == pending['instance_id'] == data.get('instance_id') and
+                                    data.get('restarting') is False):
+                                # A later requested read reconciles a lost POST response.
+                                # Only a fresh explicit action may send another restart.
+                                self.pending_restart = None
+                        else:
+                            data = self._mutate(client, authorization, command, value)
+                        if command == 'core_restart':
+                            self.pending_restart = {'instance_id': identity['instance_id'], 'request_id': request_id, 'confirmed': True, 'started': time.monotonic()}
+                            self.connection.emit('Restarting core · reconnecting…')
+                            if self.lease:
+                                self.lease.wake()
+                        self.result.emit({'command': command, 'request_id': request_id, 'data': data})
+                    except (httpx.HTTPError, ValueError, KeyError) as exc:
+                        message, ambiguous, status = self._mutation_error(exc, command)
+                        if command == 'core_restart' and ambiguous:
+                            self.pending_restart = {'instance_id': identity['instance_id'], 'request_id': request_id, 'confirmed': False, 'started': time.monotonic()}
+                        self.result.emit({'command': command, 'request_id': request_id, 'error': message,
+                            'ambiguous': ambiguous, 'status': status})
+                    next_poll = 0
+                    continue
+                if command == 'media_image':
+                    try:
+                        response = client.get('/api/v1/capabilities', headers=authorization)
+                        response.raise_for_status()
+                        capabilities = response.json()
+                        self._account(capabilities)
+                        if capabilities.get('account_id') != value.get('account_id'):
+                            raise AccountChangedError('Account changed')
+                        if not capabilities.get('features', {}).get('media_images'):
+                            raise ValueError('Core image previews are unavailable')
+                        params = {key: value[key] for key in ('account_id', 'kind', 'item_id', 'message_id', 'index') if key in value}
+                        response = client.get('/api/v1/media/image', params=params, headers=authorization, timeout=httpx.Timeout(14, connect=2))
+                        response.raise_for_status()
+                        # Decode the bounded raster on this worker thread. QImage
+                        # crosses Qt signals safely; only QPixmap creation is GUI work.
+                        import base64
+                        from .media import decode_image, MAX_IMAGE_BYTES
+                        data = response.json()
+                        encoded = data.pop('data', None)
+                        if not isinstance(encoded, str) or len(encoded) > ((MAX_IMAGE_BYTES + 2) // 3) * 4:
+                            raise ValueError('Image preview limit')
+                        image = decode_image(base64.b64decode(encoded, validate=True))
+                        if image is None:
+                            raise ValueError('Image raster unavailable')
+                        self.result.emit({**origin, 'command': command, 'request_id': request_id,
+                            'data': {'account_id': data.get('account_id'), 'image': image}})
+                    except (httpx.HTTPError, ValueError, KeyError):
+                        self.result.emit({**origin, 'command': command, 'request_id': request_id,
+                            'error': 'Image unavailable or expired. Refresh history, or retry loading.'})
+                    continue
                 required = ('sms_history' if command == 'refresh_sms' else 'device_management' if command in {'add_device', 'rename_device', 'remove_device', 'encryption', 'test_encryption', 'resolve_registration'} else None)
                 if required and not self.features.get(required):
                     self.result.emit({**origin, 'command': command, 'request_id': request_id, 'error': 'Core update ready · restart the shared core to use SMS history and device management. Stored history is kept.', 'ambiguous': False, 'status': None})
@@ -252,8 +363,10 @@ class CoreWorker(QThread):
                     if sms is not None:
                         self.sms_cache[selected_device] = sms
                     self.snapshot.emit({"sms": sms, "sms_device_id": selected_device, "sms_request_id": self.device_request_id, "items": items["items"], "web": web, "capabilities": capabilities, "devices": devices, "actions": actions["actions"], "instance_id": identity["instance_id"]})
-                    self.connection.emit("Connected to private core")
+                    if self.pending_restart and identity['instance_id'] != self.pending_restart['instance_id']:
+                        self.pending_restart = None
+                    self.connection.emit("Restarting core · reconnecting…" if self.pending_restart else "Connected to private core")
                 except (httpx.HTTPError, ValueError, KeyError) as exc:
                     self.connection.emit("Disconnected · waiting for core")
                     self.failed.emit(f"Core refresh failed: {exc}. Retained content remains visible; use Refresh to try again.")
-                next_poll = time.monotonic() + 2
+                next_poll = time.monotonic() + (.2 if self.pending_restart else 2)

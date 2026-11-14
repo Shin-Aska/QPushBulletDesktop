@@ -53,7 +53,8 @@
       "module": "pbdesk.cli",
       "args": [
         "--foreground",
-        "--demo"
+        "--demo",
+        "--standalone"
       ],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
@@ -75,7 +76,9 @@
       "request": "launch",
       "python": "${workspaceFolder}/.venv/bin/python",
       "module": "pbdesk.web",
-      "args": [],
+      "args": [
+        "--standalone"
+      ],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "justMyCode": true,

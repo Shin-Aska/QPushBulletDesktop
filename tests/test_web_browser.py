@@ -33,13 +33,13 @@ def test_firefox_local_bootstrap_with_external_requests_blocked(tmp_path):
         port = sock.getsockname()[1]
     core_port = port - 1 if port > 1025 else port + 1
     env = dict(os.environ, PBDESK_STATE_DIR=str(tmp_path / "state"), PBDESK_APPLICATION_DIR=str(tmp_path / "application"), PBDESK_WEB_PORT=str(port), PBDESK_CORE_PORT=str(core_port))
-    process = subprocess.Popen([sys.executable, "-m", "pbdesk.web"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    process = subprocess.Popen([sys.executable, "-m", "pbdesk.web", "--standalone"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
     url = f"http://127.0.0.1:{port}"
     driver = None
     try:
         for _ in range(100):
             try:
-                with urllib.request.urlopen(url + "/health", timeout=0.2) as response:
+                with urllib.request.urlopen(url + "/static/css/app.css", timeout=0.2) as response:
                     if response.status == 200:
                         break
             except (OSError, urllib.error.URLError):

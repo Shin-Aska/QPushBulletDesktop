@@ -42,7 +42,7 @@ def test_available_systemd_uses_transient_unit(tmp_path,monkeypatch):
     from pbdesk.services import lifecycle
     settings=Settings(tmp_path)
     calls=[]
-    answers=iter([None,{"ready":True}])
+    answers=iter([None,{"ready":True,"client_lifecycle":1}])
     monkeypatch.delenv("PBDESK_LIFECYCLE",raising=False)
     monkeypatch.setattr(lifecycle,"_probe",lambda *a:next(answers))
     def runner(command,**kwargs):

@@ -11,9 +11,12 @@ class Dispatcher:
         self.store=store
         self.provider_getter=provider_getter
         self.lock=asyncio.Lock()
+        self.paused=False
 
     async def dispatch_once(self):
         async with self.lock:
+            if self.paused:
+                return
             ids=await asyncio.to_thread(self.store.ready_actions)
             if not ids:
                 return

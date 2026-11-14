@@ -62,7 +62,8 @@
         "-m",
         "pbdesk.cli",
         "--foreground",
-        "--demo"
+        "--demo",
+        "--standalone"
       ],
       "options": {
         "cwd": "${workspaceFolder}",
@@ -88,7 +89,8 @@
       "command": "${workspaceFolder}/.venv/bin/python",
       "args": [
         "-m",
-        "pbdesk.web"
+        "pbdesk.web",
+        "--standalone"
       ],
       "options": {
         "cwd": "${workspaceFolder}",

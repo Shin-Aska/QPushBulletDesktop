@@ -1,0 +1,178 @@
+"""CoreWorker transport-only tests: no Qt widgets/display or live network."""
+import threading
+from uuid import uuid4
+import httpx
+import pytest
+from pbdesk.config import Settings
+from pbdesk.credentials import health_response
+from pbdesk.desktop.worker import CoreWorker
+
+OLD = '11111111-1111-1111-1111-111111111111'
+NEW = '22222222-2222-2222-2222-222222222222'
+
+
+class FakeLease:
+    def __init__(self, *args, **kwargs):
+        self.stop_event = threading.Event()
+        self.error = None
+        self.wakes = 0
+    def start(self): return self
+    def wake(self): self.wakes += 1
+    def close(self): pass
+
+
+def test_core_commands_verify_identity_strip_patch_id_and_coalesce_restart(tmp_path, monkeypatch):
+    settings = Settings(tmp_path)
+    actual = httpx.Client
+    calls, results, snapshots, stopped = [], [], [], []
+    health_count = 0
+    restarts = 0
+    def handle(request):
+        nonlocal health_count, restarts
+        calls.append(request)
+        path = request.url.path
+        if path.endswith('/health'):
+            health_count += 1
+            instance = NEW if health_count >= 6 else OLD
+            assert 'authorization' not in request.headers
+            return httpx.Response(200, json=health_response(settings, request.headers, instance, True))
+        assert request.headers.get('authorization', '').startswith('Bearer ')
+        if path.endswith('/capabilities'):
+            return httpx.Response(200, json={'account_id': 'retained-account', 'features': {'core_settings': True, 'core_restart': True}})
+        if path.endswith('/core/settings'):
+            if request.method == 'PATCH':
+                import json
+                assert json.loads(request.content) == {'expected_instance_id': OLD, 'notifications_enabled': True}
+            return httpx.Response(200, json={'instance_id': OLD, 'notifications': {'requested': True}})
+        if path.endswith('/core/restart'):
+            restarts += 1
+            return httpx.Response(202, json={'accepted': True, 'instance_id': OLD, 'request_id': 'restart-one'})
+        if path.endswith('/items'):
+            return httpx.Response(200, json={'account_id': 'retained-account', 'items': []})
+        if path.endswith('/web'):
+            return httpx.Response(200, json={'enabled': True})
+        raise AssertionError(path)
+    monkeypatch.setattr('pbdesk.desktop.worker.ClientLease', FakeLease)
+    monkeypatch.setattr('pbdesk.desktop.worker.httpx.Client', lambda **kwargs: actual(**kwargs, transport=httpx.MockTransport(handle)))
+    worker = CoreWorker(settings)
+    worker.result.connect(results.append)
+    worker.snapshot.connect(lambda value: (snapshots.append(value), worker.stop()))
+    worker.stopped_all.connect(lambda: stopped.append(True))
+    worker.request('core_settings', {'request_id': 'get-one'})
+    worker.request('core_settings_update', {'expected_instance_id': OLD, 'notifications_enabled': True, 'request_id': 'patch-one'})
+    payload = {'expected_instance_id': OLD, 'request_id': 'restart-one'}
+    worker.request('core_restart', payload)
+    worker.request('core_restart', payload)
+    worker.request('core_restart', {**payload, 'request_id': 'conflict'})
+    worker.run()
+    assert restarts == 1 and len(results) == 5
+    assert results[0]['command'] == 'core_settings' and results[0]['request_id'] == 'get-one'
+    assert results[1]['command'] == 'core_settings_update' and results[1]['request_id'] == 'patch-one'
+    assert results[2]['data']['accepted'] and results[3]['data']['accepted']
+    assert results[4]['status'] == 409
+    assert snapshots[-1]['instance_id'] == NEW and snapshots[-1]['capabilities']['account_id'] == 'retained-account'
+    assert not stopped and worker.pending_restart is None
+    assert worker.lease.wakes >= 2
+
+
+def test_foreign_core_gets_no_bearer_for_settings_command(tmp_path, monkeypatch):
+    settings = Settings(tmp_path)
+    actual = httpx.Client
+    calls, results = [], []
+    def handle(request):
+        calls.append(request)
+        return httpx.Response(200, json={'application': 'pbdesk-core', 'api_version': 1, 'ready': True,
+            'instance_id': OLD, 'proof': 'foreign'})
+    monkeypatch.setattr('pbdesk.desktop.worker.ClientLease', FakeLease)
+    monkeypatch.setattr('pbdesk.desktop.worker.httpx.Client', lambda **kwargs: actual(**kwargs, transport=httpx.MockTransport(handle)))
+    worker = CoreWorker(settings)
+    worker.result.connect(lambda value: (results.append(value), worker.stop()))
+    worker.request('core_settings', {'request_id': 'foreign'})
+    worker.run()
+    assert results[0]['error'] and all('authorization' not in call.headers for call in calls)
+    assert all(call.url.path.endswith('/health') for call in calls)
+
+
+def test_old_core_settings_capability_is_actionable_and_sends_no_settings_call(tmp_path, monkeypatch):
+    settings = Settings(tmp_path)
+    actual = httpx.Client
+    calls, results = [], []
+    def handle(request):
+        calls.append(request)
+        if request.url.path.endswith('/health'):
+            return httpx.Response(200, json=health_response(settings, request.headers, OLD, True))
+        assert request.url.path.endswith('/capabilities')
+        return httpx.Response(200, json={'features': {}})
+    monkeypatch.setattr('pbdesk.desktop.worker.ClientLease', FakeLease)
+    monkeypatch.setattr('pbdesk.desktop.worker.httpx.Client', lambda **kwargs: actual(**kwargs, transport=httpx.MockTransport(handle)))
+    worker = CoreWorker(settings)
+    worker.result.connect(lambda value: (results.append(value), worker.stop()))
+    worker.request('core_settings', {'request_id': 'old'})
+    worker.run()
+    assert 'updated core' in results[0]['error']
+    assert all('/core/settings' not in str(call.url) for call in calls)
+
+
+def test_ambiguous_restart_is_not_reposted_or_falsely_confirmed(tmp_path, monkeypatch):
+    settings = Settings(tmp_path)
+    actual = httpx.Client
+    results, posts = [], []
+    def handle(request):
+        path = request.url.path
+        if path.endswith('/health'):
+            return httpx.Response(200, json=health_response(settings, request.headers, OLD, True))
+        if path.endswith('/capabilities'):
+            return httpx.Response(200, json={'features': {'core_settings': True, 'core_restart': True}})
+        assert path.endswith('/core/restart')
+        posts.append(request)
+        raise httpx.ReadError('lost response', request=request)
+    monkeypatch.setattr('pbdesk.desktop.worker.ClientLease', FakeLease)
+    monkeypatch.setattr('pbdesk.desktop.worker.httpx.Client', lambda **kwargs: actual(**kwargs, transport=httpx.MockTransport(handle)))
+    worker = CoreWorker(settings)
+    def result(value):
+        results.append(value)
+        if len(results) == 2:
+            worker.stop()
+    worker.result.connect(result)
+    payload = {'expected_instance_id': OLD, 'request_id': 'uncertain'}
+    worker.request('core_restart', payload)
+    worker.request('core_restart', payload)
+    worker.run()
+    assert len(posts) == 1 and results[0]['ambiguous']
+    assert all('data' not in value for value in results)
+
+
+def test_lost_restart_reconciles_idle_same_instance_then_allows_explicit_new_request(tmp_path, monkeypatch):
+    import time
+    settings = Settings(tmp_path)
+    actual = httpx.Client
+    results, posts = [], []
+    worker = CoreWorker(settings)
+    def handle(request):
+        path = request.url.path
+        if path.endswith('/health'):
+            return httpx.Response(200, json=health_response(settings, request.headers, OLD, True))
+        if path.endswith('/capabilities'):
+            return httpx.Response(200, json={'features': {'core_settings': True, 'core_restart': True}})
+        if path.endswith('/core/settings'):
+            worker.pending_restart['started'] = time.monotonic() - 25
+            return httpx.Response(200, json={'instance_id': OLD, 'restarting': False})
+        assert path.endswith('/core/restart')
+        posts.append(request)
+        if len(posts) == 1:
+            raise httpx.ReadError('request outcome not confirmed', request=request)
+        return httpx.Response(202, json={'accepted': True, 'instance_id': OLD, 'request_id': 'explicit-new'})
+    monkeypatch.setattr('pbdesk.desktop.worker.ClientLease', FakeLease)
+    monkeypatch.setattr('pbdesk.desktop.worker.httpx.Client', lambda **kwargs: actual(**kwargs, transport=httpx.MockTransport(handle)))
+    def result(value):
+        results.append(value)
+        if len(results) == 3:
+            worker.stop()
+    worker.result.connect(result)
+    worker.request('core_restart', {'expected_instance_id': OLD, 'request_id': 'lost'})
+    worker.request('core_settings', {'request_id': 'manual-refresh-after-timeout'})
+    worker.request('core_restart', {'expected_instance_id': OLD, 'request_id': 'explicit-new'})
+    worker.run()
+    assert len(posts) == 2 and results[0]['ambiguous']
+    assert results[1]['data']['restarting'] is False
+    assert results[2]['data']['accepted']

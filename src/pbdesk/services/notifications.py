@@ -5,12 +5,17 @@ import html
 
 class Notifier:
     def __init__(self, enabled=False):
-        self.enabled = enabled
-        self.command = shutil.which("notify-send") if enabled else None
-        self.outcome = "disabled" if not enabled else "unavailable" if not self.command else "ready"
+        self.configure(enabled)
+
+    def configure(self, enabled):
+        self.requested = bool(enabled)
+        self.command = shutil.which("notify-send")
+        self.available = self.command is not None
+        self.enabled = self.requested and self.available
+        self.outcome = "disabled" if not self.requested else "unavailable" if not self.available else "ready"
 
     async def notify(self, item):
-        if not self.command:
+        if not self.enabled or not self.command:
             return False
         try:
             process = await asyncio.create_subprocess_exec(
