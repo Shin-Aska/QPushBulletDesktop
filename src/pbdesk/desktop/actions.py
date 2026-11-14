@@ -6,6 +6,7 @@ import uuid
 
 from PyQt6.QtCore import Qt, pyqtSignal
 from .theme import primary
+from .widgets import card_frame
 from PyQt6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QTextBrowser, QTextEdit, QVBoxLayout)
 
 PLAINTEXT_NOTICE = "Pushbullet can process this content. SMS carrier delivery is not end-to-end encrypted."
@@ -68,13 +69,21 @@ class ComposeDialog(QDialog):
         self.setWindowTitle("Edit action" if action else "Compose · save for review")
         self.resize(600, 650)
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 18, 20, 16)
+        layout.setSpacing(10)
         heading = plain_label("Edit saved action" if action else "Compose a message")
         heading.setObjectName("pageTitle")
         layout.addWidget(heading)
-        layout.addWidget(plain_label("Choose an explicit destination. Saving creates a pending action; approval happens separately in Message activity."))
-        layout.addWidget(plain_label("Not end-to-end encrypted; sent over HTTPS to Pushbullet"))
-        layout.addWidget(plain_label(PLAINTEXT_NOTICE))
-        form = QFormLayout()
+        sub = plain_label("Choose an explicit destination. Saving creates a pending action; approval happens separately in Message activity.")
+        sub.setObjectName("subtitle")
+        layout.addWidget(sub)
+        notice = plain_label("Not end-to-end encrypted; sent over HTTPS to Pushbullet.\n" + PLAINTEXT_NOTICE)
+        notice.setObjectName("infoBanner")
+        layout.addWidget(notice)
+        form_card = card_frame()
+        form = QFormLayout(form_card)
+        form.setContentsMargins(16, 16, 16, 16)
+        form.setSpacing(10)
         self.kind = QComboBox()
         for value in (kinds or ("note", "link", "sms")):
             self.kind.addItem(value.title(), value)
@@ -97,7 +106,7 @@ class ComposeDialog(QDialog):
         form.addRow(self.title_label, self.title)
         form.addRow("Body", self.body)
         form.addRow(self.url_label, self.url)
-        layout.addLayout(form)
+        layout.addWidget(form_card, 1)
         self.validation = plain_label()
         layout.addWidget(self.validation)
         self.request_status = plain_label()
@@ -251,14 +260,23 @@ class ReviewDialog(QDialog):
         self.setWindowTitle(f"Review action #{action['id']}")
         self.resize(680, 730)
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 18, 20, 16)
+        layout.setSpacing(10)
         heading = plain_label("Review exact message")
         heading.setObjectName("pageTitle")
         layout.addWidget(heading)
-        layout.addWidget(plain_label("Approval applies only to the destination and content shown below."))
+        sub = plain_label("Approval applies only to the destination and content shown below.")
+        sub.setObjectName("subtitle")
+        layout.addWidget(sub)
+        preview_card = card_frame()
+        preview_layout = QVBoxLayout(preview_card)
+        preview_layout.setContentsMargins(18, 16, 18, 14)
         self.preview = QTextBrowser()
+        self.preview.setObjectName("plainDetail")
         self.preview.setOpenExternalLinks(False)
         self.preview.setAccessibleName("Exact action payload")
-        layout.addWidget(self.preview, 1)
+        preview_layout.addWidget(self.preview, 1)
+        layout.addWidget(preview_card, 1)
         self.advanced_toggle = QPushButton('▸  Advanced details')
         self.advanced_toggle.setCheckable(True)
         layout.addWidget(self.advanced_toggle)
@@ -313,17 +331,23 @@ class ReviewDialog(QDialog):
     def render(self):
         action = self.action
         device = next((item for item in self.devices if item['id'] == action['device_id']), {})
-        document = '<p style="color:#68766e">' + escape(STATE_LABELS.get(action['state'], action['state'])) + '</p><h2>' + escape('SMS' if action['kind'] == 'sms' else action['kind'].title()) + ' to ' + escape(action.get('recipient') or device.get('nickname') or action['device_id']) + '</h2><p>Via ' + escape(device.get('nickname') or '(unnamed)') + ' · ' + escape(action['device_id']) + '</p><hr>'
+        state_text = STATE_LABELS.get(action['state'], action['state'])
+        badge_bg, badge_fg = ('#fadbd8', '#922b21') if action['state'] in {'failed', 'expired'} else ('#d9f0e4', '#165b45') if action['state'] == 'upstream_accepted' else ('#fdecc8', '#7d500a')
+        document = (
+            f'<p style="margin:0 0 8px 0;"><span style="background:{badge_bg}; color:{badge_fg}; padding:3px 10px; border-radius:10px; font-size:12px; font-weight:600;">{escape(state_text)}</span></p>'
+            + '<h2 style="margin:4px 0; font-size:20px; color:#152a30;">' + escape('SMS' if action['kind'] == 'sms' else action['kind'].title()) + ' to ' + escape(action.get('recipient') or device.get('nickname') or action['device_id']) + '</h2>'
+            + '<p style="color:#657176; margin:0 0 12px 0;">Via ' + escape(device.get('nickname') or '(unnamed)') + ' · ' + escape(action['device_id']) + '</p>'
+        )
         if action.get('title'):
-            document += '<h3>' + escape(action['title']) + '</h3>'
-        document += '<p>' + escape(action.get('body') or '').replace('\n', '<br>') + '</p>'
+            document += '<h3 style="margin:10px 0 6px 0; color:#152a30;">' + escape(action['title']) + '</h3>'
+        document += '<div style="background:#f7f8f5; border:1px solid #e6eae4; border-radius:6px; padding:12px; margin:12px 0; color:#24343b;">' + escape(action.get('body') or '').replace('\n', '<br>') + '</div>'
         if action.get('url'):
-            document += '<p>' + escape(action['url']) + '</p>'
-        document += '<hr><p>Expires: ' + escape(action['expires_at']) + '</p><p style="color:#68766e; font-size:12px">Not end-to-end encrypted; sent over HTTPS to Pushbullet</p>'
+            document += '<p style="color:#00765f;">' + escape(action['url']) + '</p>'
+        document += '<p style="margin:10px 0 2px 0; color:#4a5960;">Expires: ' + escape(action['expires_at']) + '</p><p style="color:#657176; font-size:12px; margin:2px 0;">Not end-to-end encrypted; sent over HTTPS to Pushbullet</p>'
         if action['state'] == 'uncertain':
-            document += '<p style="background-color:#fff0d5">Pushbullet may already have accepted this message. Check the destination before creating another action. No automatic retry is offered.</p>'
+            document += '<p style="background-color:#fff4df; border:1px solid #e5c58b; border-radius:6px; padding:8px; color:#785117;">Pushbullet may already have accepted this message. Check the destination before creating another action. No automatic retry is offered.</p>'
         if action.get('error_message'):
-            document += '<p>' + escape(action['error_message']) + '</p>'
+            document += '<p style="color:#922b21;">' + escape(action['error_message']) + '</p>'
         self.preview.setHtml(document)
         self.advanced.setPlainText(action_preview(action, self.devices))
         self.update_controls()

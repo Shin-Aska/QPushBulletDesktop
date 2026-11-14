@@ -5,6 +5,7 @@ from PyQt6.QtWidgets import (QAbstractItemView, QDialog, QDialogButtonBox,
 from .actions import action_preview, plain_label
 from .models import ActionModel
 from .theme import primary
+from .widgets import PillDelegate, card_frame
 
 
 class ActivityDialog(QDialog):
@@ -14,12 +15,16 @@ class ActivityDialog(QDialog):
         super().__init__(parent)
         self.devices = []
         self.setWindowTitle('Message activity')
-        self.resize(1010, 650)
+        self.resize(1040, 660)
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 18, 20, 16)
+        layout.setSpacing(10)
         title = plain_label('Message activity')
         title.setObjectName('pageTitle')
         layout.addWidget(title)
-        layout.addWidget(plain_label('All saved Note, Link and SMS actions. Review the exact destination and content before approving. Pushbullet acceptance is not a delivery receipt.'))
+        sub = plain_label('All saved Note, Link and SMS actions. Review the exact destination and content before approving. Pushbullet acceptance is not a delivery receipt.')
+        sub.setObjectName('subtitle')
+        layout.addWidget(sub)
         self.model = ActionModel()
         self.view = QTableView()
         self.view.setAccessibleName('All saved message actions')
@@ -34,12 +39,24 @@ class ActivityDialog(QDialog):
         self.view.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
         self.view.setColumnHidden(4, True)
         self.view.setColumnHidden(5, True)
+        self.view.setItemDelegate(PillDelegate({1, 3}, parent=self.view))
+        left_card = card_frame()
+        left_layout = QVBoxLayout(left_card)
+        left_layout.setContentsMargins(8, 8, 8, 8)
+        left_layout.addWidget(self.view)
+
         self.detail = QTextBrowser()
+        self.detail.setObjectName('plainDetail')
         self.detail.setOpenExternalLinks(False)
         self.detail.setAccessibleName('Saved message action details')
+        right_card = card_frame()
+        right_layout = QVBoxLayout(right_card)
+        right_layout.setContentsMargins(18, 16, 18, 16)
+        right_layout.addWidget(self.detail)
+
         split = QSplitter()
-        split.addWidget(self.view)
-        split.addWidget(self.detail)
+        split.addWidget(left_card)
+        split.addWidget(right_card)
         split.setSizes([600, 400])
         layout.addWidget(split, 1)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)

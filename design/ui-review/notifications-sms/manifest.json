@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-11-14T08:40:31.288033+00:00",
+  "captured_at": "2026-11-14T09:37:00.390725+00:00",
   "data": "fictional fixtures only",
   "native_platform": "xcb",
   "capture": "Actual production Qt6 QWidget.grab on xcb",
@@ -13,99 +13,99 @@
       "title": "Notifications \u00b7 source filter and selected detail",
       "width": 1280,
       "height": 850,
-      "sha256": "016b71e0867c1b2add0edc1f1cb37709c3f4aee7cea660083605cf00e8550fe6"
+      "sha256": "e346f217a92b3e2ed9276686a38781621b028e5cc9fed8462e868473903f4ce5"
     },
     {
       "file": "02-sms-conversation.png",
       "title": "SMS \u00b7 received and sent bubbles in one conversation",
       "width": 1280,
       "height": 850,
-      "sha256": "1a04f33807d6892626e8885f36b8e4f0496f11127ff460750c515a6318ee760d"
+      "sha256": "d6cbedb27063fa044786a1e425d7cbb90b8dcf0712d12478a6cbaf32e25c80d2"
     },
     {
       "file": "03-sms-draft.png",
       "title": "SMS \u00b7 unsaved reply beneath the timeline",
       "width": 1280,
       "height": 850,
-      "sha256": "153de33ac21753e34f3e04950719d5fdc279ebaf34ba58934e49837ee4bbf061"
+      "sha256": "26be067b629d39949b161ee6a6922da1ef12a3ee4322080b0b2e49ed1fa492e1"
     },
     {
       "file": "04-sms-pending.png",
       "title": "SMS \u00b7 pending review request is distinct from sent history",
       "width": 1280,
       "height": 850,
-      "sha256": "9b8376f8a07467fbefcca48cf70fc1a8852e4e841396e549cff40ab66e1f0731"
+      "sha256": "87d55203cc42729051a6eac55c44eb950848aa4cc26e2c6878edd4f0f8757f2a"
     },
     {
       "file": "05-sms-uncertain.png",
       "title": "SMS \u00b7 uncertain request with no automatic retry",
       "width": 1280,
       "height": 850,
-      "sha256": "70a5b78006eff374622513c4af4d8d581356a7c79fd660861dd850727611b22e"
+      "sha256": "42e0f606235a394eeee793096c59cbcf9a1e1c4f2fdaf0be5e1ad1ec457d4d1a"
     },
     {
       "file": "06-sms-new-message.png",
       "title": "SMS \u00b7 inline new message with explicit recipient",
       "width": 1280,
       "height": 850,
-      "sha256": "1e096361dbde53178bdebce47fa4a49fc34622e193c41a7958c3ca73c87730fc"
+      "sha256": "0d9864450776cef42440778a680b843d25e282d751ef213ae437fb242797c94f"
     },
     {
       "file": "07-sms-new-draft.png",
       "title": "SMS \u00b7 new conversation draft with explicit phone and number",
       "width": 1280,
       "height": 850,
-      "sha256": "146d35a845c084932695b789102ade35d136296a02111d77a3e484a02199dcf4"
+      "sha256": "b04b07e6b87113552cdbd7d77539c5da550bf23056db62df4bd9793c9728e132"
     },
     {
       "file": "08-message-activity.png",
       "title": "Message activity \u00b7 all saved Note, Link and SMS states",
-      "width": 1010,
-      "height": 650,
-      "sha256": "f5b07169fc361fa76a4a73e8bf46753c27435f863c080d0916b3baa08a5a8e64"
+      "width": 1040,
+      "height": 660,
+      "sha256": "f50e0f30963c258b6695ce84609d5c53ad5913c7950bebc84779dc07f7735dd6"
     },
     {
       "file": "09-review-exact-message.png",
       "title": "Exact review \u00b7 destination, expiry and unchecked consent",
       "width": 680,
       "height": 730,
-      "sha256": "7e4a37438a74911b2efc2d6683eedbcf1318b2e28bef23cdff763d7149fbbfd9"
+      "sha256": "215c6b431d74fec2119194e265a7f89db63aeb0e4a34c337959c2848bccec68f"
     },
     {
       "file": "10-review-advanced.png",
       "title": "Exact review \u00b7 revision and fingerprint",
       "width": 680,
       "height": 730,
-      "sha256": "bb9e2ff7d12c946bf18b9e62807e3ea6f9ff068ac891bfd89a2bae5a2344ccb5"
+      "sha256": "e46978285dccdc2d0dd63e46597e865ae84fc649dffae9a7658bef449a15c35b"
     },
     {
       "file": "11-review-uncertain.png",
       "title": "Message activity \u00b7 uncertain action review",
       "width": 680,
       "height": 730,
-      "sha256": "2ceee85ab79177ec494c14332c0365a2cce5c52cab6d196c6c40296c769d3862"
+      "sha256": "b9eb3388342e701ff3e2da1cb68a882ddd0018bd71c6f1af142eb944c15d91a8"
     },
     {
       "file": "12-devices.png",
       "title": "Devices \u00b7 retained registration and encryption inspection",
       "width": 1280,
       "height": 850,
-      "sha256": "a2e5cbdbafb1b3c1f31eafbabec7a61e9e41ca0f972b0d57e1f4c57a043e2ea5"
+      "sha256": "b659d0d9983e0b4a15cf4a236c821866a6e6312baba9b9b657a5bdfdbdf0ff8a"
     },
     {
       "file": "13-compose-note.png",
       "title": "Notifications \u00b7 Note or Link saved for separate review",
       "width": 600,
       "height": 650,
-      "sha256": "bbc9b7d323b7f661ee31e7a421c0c784592b7f00becb9471455aa663dbec4332"
+      "sha256": "ab836bc4a5ee8bc060debf12c0cac3b1a1c364a6ee30273b3976e4627a714f7a"
     }
   ],
   "source_sha256": {
-    "src/pbdesk/desktop/app.py": "5c5a01b6487376376178b8f11ed552e20868df2c45b7fe076cd526bdb13cd0c4",
-    "src/pbdesk/desktop/chat.py": "8a7231bf45cee1c7674a443c5b1d1f4d74fc5907a599c8c2c00f5aaf8a1d12b8",
-    "src/pbdesk/desktop/activity.py": "03aae904e0c5721564c91457f8cec46f66bd0693691fa14ca81d610fd18d520e",
-    "src/pbdesk/desktop/actions.py": "f12d1a60e1238fc9150838c0b4a5d1d1b75a2fe8c2e18855f8c1b042c2bfba28",
+    "src/pbdesk/desktop/app.py": "0e19bc1f7a4645c0cedb4aa498fa895cf246e5716909d0f6c5ef246b60766f8f",
+    "src/pbdesk/desktop/chat.py": "1f0ca6aefc78d60c03b1cff831f24ffe73aa5f3ab7e2d522b764598b2548873b",
+    "src/pbdesk/desktop/activity.py": "f660da77cd48e60d1b55cfef99b8f6b95b52e16d00549f02b6ce1af3fe30cd73",
+    "src/pbdesk/desktop/actions.py": "89f407bd8920ba136856d99e5e039fe6180e410883cdf91c537ba0658ead105a",
     "src/pbdesk/desktop/worker.py": "6b44639c04c1e269126a107fe4b0840d12588942ad1711d9be9845f8587b8014",
-    "src/pbdesk/desktop/theme.py": "fd99d2d2e6b422b6b4291f3566edc889940cf2c082f7b7de42e8ec11296b23d5"
+    "src/pbdesk/desktop/theme.py": "94491417c7286474da538413fa6874fd8a7610961c2be4ad71f22765376454b2"
   }
 }

@@ -4,7 +4,7 @@ from datetime import datetime
 import re
 import uuid
 
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal
+from PyQt6.QtCore import QSize, Qt, QTimer, pyqtSignal
 from PyQt6 import sip
 from PyQt6.QtGui import QKeySequence, QShortcut, QTextOption
 from PyQt6.QtWidgets import (
@@ -15,19 +15,19 @@ from PyQt6.QtWidgets import (
 
 from .actions import PLAINTEXT_NOTICE, STATE_LABELS, plain_label
 from .theme import primary
+from .widgets import ConversationDelegate, card_frame, divider_line, make_icon
 
 E164 = re.compile(r"\+[1-9][0-9]{1,14}\Z")
 CHAT_STYLE = """
 QWidget#smsPage { background: #faf9f6; }
-QWidget#smsPage QScrollArea { background: #f2f5f1; border: 1px solid #d7dfda; border-radius: 6px; }
-QWidget#smsTimeline { background: #f2f5f1; }
-QFrame#smsIncoming { background: #ffffff; border: 1px solid #d8e0dc; border-radius: 12px; }
-QFrame#smsOutgoing { background: #d2ebe1; border: 1px solid #b0d9c9; border-radius: 12px; }
+QWidget#smsPage QScrollArea { background: #f7f8f5; border: none; border-radius: 0px; }
+QWidget#smsTimeline { background: #f7f8f5; }
+QFrame#smsIncoming { background: #ffffff; border: 1px solid #e2e8e4; border-radius: 10px; }
+QFrame#smsOutgoing { background: #dcf0e7; border: 1px solid #bfe0d1; border-radius: 10px; }
 QFrame#smsLocal { background: #fff6e5; border: 1px dashed #d3b77f; border-radius: 8px; }
 QWidget#smsPage QLabel#smsMeta { color: #637773; font-size: 12px; }
-QWidget#smsPage QLabel#smsDate { color: #657176; padding: 12px 0 5px; }
-QWidget#smsPage QLabel#smsHeading { color: #20383e; font-size: 20px; font-weight: 600; }
-QWidget#smsPage QListWidget::item { padding: 15px 12px; }
+QWidget#smsPage QLabel#smsDate { color: #5c6b6f; background: #e8ece6; border-radius: 10px; padding: 3px 12px; font-size: 11px; font-weight: 600; }
+QWidget#smsPage QLabel#smsHeading { color: #152a30; font-size: 18px; font-weight: 700; }
 """
 
 
@@ -131,28 +131,31 @@ class SmsPage(QWidget):
         self.setStyleSheet(CHAT_STYLE)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
         toolbar = QHBoxLayout()
-        toolbar.addWidget(plain_label("Phone"))
-        self.phone = QComboBox()
-        self.phone.setObjectName("smsPhoneSelector")
-        self.phone.setMinimumWidth(220)
-        self.phone.setAccessibleName("SMS phone")
-        self.phone.currentIndexChanged.connect(self._phone_changed)
-        toolbar.addWidget(self.phone)
+        toolbar.setContentsMargins(0, 0, 0, 0)
+        toolbar.setSpacing(8)
         self.sync_status = plain_label("Choose a phone to read SMS history.")
+        self.sync_status.setWordWrap(False)
         self.sync_status.setObjectName("smsMeta")
-        toolbar.addWidget(self.sync_status, 1)
+        toolbar.addWidget(self.sync_status)
         self.refresh_button = QPushButton("Refresh")
+        self.refresh_button.setObjectName("inlineLink")
+        self.refresh_button.setIcon(make_icon("refresh", "#4a5960", 14))
+        self.refresh_button.setIconSize(QSize(14, 14))
         self.refresh_button.clicked.connect(self.refresh)
         toolbar.addWidget(self.refresh_button)
-        self.new_button = QPushButton("+ New message")
+        toolbar.addStretch(1)
+        self.new_button = primary(QPushButton("+ New message"))
         self.new_button.clicked.connect(self.start_new)
         toolbar.addWidget(self.new_button)
         layout.addLayout(toolbar)
+
         splitter = QSplitter()
-        left = QWidget()
+        left = card_frame()
         left_layout = QVBoxLayout(left)
-        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setContentsMargins(12, 12, 12, 10)
+        left_layout.setSpacing(8)
         self.search = QLineEdit()
         self.search.setObjectName("smsThreadSearch")
         self.search.setPlaceholderText("Search conversations…")
@@ -160,24 +163,48 @@ class SmsPage(QWidget):
         self.search.setClearButtonEnabled(True)
         self.search.textChanged.connect(self._populate_threads)
         left_layout.addWidget(self.search)
+        self.phone = QComboBox()
+        self.phone.setObjectName("smsPhoneSelector")
+        self.phone.setAccessibleName("SMS phone")
+        self.phone.currentIndexChanged.connect(self._phone_changed)
+        left_layout.addWidget(self.phone)
+        left_layout.addWidget(divider_line())
         self.threads = QListWidget()
         self.threads.setObjectName("smsThreads")
         self.threads.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.threads.setWordWrap(True)
         self.threads.setTextElideMode(Qt.TextElideMode.ElideRight)
+        self.threads.setItemDelegate(ConversationDelegate(_time, self.threads))
         self.threads.setAccessibleName("SMS conversations")
         self.threads.currentItemChanged.connect(self._thread_changed)
-        left_layout.addWidget(self.threads)
+        left_layout.addWidget(self.threads, 1)
         splitter.addWidget(left)
-        right = QWidget()
+
+        right_outer = QWidget()
+        right_outer_layout = QVBoxLayout(right_outer)
+        right_outer_layout.setContentsMargins(0, 0, 0, 0)
+        right_outer_layout.setSpacing(6)
+
+        right = card_frame()
         right_layout = QVBoxLayout(right)
-        right_layout.setContentsMargins(12, 0, 0, 0)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(0)
+
+        chat_header = QWidget()
+        chat_header_layout = QHBoxLayout(chat_header)
+        chat_header_layout.setContentsMargins(18, 12, 18, 12)
+        header_titles = QVBoxLayout()
+        header_titles.setSpacing(2)
         self.heading = plain_label("Your SMS conversations")
         self.heading.setObjectName("smsHeading")
-        right_layout.addWidget(self.heading)
+        header_titles.addWidget(self.heading)
         self.context_label = plain_label("Select a conversation, or start a new message.")
         self.context_label.setObjectName("smsMeta")
-        right_layout.addWidget(self.context_label)
+        header_titles.addWidget(self.context_label)
+        chat_header_layout.addLayout(header_titles, 1)
+        right_layout.addWidget(chat_header)
+        right_layout.addWidget(divider_line())
+
         self.timeline = QScrollArea()
         self.timeline.setObjectName("smsTimelineScroll")
         self.timeline.setWidgetResizable(True)
@@ -185,11 +212,17 @@ class SmsPage(QWidget):
         self.timeline_content = QWidget()
         self.timeline_content.setObjectName("smsTimeline")
         self.timeline_layout = QVBoxLayout(self.timeline_content)
-        self.timeline_layout.setContentsMargins(16, 8, 16, 16)
-        self.timeline_layout.setSpacing(8)
+        self.timeline_layout.setContentsMargins(18, 12, 18, 16)
+        self.timeline_layout.setSpacing(10)
         self.timeline_layout.addStretch()
         self.timeline.setWidget(self.timeline_content)
         right_layout.addWidget(self.timeline, 1)
+        right_layout.addWidget(divider_line())
+
+        composer_wrap = QWidget()
+        composer_layout = QVBoxLayout(composer_wrap)
+        composer_layout.setContentsMargins(16, 12, 16, 12)
+        composer_layout.setSpacing(8)
         self.recipient = QLineEdit()
         self.recipient.setObjectName("smsRecipient")
         self.recipient.setPlaceholderText("+639171234567 — explicit E.164 recipient")
@@ -197,7 +230,7 @@ class SmsPage(QWidget):
         self.recipient.setMaxLength(32)
         self.recipient.textChanged.connect(self._recipient_changed)
         self.recipient.hide()
-        right_layout.addWidget(self.recipient)
+        composer_layout.addWidget(self.recipient)
         self.composer = QTextEdit()
         self.composer.setObjectName("smsComposer")
         self.composer.setAcceptRichText(False)
@@ -205,10 +238,10 @@ class SmsPage(QWidget):
         self.composer.setAccessibleName("SMS message draft")
         self.composer.setFixedHeight(86)
         self.composer.textChanged.connect(self._draft_changed)
-        right_layout.addWidget(self.composer)
+        composer_layout.addWidget(self.composer)
         self.feedback = plain_label()
         self.feedback.setObjectName("smsMeta")
-        right_layout.addWidget(self.feedback)
+        composer_layout.addWidget(self.feedback)
         row = QHBoxLayout()
         hint = plain_label("Ctrl+Enter to review · Enter for a new line")
         hint.setObjectName("smsMeta")
@@ -217,14 +250,17 @@ class SmsPage(QWidget):
         self.send_button.setObjectName("smsSendButton")
         self.send_button.clicked.connect(self.submit)
         row.addWidget(self.send_button)
-        right_layout.addLayout(row)
+        composer_layout.addLayout(row)
+        right_layout.addWidget(composer_wrap)
+
+        right_outer_layout.addWidget(right, 1)
         notice = plain_label(PLAINTEXT_NOTICE)
         notice.setObjectName("smsMeta")
-        right_layout.addWidget(notice)
-        splitter.addWidget(right)
+        right_outer_layout.addWidget(notice)
+        splitter.addWidget(right_outer)
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
-        splitter.setSizes([280, 700])
+        splitter.setSizes([340, 660])
         layout.addWidget(splitter, 1)
         self.send_shortcut = QShortcut(QKeySequence("Ctrl+Return"), self.composer)
         self.send_shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
@@ -462,6 +498,12 @@ class SmsPage(QWidget):
                 continue
             item = QListWidgetItem(title + "\n" + preview[:90].replace("\n", " "))
             item.setData(Qt.ItemDataRole.UserRole, key)
+            last_ts = records[-1].get("timestamp") if records else (thread["actions"][-1].get("created_at") if thread["actions"] else None)
+            item.setData(Qt.ItemDataRole.UserRole + 1, {
+                "title": title,
+                "preview": preview.replace("\n", " "),
+                "last_timestamp": last_ts,
+            })
             self.threads.addItem(item)
             if key == self.current_thread:
                 self.threads.setCurrentItem(item)
