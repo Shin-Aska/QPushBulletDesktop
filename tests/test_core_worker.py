@@ -21,6 +21,53 @@ class FakeLease:
     def close(self): pass
 
 
+@pytest.mark.parametrize('outcome, expected', [
+    (422, 'source_blocked'), (410, 'unavailable'), (413, 'too_large'),
+    (415, 'format'), (502, 'download_failed'), (504, 'timeout'),
+    ('timeout', 'timeout'), ('network', 'core_unavailable'),
+    ('invalid_image', 'decode_failed'), ('old_core', 'core_update'),
+])
+def test_image_failure_reports_reason_without_private_details_or_retry(tmp_path, monkeypatch, outcome, expected):
+    from pbdesk.media_errors import IMAGE_ERRORS
+    settings = Settings(tmp_path)
+    actual = httpx.Client
+    calls, results = [], []
+    def handle(request):
+        path = request.url.path
+        if path.endswith('/health'):
+            return httpx.Response(200, json=health_response(settings, request.headers, OLD, True))
+        assert request.headers.get('authorization', '').startswith('Bearer ')
+        if path.endswith('/capabilities'):
+            return httpx.Response(200, json={'account_id': 'acct',
+                'features': {'media_images': outcome != 'old_core'}})
+        assert path == '/api/v1/media/image'
+        calls.append(request)
+        assert dict(request.url.params) == {'account_id': 'acct', 'kind': 'contact', 'message_id': '7', 'index': '0'}
+        private = 'https://dl3.pushbulletusercontent.com/private-token/photo'
+        if outcome == 'timeout':
+            raise httpx.ReadTimeout(private, request=request)
+        if outcome == 'network':
+            raise httpx.ConnectError(private, request=request)
+        if outcome == 'invalid_image':
+            return httpx.Response(200, json={'account_id': 'acct', 'data': 'not-base64'})
+        return httpx.Response(outcome, json={'detail': private})
+    monkeypatch.setattr('pbdesk.desktop.worker.ClientLease', FakeLease)
+    monkeypatch.setattr('pbdesk.desktop.worker.httpx.Client', lambda **kwargs: actual(**kwargs, transport=httpx.MockTransport(handle)))
+    worker = CoreWorker(settings)
+    worker.result.connect(lambda value: (results.append(value), worker.stop()))
+    worker.request('media_image', {'account_id': 'acct', 'kind': 'contact', 'message_id': 7,
+        'index': 0, 'revision': 'retained-url-hash', 'request_id': 'image-attempt'})
+    worker.run()
+    assert len(results) == 1 and len(calls) == (0 if outcome == 'old_core' else 1)
+    result = results[0]
+    assert result['command'] == 'media_image' and result['request_id'] == 'image-attempt'
+    assert result['account_id'] == 'acct' and result['error_code'] == expected
+    assert result['error'] == IMAGE_ERRORS[expected]
+    assert 'private-token' not in repr(result)
+    if isinstance(outcome, int):
+        assert result['status'] == outcome
+
+
 def test_core_commands_verify_identity_strip_patch_id_and_coalesce_restart(tmp_path, monkeypatch):
     settings = Settings(tmp_path)
     actual = httpx.Client

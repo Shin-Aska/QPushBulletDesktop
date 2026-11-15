@@ -287,7 +287,7 @@ def test_media_result_feedback_never_changes_global_command_errors(isolated, qtb
     request_id = window.item_image.request_id
     worker.result.emit({'command': 'media_image', 'request_id': request_id,
                         'account_id': 'fictional', 'error': 'Fictional attachment expired'})
-    assert 'unavailable or expired' in window.item_image.status.text()
+    assert 'could not be loaded' in window.item_image.status.text()
     assert window.item_image.load_button.isEnabled()
     assert not window.command_error and not window.error.isVisible()
     worker.result.emit({'command': 'refresh_devices', 'error': 'Device refresh failed. Try again.'})

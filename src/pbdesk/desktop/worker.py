@@ -7,6 +7,7 @@ import httpx
 from PyQt6.QtCore import QThread, pyqtSignal
 from pbdesk.config import Settings
 from pbdesk.credentials import service_token, health_headers, verify_health
+from pbdesk.media_errors import IMAGE_ERRORS
 from pbdesk.services.client_lifecycle import ClientLease
 
 CORE_COMMANDS = {"core_settings", "core_settings_update", "core_restart"}
@@ -23,6 +24,24 @@ class CoreWorker(QThread):
     failed = pyqtSignal(str)
     result = pyqtSignal(dict)
     stopped_all = pyqtSignal()
+
+    @staticmethod
+    def _media_error(exc):
+        status = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
+        if isinstance(exc, AccountChangedError):
+            code = 'account_changed'
+        elif isinstance(exc, httpx.TimeoutException):
+            code = 'timeout'
+        elif isinstance(exc, httpx.HTTPStatusError):
+            code = {401: 'access_denied', 403: 'access_denied', 404: 'not_found',
+                409: 'account_changed', 410: 'unavailable', 413: 'too_large',
+                415: 'format', 422: 'source_blocked', 502: 'download_failed',
+                504: 'timeout'}.get(status, 'unknown')
+        elif isinstance(exc, httpx.HTTPError):
+            code = 'core_unavailable'
+        else:
+            code = 'decode_failed'
+        return {'error_code': code, 'error': IMAGE_ERRORS[code], 'status': status}
 
     def __init__(self, settings: Settings, demo=False):
         super().__init__()
@@ -300,7 +319,9 @@ class CoreWorker(QThread):
                         if capabilities.get('account_id') != value.get('account_id'):
                             raise AccountChangedError('Account changed')
                         if not capabilities.get('features', {}).get('media_images'):
-                            raise ValueError('Core image previews are unavailable')
+                            self.result.emit({**origin, 'command': command, 'request_id': request_id,
+                                'error_code': 'core_update', 'error': IMAGE_ERRORS['core_update']})
+                            continue
                         params = {key: value[key] for key in ('account_id', 'kind', 'item_id', 'message_id', 'index') if key in value}
                         response = client.get('/api/v1/media/image', params=params, headers=authorization, timeout=httpx.Timeout(14, connect=2))
                         response.raise_for_status()
@@ -317,9 +338,9 @@ class CoreWorker(QThread):
                             raise ValueError('Image raster unavailable')
                         self.result.emit({**origin, 'command': command, 'request_id': request_id,
                             'data': {'account_id': data.get('account_id'), 'image': image}})
-                    except (httpx.HTTPError, ValueError, KeyError):
+                    except (httpx.HTTPError, ValueError, KeyError) as exc:
                         self.result.emit({**origin, 'command': command, 'request_id': request_id,
-                            'error': 'Image unavailable or expired. Refresh history, or retry loading.'})
+                            **self._media_error(exc)})
                     continue
                 required = ('sms_history' if command == 'refresh_sms' else 'device_management' if command in {'add_device', 'rename_device', 'remove_device', 'encryption', 'test_encryption', 'resolve_registration'} else None)
                 if required and not self.features.get(required):

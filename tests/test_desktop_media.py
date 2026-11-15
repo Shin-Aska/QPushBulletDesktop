@@ -138,6 +138,49 @@ def test_remote_contact_is_explicit_and_group_never_uses_one_members_photo(qtbot
     assert widget.avatar.pixmap().toImage().pixelColor(16, 16) != QColor('#d32f2f')
 
 
+def test_loaded_contact_photo_stays_in_list_across_navigation_and_refresh(qtbot):
+    recipients = [{'address': '+15550000001', 'image_url': 'https://dl3.pushbulletusercontent.com/synthetic/photo'}]
+    records = [message(recipients=recipients), message(2, conversation='two')]
+    widget, worker = page(qtbot, records)
+    def row(key):
+        return next(widget.threads.item(index) for index in range(widget.threads.count())
+            if widget.threads.item(index).data(Qt.ItemDataRole.UserRole) == ('history', key))
+    def photo_present():
+        return row('one').icon().pixmap(36, 36).toImage().pixelColor(16, 16) == QColor('#d32f2f')
+    widget.threads.setCurrentItem(row('one'))
+    widget.avatar_remote.load()
+    request = worker.requests[-1][1]
+    worker.result.emit({'command': 'media_image', 'request_id': request['request_id'], 'account_id': 'acct',
+        'data': {'account_id': 'acct', 'data': encoded()}})
+    assert photo_present()
+    widget.threads.setCurrentItem(row('two'))
+    assert photo_present()
+    widget.apply_snapshot(snapshot(records))
+    widget._refresh_theme()
+    assert photo_present()
+    worker._media_cache.clear()  # Full-size attachment previews may be evicted independently.
+    widget.threads.setCurrentItem(row('one'))
+    assert photo_present() and widget.avatar_remote.isHidden()
+    assert widget.avatar.pixmap().toImage().pixelColor(16, 16) == QColor('#d32f2f')
+    widget.threads.setCurrentItem(row('two'))
+    widget.search.setText('Message 2')
+    widget.search.clear()
+    assert photo_present()
+    records.append(message(3, recipients=recipients))
+    widget.apply_snapshot(snapshot(records))
+    widget.threads.setCurrentItem(row('one'))
+    assert photo_present()
+    assert widget.avatar.pixmap().toImage().pixelColor(16, 16) == QColor('#d32f2f')
+    assert widget.avatar_remote.isHidden()
+    assert len([command for command, _ in worker.requests if command == 'media_image']) == 1
+    changed = [message(3, recipients=[{**recipients[0], 'image_url': 'https://dl3.pushbulletusercontent.com/synthetic/changed'}])]
+    widget.apply_snapshot(snapshot(changed))
+    assert not photo_present()
+    assert widget.avatar_remote.isVisible()
+    widget.apply_snapshot(snapshot([message(account='other', recipients=recipients)], account='other'))
+    assert not photo_present() and widget.avatar_remote.isVisible()
+
+
 def test_loading_image_above_view_keeps_visible_message_anchor(qtbot):
     records = [message(index + 1, body='Synthetic text ' * 8,
         image_urls=['https://static.pushbullet.com/fixture.png'] if index == 0 else []) for index in range(20)]
@@ -171,7 +214,7 @@ def test_remote_contact_error_survives_polling_and_can_retry(qtbot):
     worker.result.emit({'command': 'media_image', 'request_id': request['request_id'],
         'account_id': 'acct', 'error': 'Synthetic failure'})
     error = remote.status.text()
-    assert 'unavailable' in error
+    assert 'could not be loaded' in error
     assert remote.load_button.text() == 'Retry image'
     widget.apply_snapshot(snapshot(records))
     assert remote.status.text() == error
@@ -187,3 +230,20 @@ def test_remote_contact_error_survives_polling_and_can_retry(qtbot):
     assert remote.isHidden()
     assert widget.avatar.pixmap().toImage().pixelColor(16, 16) == QColor('#d32f2f')
     assert widget.composer.toPlainText() == 'Preserved draft'
+
+
+def test_remote_image_shows_fixed_error_reason_without_reflecting_details(qtbot):
+    from pbdesk.media_errors import IMAGE_ERRORS
+    widget, worker = page(qtbot, [message(recipients=[{'address': '+15550000001',
+        'image_url': 'https://dl3.pushbulletusercontent.com/synthetic/contact.png'}])])
+    remote = widget.avatar_remote
+    for code in ('source_blocked', 'download_failed', 'format', 'timeout', 'decode_failed', 'unavailable'):
+        remote.load()
+        worker.result.emit({'command': 'media_image', 'request_id': remote.request_id, 'account_id': 'acct',
+            'error_code': code, 'error': 'Private URL and provider response must not be shown'})
+        assert remote.status.text() == IMAGE_ERRORS[code]
+        assert remote.load_button.isEnabled() and remote.load_button.text() == 'Retry image'
+    remote.load()
+    worker.result.emit({'command': 'media_image', 'request_id': remote.request_id, 'account_id': 'acct',
+        'error_code': {'invalid': 'Private URL'}, 'error': 'Private URL'})
+    assert remote.status.text() == IMAGE_ERRORS['unknown']

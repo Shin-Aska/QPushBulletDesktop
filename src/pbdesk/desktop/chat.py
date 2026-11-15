@@ -1,4 +1,5 @@
 """Native SMS conversations. Phone history and local send requests stay distinct."""
+from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import datetime
 from html import escape
@@ -8,9 +9,9 @@ import weakref
 
 from PyQt6.QtCore import QSize, Qt, QTimer, pyqtSignal
 from PyQt6 import sip
-from PyQt6.QtGui import QKeySequence, QShortcut, QTextOption
+from PyQt6.QtGui import QIcon, QKeySequence, QPixmap, QShortcut, QTextOption
 from PyQt6.QtWidgets import (
-    QApplication, QComboBox, QFrame, QHBoxLayout, QLabel, QLineEdit, QListWidget,
+    QAbstractItemView, QApplication, QComboBox, QFrame, QHBoxLayout, QLabel, QLineEdit, QListWidget,
     QListWidgetItem, QPushButton, QScrollArea, QSizePolicy, QSplitter,
     QTextEdit, QVBoxLayout, QWidget,
 )
@@ -111,6 +112,7 @@ class SmsPage(QWidget):
         self.selection_request_id = None
         self.current_thread = None
         self._threads = {}
+        self._contact_icons = OrderedDict()
         self._drafts = {}
         self._new_recipients = {}
         self._contexts = {}
@@ -166,6 +168,7 @@ class SmsPage(QWidget):
         self.threads.setObjectName("smsThreads")
         self.threads.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.threads.setWordWrap(True)
+        self.threads.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
         self.threads.setTextElideMode(Qt.TextElideMode.ElideRight)
         self.threads.setItemDelegate(ConversationDelegate(_time, self.threads))
         self.threads.setAccessibleName("SMS conversations")
@@ -333,8 +336,19 @@ class SmsPage(QWidget):
     def _remote_avatar_loaded(self, image):
         if self._avatar_key != self._key():
             return
-        from PyQt6.QtGui import QIcon, QPixmap
-        icon = QIcon(QPixmap.fromImage(image))
+        reference = self.avatar_remote.reference
+        if reference.get('kind') != 'contact':
+            return
+        # Retain only small native avatars independently of the full-image cache.
+        # Account + URL revision also survives a new message with the same photo.
+        key = (reference['account_id'], reference['revision'])
+        pixmap = QPixmap.fromImage(image).scaled(36, 36, Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation)
+        icon = QIcon(pixmap)
+        self._contact_icons[key] = icon
+        self._contact_icons.move_to_end(key)
+        while len(self._contact_icons) > 256:
+            self._contact_icons.popitem(last=False)
         self.avatar.setPixmap(icon.pixmap(36, 36))
         for index in range(self.threads.count()):
             item = self.threads.item(index)
@@ -342,8 +356,7 @@ class SmsPage(QWidget):
                 item.setIcon(icon)
         self.avatar_remote.hide()
 
-    def _sync_remote_avatar(self, thread):
-        self._avatar_key = self._key()
+    def _contact_reference(self, thread):
         recipients = self._thread_recipients(thread)
         reference = None
         if len(recipients) == 1 and recipients[0].get('image_url') and inline_image(recipients[0].get('thumbnail')) is None:
@@ -352,11 +365,31 @@ class SmsPage(QWidget):
             if message and message.get('id') is not None:
                 reference = {'account_id': self.account_id, 'kind': 'contact', 'message_id': message['id'],
                     'index': 0, 'revision': attachment_revision(recipients[0]['image_url'])}
+        return reference
+
+    def _cached_contact_icon(self, reference):
+        if not reference:
+            return None
+        key = (reference['account_id'], reference['revision'])
+        icon = self._contact_icons.get(key)
+        if icon is not None:
+            self._contact_icons.move_to_end(key)
+        return icon
+
+    def _thread_icon(self, thread, title):
+        cached = self._cached_contact_icon(self._contact_reference(thread))
+        return cached if cached is not None else contact_icon(self._thread_recipients(thread), title)
+
+    def _sync_remote_avatar(self, thread):
+        self._avatar_key = self._key()
+        reference = self._contact_reference(thread)
         changed = reference != self.avatar_remote.reference
         self.avatar_remote.set_reference(reference)
         if reference:
             if self.avatar_remote.image is not None:
                 self._remote_avatar_loaded(self.avatar_remote.image)
+            elif self._cached_contact_icon(reference) is not None:
+                self.avatar_remote.hide()
             elif changed:
                 self.avatar_remote.status.setText('Contact image · load to display')
                 self.avatar_remote.load_button.setText('Load contact image')
@@ -369,9 +402,9 @@ class SmsPage(QWidget):
             row = self.threads.item(index)
             key = row.data(Qt.ItemDataRole.UserRole)
             thread = self._threads.get(key, {})
-            row.setIcon(contact_icon(self._thread_recipients(thread), self._thread_title(key, thread)))
+            row.setIcon(self._thread_icon(thread, self._thread_title(key, thread)))
         thread = self._threads.get(self.current_thread, {})
-        self.avatar.setPixmap(contact_icon(self._thread_recipients(thread), self.heading.text()).pixmap(36, 36))
+        self.avatar.setPixmap(self._thread_icon(thread, self.heading.text()).pixmap(36, 36))
         self._sync_remote_avatar(thread)
         self.threads.viewport().update()
 
@@ -470,6 +503,7 @@ class SmsPage(QWidget):
         self.selection_request_id = None
         self.current_thread = None
         self._threads = {}
+        self._contact_icons.clear()
         self._loading = True
         self.composer.clear()
         self.recipient.clear()
@@ -590,9 +624,14 @@ class SmsPage(QWidget):
         return name or thread.get("recipient") or (", ".join(addresses) if addresses else "Unknown sender")
 
     def _populate_threads(self):
-        old_scroll = self.threads.verticalScrollBar().value()
-        self.threads.blockSignals(True)
-        self.threads.clear()
+        scroll = self.threads.verticalScrollBar()
+        old_scroll = scroll.value()
+        anchor = self.threads.itemAt(0, 0)
+        anchor_key = anchor.data(Qt.ItemDataRole.UserRole) if anchor else None
+        anchor_top = self.threads.visualItemRect(anchor).top() if anchor else 0
+        rows = {self.threads.item(index).data(Qt.ItemDataRole.UserRole): self.threads.item(index)
+            for index in range(self.threads.count())}
+        desired = []
         query = self.search.text().casefold()
         def recent(entry):
             return max([_order(item.get("timestamp")) for item in entry[1]["messages"]] +
@@ -604,20 +643,44 @@ class SmsPage(QWidget):
             searchable = title + " " + " ".join(str(item.get("body", "")) for item in records)
             if query and query not in searchable.casefold():
                 continue
-            item = QListWidgetItem(title + "\n" + preview[:90].replace("\n", " "))
-            item.setData(Qt.ItemDataRole.UserRole, key)
-            item.setIcon(contact_icon(self._thread_recipients(thread), title))
             last_ts = records[-1].get("timestamp") if records else (thread["actions"][-1].get("created_at") if thread["actions"] else None)
-            item.setData(Qt.ItemDataRole.UserRole + 1, {
+            desired.append((key, title + "\n" + preview[:90].replace("\n", " "), self._thread_icon(thread, title), {
                 "title": title,
                 "preview": preview.replace("\n", " "),
                 "last_timestamp": last_ts,
-            })
-            self.threads.addItem(item)
-            if key == self.current_thread:
-                self.threads.setCurrentItem(item)
-        self.threads.blockSignals(False)
-        self.threads.verticalScrollBar().setValue(old_scroll)
+            }))
+        blocked = self.threads.blockSignals(True)
+        try:
+            retained = {}
+            for position, (key, text, icon, metadata) in enumerate(desired):
+                item = rows.pop(key, None)
+                if item is None:
+                    item = QListWidgetItem()
+                    item.setData(Qt.ItemDataRole.UserRole, key)
+                    self.threads.insertItem(position, item)
+                elif self.threads.row(item) != position:
+                    self.threads.takeItem(self.threads.row(item))
+                    self.threads.insertItem(position, item)
+                if item.text() != text:
+                    item.setText(text)
+                item.setIcon(icon)
+                if item.data(Qt.ItemDataRole.UserRole + 1) != metadata:
+                    item.setData(Qt.ItemDataRole.UserRole + 1, metadata)
+                retained[key] = item
+            for item in rows.values():
+                self.threads.takeItem(self.threads.row(item))
+            current = retained.get(self.current_thread)
+            if self.threads.currentItem() is not current:
+                self.threads.setCurrentItem(current)
+            # Complete Qt's pending row layout before restoring the visible anchor.
+            self.threads.doItemsLayout()
+            if anchor_key in retained:
+                new_top = self.threads.visualItemRect(retained[anchor_key]).top()
+                scroll.setValue(scroll.value() + new_top - anchor_top)
+            else:
+                scroll.setValue(old_scroll)
+        finally:
+            self.threads.blockSignals(blocked)
 
     def _thread_changed(self, item, previous=None):
         if item is not None:
@@ -630,7 +693,14 @@ class SmsPage(QWidget):
         self.current_thread = key
         self.recipient.hide()
         self._load_draft()
-        self._populate_threads()
+        selected = next((self.threads.item(index) for index in range(self.threads.count())
+            if self.threads.item(index).data(Qt.ItemDataRole.UserRole) == key), None)
+        if self.threads.currentItem() is not selected:
+            blocked = self.threads.blockSignals(True)
+            try:
+                self.threads.setCurrentItem(selected)
+            finally:
+                self.threads.blockSignals(blocked)
         self._render_timeline(new_context=True)
 
     def start_new(self):
@@ -804,7 +874,7 @@ class SmsPage(QWidget):
         is_new = bool(self.current_thread and self.current_thread[0] == "new")
         self.recipient.setVisible(is_new)
         self.heading.setText("New message" if is_new else self._thread_title(self.current_thread, thread) if self.current_thread in self._threads else "Your SMS conversations")
-        self.avatar.setPixmap(contact_icon(self._thread_recipients(thread), self.heading.text()).pixmap(36, 36))
+        self.avatar.setPixmap(self._thread_icon(thread, self.heading.text()).pixmap(36, 36))
         self._sync_remote_avatar(thread)
         route = thread.get("recipient")
         self.context_label.setText("Enter the complete phone number, including + and country code." if is_new else

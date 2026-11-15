@@ -60,6 +60,38 @@ def page(qtbot, messages=None):
     return widget, worker
 
 
+def test_thread_click_and_refresh_keep_scrolled_list_anchor(qtbot):
+    from PyQt6.QtCore import QPoint
+    records = [message(index + 1, conversation=f'thread-{index}', name=f'Contact {index}')
+        for index in range(60)]
+    widget, worker = page(qtbot, records)
+    threads = widget.threads
+    scroll = threads.verticalScrollBar()
+    assert scroll.maximum() > 0
+    scroll.setValue(scroll.maximum() // 2)
+    qtbot.wait(20)
+    anchor = threads.itemAt(10, 0)
+    anchor_key = anchor.data(Qt.ItemDataRole.UserRole)
+    anchor_top = threads.visualItemRect(anchor).top()
+    target = threads.itemAt(QPoint(10, threads.viewport().height() // 2))
+    selected = target.data(Qt.ItemDataRole.UserRole)
+    position = scroll.value()
+    qtbot.mouseClick(threads.viewport(), Qt.MouseButton.LeftButton,
+        pos=threads.visualItemRect(target).center())
+    qtbot.wait(30)
+    assert widget.current_thread == selected
+    assert scroll.value() == position
+    widget.apply_snapshot(snapshot(records))
+    qtbot.wait(30)
+    assert scroll.value() == position
+    widget.apply_snapshot(snapshot(records + [message(61, conversation='newest', name='New contact')]))
+    qtbot.wait(30)
+    first = threads.itemAt(10, 0)
+    assert first.data(Qt.ItemDataRole.UserRole) == anchor_key
+    assert threads.visualItemRect(first).top() == anchor_top
+    assert threads.currentItem().data(Qt.ItemDataRole.UserRole) == selected
+
+
 def create_request(widget, worker, body="Hello"):
     widget.composer.setPlainText(body)
     widget.submit()

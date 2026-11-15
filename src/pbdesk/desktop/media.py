@@ -8,6 +8,7 @@ import uuid
 from PyQt6.QtCore import QByteArray, QBuffer, QIODevice, QSize, Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QFont, QIcon, QImage, QImageReader, QPainter, QPixmap
 from PyQt6.QtWidgets import QDialog, QLabel, QPushButton, QVBoxLayout, QWidget, QSizePolicy
+from pbdesk.media_errors import IMAGE_ERRORS
 
 from .theme import colors
 from .widgets import make_icon
@@ -198,7 +199,9 @@ class RemoteImage(QWidget):
                 except (ValueError, binascii.Error):
                     pass
         if image is None:
-            self.status.setText('Image unavailable or expired. Refresh history, or retry loading.')
+            code = result.get('error_code')
+            message = IMAGE_ERRORS.get(code, IMAGE_ERRORS['unknown']) if isinstance(code, str) else IMAGE_ERRORS['unknown']
+            self.status.setText(message)
             self.load_button.setText('Retry image')
             return
         cache = self.worker._media_cache
