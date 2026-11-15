@@ -7,9 +7,10 @@ import httpx
 from fastapi import Depends, HTTPException
 
 MAX_IMAGE_BYTES = 4 * 1024 * 1024
-# Exact origins in Pushbullet's public client and documented image examples.
+# Exact origins in Pushbullet's public client, documented image examples,
+# and retained provider contact metadata (the numbered dl3 host).
 # See docs/sms-history-protocol.md and its pinned public-client source.
-MEDIA_HOSTS = frozenset({'dl.pushbulletusercontent.com', 'static.pushbullet.com',
+MEDIA_HOSTS = frozenset({'dl.pushbulletusercontent.com', 'dl3.pushbulletusercontent.com', 'static.pushbullet.com',
     'pushbullet.imgix.net', *(f'lh{n}.googleusercontent.com' for n in range(1, 7))})
 RASTER_TYPES = frozenset({'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/bmp'})
 

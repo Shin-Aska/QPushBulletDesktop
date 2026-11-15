@@ -154,3 +154,36 @@ def test_loading_image_above_view_keeps_visible_message_anchor(qtbot):
     qtbot.wait(80)
     assert widget._anchor()[0] == anchor[0]
     assert abs(widget._anchor()[1] - anchor[1]) <= 3
+
+
+def test_remote_contact_error_survives_polling_and_can_retry(qtbot):
+    records = [message(recipients=[{'address': '+15550000001',
+        'image_url': 'https://dl3.pushbulletusercontent.com/synthetic/contact.png'}])]
+    widget, worker = page(qtbot, records)
+    widget.composer.setPlainText('Preserved draft')
+    remote = widget.avatar_remote
+    qtbot.mouseClick(remote.load_button, Qt.MouseButton.LeftButton)
+    request = worker.requests[-1][1]
+    widget.apply_snapshot(snapshot(records))
+    assert remote.request_id == request['request_id']
+    assert remote.status.text() == 'Loading image…'
+    assert not remote.load_button.isEnabled()
+    worker.result.emit({'command': 'media_image', 'request_id': request['request_id'],
+        'account_id': 'acct', 'error': 'Synthetic failure'})
+    error = remote.status.text()
+    assert 'unavailable' in error
+    assert remote.load_button.text() == 'Retry image'
+    widget.apply_snapshot(snapshot(records))
+    assert remote.status.text() == error
+    assert remote.load_button.text() == 'Retry image'
+    assert remote.load_button.isEnabled()
+    assert len([command for command, _ in worker.requests if command == 'media_image']) == 1
+    qtbot.mouseClick(remote.load_button, Qt.MouseButton.LeftButton)
+    retry = worker.requests[-1][1]
+    assert retry['request_id'] != request['request_id']
+    worker.result.emit({'command': 'media_image', 'request_id': retry['request_id'], 'account_id': 'acct',
+        'data': {'account_id': 'acct', 'data': encoded()}})
+    widget.apply_snapshot(snapshot(records))
+    assert remote.isHidden()
+    assert widget.avatar.pixmap().toImage().pixelColor(16, 16) == QColor('#d32f2f')
+    assert widget.composer.toPlainText() == 'Preserved draft'

@@ -73,10 +73,27 @@ def test_media_migration_retains_identity_history_keys_ciphertext_and_accounts(t
 
 @pytest.mark.parametrize('url', ['http://static.pushbullet.com/x', 'https://evil.example/x',
     'https://static.pushbullet.com.evil.example/x', 'https://u:p@static.pushbullet.com/x',
+    'https://dl3.pushbulletusercontent.com.evil.example/x', 'https://dl4.pushbulletusercontent.com/x',
+    'http://dl3.pushbulletusercontent.com/x', 'https://dl3.pushbulletusercontent.com:444/x',
     'https://static.pushbullet.com:444/x', 'https://127.0.0.1/x', 'file:///tmp/x',
     'https://static.pushbullet.com/x#fragment', 'https://static.pushbullet.com/\nx'])
 def test_media_url_guards(url):
     assert not safe_media_url(url)
+
+
+def test_numbered_pushbullet_image_host_is_fetched_without_credentials():
+    async def run():
+        url = 'https://dl3.pushbulletusercontent.com/synthetic/contact.png'
+        requests = []
+        def handler(request):
+            requests.append(request)
+            assert str(request.url) == url
+            assert not any(key in request.headers for key in ('authorization', 'access-token', 'cookie'))
+            return httpx.Response(200, content=b'synthetic-raster', headers={'content-type': 'image/png'})
+        result = await fetch_image(url, httpx.MockTransport(handler))
+        assert result['data'] == base64.b64encode(b'synthetic-raster').decode()
+        assert len(requests) == 1
+    asyncio.run(run())
 
 
 def test_media_fetch_has_no_credentials_no_redirects_and_bounded_bytes():

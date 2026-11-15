@@ -352,11 +352,12 @@ class SmsPage(QWidget):
             if message and message.get('id') is not None:
                 reference = {'account_id': self.account_id, 'kind': 'contact', 'message_id': message['id'],
                     'index': 0, 'revision': attachment_revision(recipients[0]['image_url'])}
+        changed = reference != self.avatar_remote.reference
         self.avatar_remote.set_reference(reference)
         if reference:
             if self.avatar_remote.image is not None:
                 self._remote_avatar_loaded(self.avatar_remote.image)
-            elif not self.avatar_remote.request_id:
+            elif changed:
                 self.avatar_remote.status.setText('Contact image · load to display')
                 self.avatar_remote.load_button.setText('Load contact image')
 
