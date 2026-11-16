@@ -211,7 +211,7 @@ class ConversationDelegate(QStyledItemDelegate):
         self._time = time_fn
 
     def sizeHint(self, option, index):
-        return QSize(max(option.rect.width(), 220), 82)
+        return QSize(max(option.rect.width(), 220), 104)
 
     def paint(self, painter, option, index):
         row = index.data(Qt.ItemDataRole.UserRole + 1)
@@ -252,10 +252,16 @@ class ConversationDelegate(QStyledItemDelegate):
         title_elided = title_fm.elidedText(title, Qt.TextElideMode.ElideRight, max(40, inner_w - time_w - 6))
         painter.drawText(QRect(rect.left() + pad_x, rect.top() + pad_y, max(40, inner_w - time_w - 6), 20), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, title_elided)
 
+        device = row.get('device')
+        if device:
+            painter.setFont(meta_font)
+            painter.setPen(QColor(c['text']))
+            device_text = QFontMetrics(meta_font).elidedText(str(device), Qt.TextElideMode.ElideRight, max(1, inner_w))
+            painter.drawText(QRect(rect.left() + pad_x, rect.top() + pad_y + 23, inner_w, 20), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, device_text)
         preview = ' '.join((row.get('preview') or '').split())
         painter.setFont(body_font)
         painter.setPen(QColor(c['muted']))
-        painter.drawText(QRect(rect.left() + pad_x, rect.top() + pad_y + 24, inner_w, 36), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop | Qt.TextFlag.TextWordWrap, preview)
+        painter.drawText(QRect(rect.left() + pad_x, rect.top() + pad_y + (47 if device else 24), inner_w, 36), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop | Qt.TextFlag.TextWordWrap, preview)
         painter.restore()
 
 

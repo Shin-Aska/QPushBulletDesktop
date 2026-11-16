@@ -23,6 +23,10 @@ class AccountChangedError(ValueError):
     """A queued action belongs to a different credential account."""
 
 
+class PollStopped(Exception):
+    """Stop a multi-device cached read between local requests."""
+
+
 class CoreWorker(QThread):
     history_security = pyqtSignal(dict)
     snapshot = pyqtSignal(dict)
@@ -90,15 +94,59 @@ class CoreWorker(QThread):
             self.account_id = account_id
             self.account_known = True
         if changed:
+            self.device_id = None
+            self.device_request_id = None
             # Clear prior-account client memory even if the next data GET fails.
-            self.snapshot.emit({'capabilities': data, 'devices': {'account_id': account_id, 'devices': []}, 'items': [], 'actions': []})
+            self.snapshot.emit({'capabilities': data, 'devices': {'account_id': account_id, 'devices': []},
+                'items': [], 'actions': [], 'sms_by_device': {}, 'sms': None,
+                'sms_device_id': None, 'sms_request_id': None})
 
     @staticmethod
     def _consistent_account(capabilities, *parts):
         if 'account_id' not in capabilities:
             return True  # Older cores have no new private-history surfaces.
         account_id = capabilities['account_id']
-        return all(part is None or ('account_id' in part and part['account_id'] == account_id) for part in parts)
+        return all(part is None or ('account_id' in part and part['account_id'] == account_id
+            and all('account_id' not in row or row['account_id'] == account_id
+                for key in ('devices', 'items', 'actions', 'messages') for row in part.get(key, [])))
+            for part in parts)
+
+    def _sms_targets(self, devices, actions, selected_device, account_id):
+        if selected_device:
+            return [selected_device]
+        targets = {row['id'] for row in devices['devices']
+            if row.get('id') and (row.get('can_sms') or row.get('history', {}).get('count'))}
+        targets.update(device for device, sms in self.sms_cache.items()
+            if sms.get('account_id') == account_id)
+        targets.update(row['device_id'] for row in actions['actions']
+            if row.get('kind') == 'sms' and row.get('device_id'))
+        return sorted(targets)
+
+    def _read_sms(self, get, targets, account_id):
+        """Read the existing per-phone cache API; failures preserve that phone only."""
+        snapshots = {}
+        for device in targets:
+            if self.stop_event.is_set():
+                raise PollStopped()
+            try:
+                snapshots[device] = get('/api/v1/sms', params={'device_id': device})
+            except (httpx.HTTPError, ValueError, KeyError):
+                previous = self.sms_cache.get(device, {})
+                if previous.get('account_id') != account_id:
+                    previous = {'account_id': account_id, 'messages': [],
+                        'sync': {'state': 'idle', 'last_success_at': None, 'error': None, 'has_more': False}}
+                snapshots[device] = {**previous,
+                    'read_error': 'Cached SMS could not be read. Retained messages are shown; retry after reconnection.'}
+        return snapshots
+
+    @classmethod
+    def _consistent_sms(cls, capabilities, snapshots):
+        if not cls._consistent_account(capabilities, *snapshots.values()):
+            return False
+        account_id = capabilities.get('account_id')
+        return all(('account_id' not in row or row['account_id'] == account_id)
+            and ('device_id' not in row or row['device_id'] == device)
+            for device, sms in snapshots.items() for row in sms.get('messages', []))
 
     def _identity(self, client):
         proof = health_headers(self.settings, "desktop")
@@ -170,7 +218,7 @@ class CoreWorker(QThread):
                         if self._pending_preferences.get(name) == field:
                             self._pending_preferences.pop(name, None)
             return data
-        if command in {"create_action", "edit_action", "approve_action", "cancel_action"} and "account_id" in value:
+        if command in {"create_action", "edit_action", "approve_action", "cancel_action", "refresh_sms"} and "account_id" in value:
             # Credentials may reload without changing the core instance identity.
             response = client.get("/api/v1/capabilities", headers=headers)
             response.raise_for_status()
@@ -178,6 +226,8 @@ class CoreWorker(QThread):
             self._account(capabilities)
             self.features = capabilities.get("features", {})
             if capabilities.get("account_id") != value["account_id"]:
+                if command == 'refresh_sms':
+                    raise AccountChangedError('The account changed before SMS refresh. Review the current devices before refreshing.')
                 raise AccountChangedError("The account changed before this action could be saved. Review message activity in the current account; the original conversation draft is kept.")
         method, payload = "POST", None
         if command == "core_settings_update":
@@ -319,10 +369,18 @@ class CoreWorker(QThread):
                 if self.stop_event.is_set():
                     break
                 if command == "select_device":
+                    value = value if isinstance(value, dict) else {'device_id': value}
+                    if 'account_id' in value and value['account_id'] != self.account_id:
+                        continue
                     self.device_id = value.get("device_id")
                     self.device_request_id = value.get("request_id")
                     if self.device_id in self.sms_cache:
-                        self.snapshot.emit({"sms": self.sms_cache[self.device_id], "sms_device_id": self.device_id, "sms_request_id": self.device_request_id})
+                        cached = self.sms_cache[self.device_id]
+                        # Untagged legacy caches are usable only before an
+                        # account-aware core has established the current scope.
+                        if ((not self.account_known and 'account_id' not in cached)
+                                or self._consistent_sms({'account_id': self.account_id}, {self.device_id: cached})):
+                            self.snapshot.emit({"sms": cached, "sms_device_id": self.device_id, "sms_request_id": self.device_request_id})
                     next_poll = 0
                 if command == "search":
                     self.query = value
@@ -477,11 +535,15 @@ class CoreWorker(QThread):
                     next_poll = 0
                 try:
                     def get(path, **kwargs):
+                        if self.stop_event.is_set():
+                            raise PollStopped()
                         response = client.get(path, headers=authorization, **kwargs)
                         response.raise_for_status()
                         return response.json()
                     capabilities = get("/api/v1/capabilities")
                     self._account(capabilities)
+                    selected_device = self.device_id
+                    sms_request_id = self.device_request_id
                     items = get("/api/v1/items", params={"q": self.query})
                     web = get("/api/v1/web")
                     features = capabilities.get("features", {})
@@ -489,23 +551,38 @@ class CoreWorker(QThread):
                     self.features = features
                     devices = get("/api/v1/devices") if features.get("devices") else {"devices": [], "synced_at": None, "account_id": capabilities.get("account_id")}
                     actions = get("/api/v1/actions") if features.get("send") else {"actions": [], "account_id": capabilities.get("account_id")}
-                    sms = None
-                    selected_device = self.device_id
-                    if selected_device and features.get("sms_history"):
-                        sms = get("/api/v1/sms", params={"device_id": selected_device})
-                    if not self._consistent_account(capabilities, items, devices, actions, sms):
+                    if not self._consistent_account(capabilities, items, devices, actions):
+                        self.connection.emit('Account changed · refreshing local view…')
+                        self.sms_cache.clear()
+                        next_poll = time.monotonic() + 0.1
+                        continue
+                    sms_by_device = {}
+                    if features.get("sms_history"):
+                        targets = self._sms_targets(devices, actions, selected_device, capabilities.get('account_id'))
+                        sms_by_device = self._read_sms(get, targets, capabilities.get('account_id'))
+                    # A failed phone GET has no account proof. Recheck even when
+                    # every successful earlier read belonged to the old account.
+                    final_capabilities = get('/api/v1/capabilities')
+                    if self.stop_event.is_set():
+                        raise PollStopped()
+                    if (not self._consistent_account(capabilities, items, devices, actions, final_capabilities)
+                            or not self._consistent_sms(capabilities, sms_by_device)):
                         # A credential reload may happen between independent local GETs.
                         # Never publish rows assembled across two provider accounts.
                         self.connection.emit('Account changed · refreshing local view…')
+                        self.sms_cache.clear()
+                        self._account(final_capabilities)
                         next_poll = time.monotonic() + 0.1
                         continue
-                    if sms is not None:
-                        self.sms_cache[selected_device] = sms
-                    self.snapshot.emit({"configuration": configuration, "sms": sms, "sms_device_id": selected_device, "sms_request_id": self.device_request_id, "items": items["items"], "web": web, "capabilities": capabilities, "devices": devices, "actions": actions["actions"], "instance_id": identity["instance_id"]})
+                    self.sms_cache.update(sms_by_device)
+                    sms = sms_by_device.get(selected_device)
+                    self.snapshot.emit({"configuration": configuration, "sms": sms, "sms_by_device": sms_by_device, "sms_device_id": selected_device, "sms_request_id": sms_request_id, "items": items["items"], "web": web, "capabilities": capabilities, "devices": devices, "actions": actions["actions"], "instance_id": identity["instance_id"]})
                     if self.pending_restart and identity['instance_id'] != self.pending_restart['instance_id']:
                         self.pending_restart = None
                     self.connection.emit("Restarting core · reconnecting…" if self.pending_restart else "Connected to private core")
-                except (httpx.HTTPError, ValueError, KeyError) as exc:
+                except PollStopped:
+                    break
+                except (httpx.HTTPError, ValueError, KeyError):
                     self.connection.emit("Disconnected · waiting for core")
-                    self.failed.emit(f"Core refresh failed: {exc}. Retained content remains visible; use Refresh to try again.")
+                    self.failed.emit("Core refresh failed. Retained content remains visible; use Refresh to try again.")
                 next_poll = time.monotonic() + (.2 if self.pending_restart else 2)

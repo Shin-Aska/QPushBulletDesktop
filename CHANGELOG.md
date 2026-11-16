@@ -33,6 +33,8 @@ Target: the first public stable release, **1.0.0**. No release has been tagged o
 
 ### Changed
 
+- SMS now defaults to one All devices conversation list with device labels and an optional phone filter. Conversations remain separate per phone, including matching contacts or thread IDs; selection and polling read the local cache, and provider synchronization remains an explicit refresh.
+- A failed per-phone local SMS read preserves that phone's cached messages while other phones update. Account changes clear SMS caches and reset the filter to All devices.
 - Non-secret provider, AI, and interface settings now share the existing SQLite store. Selected legacy JSON settings are imported, verified and archived in encrypted migration material before their plaintext originals are removed; they do not remain a second settings authority.
 - Desktop and web-server processes share a core through explicit client leases. The core can stop after the final client leaves, recover after a crash, and respect Stop all services across older clients.
 - SMS reply assistance keeps generated text editable and inserts it into the current composer before the ordinary review-and-send flow.
@@ -46,6 +48,7 @@ Target: the first public stable release, **1.0.0**. No release has been tagged o
 
 ### Release preparation
 
+- Unified SMS source tests use isolated fake-core fixtures. This entry does not certify a rebuilt AppImage or a new live-profile validation.
 - Encryption has been developed against isolated fixtures. The existing live profile and running older core have not been migrated or restarted by this change; activation requires the explicit protection flow. See [encrypted history](docs/encrypted-history.md).
 
 - The selected public distribution target is an **AppImage built through GitHub Actions and distributed through GitHub Releases**. The private candidate pipeline and standalone packaged runtime are implemented. Private `main`/build-branch pushes and manual runs build the AppImage and require packaged smoke checks, full regression tests and verified checksums before successful candidate upload. No 1.0 release has been published. Native supported-desktop acceptance and complete third-party license/corresponding-source material remain release gates. See [private AppImage candidates](docs/appimage.md).

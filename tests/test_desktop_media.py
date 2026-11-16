@@ -144,7 +144,7 @@ def test_loaded_contact_photo_stays_in_list_across_navigation_and_refresh(qtbot)
     widget, worker = page(qtbot, records)
     def row(key):
         return next(widget.threads.item(index) for index in range(widget.threads.count())
-            if widget.threads.item(index).data(Qt.ItemDataRole.UserRole) == ('history', key))
+            if widget.threads.item(index).data(Qt.ItemDataRole.UserRole) == ('history', key, 'a'))
     def photo_present():
         return row('one').icon().pixmap(36, 36).toImage().pixelColor(16, 16) == QColor('#d32f2f')
     widget.threads.setCurrentItem(row('one'))

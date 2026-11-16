@@ -56,6 +56,7 @@ def page(qtbot, messages=None):
     widget.resize(1100, 740)
     widget.show()
     widget.apply_snapshot(snapshot(messages if messages is not None else [message()]))
+    widget.phone.setCurrentIndex(widget.phone.findData("a"))
     qtbot.wait(50)
     return widget, worker
 
@@ -170,7 +171,7 @@ def test_new_message_explicit_e164_drafts_preserved_per_recipient_and_thread(qtb
     widget.composer.setPlainText("Second new draft")
     widget.recipient.setText("+12025550123")
     assert widget.composer.toPlainText() == "First new draft"
-    widget._activate_thread(("history", "one"))
+    widget._activate_thread(("history", "one", "a"))
     assert widget.composer.toPlainText() == "Reply draft"
     widget.apply_snapshot(snapshot([message(), message(2)]))
     assert widget.composer.toPlainText() == "Reply draft"
@@ -194,7 +195,7 @@ def test_pending_create_uses_review_pipeline_no_approval_and_separate_local_card
     assert reviewed[0]["state"] == "pending_approval"
     assert widget.composer.toPlainText() == ""
     assert widget.findChild(QFrame, "smsLocal")
-    assert len(widget._threads[("history", "one")]["messages"]) == 1
+    assert len(widget._threads[("history", "one", "a")]["messages"]) == 1
     assert not any(command == "approve_action" for command, _ in worker.requests)
 
 
@@ -211,13 +212,13 @@ def test_accepted_request_disappears_from_chat_but_remains_in_activity(qtbot):
     history = [message(), message(2, direction="outgoing", body="A fictional reply")]
     requests = deepcopy(worker.requests)
     widget.apply_snapshot(snapshot(history, actions=actions))
-    assert widget.current_thread == ("history", "one")
+    assert widget.current_thread == ("history", "one", "a")
     assert widget.findChild(QFrame, "smsLocal") is None
     assert len(widget.findChildren(QFrame, "smsOutgoing")) == 1
     assert [text.toPlainText() for text in widget.timeline_content.findChildren(MessageText)] == [
         "Message 1", "A fictional reply"]
     assert widget.actions == actions
-    assert widget._threads[("history", "one")]["actions"] == []
+    assert widget._threads[("history", "one", "a")]["actions"] == []
     assert worker.requests == requests
     activity = ActivityDialog(widget)
     qtbot.addWidget(activity)
@@ -237,7 +238,7 @@ def test_unresolved_request_stays_visible_even_with_matching_phone_history(qtbot
     widget.apply_snapshot(snapshot([message(direction="outgoing", body="A fictional reply")], actions=[action]))
     assert widget.findChild(QFrame, "smsLocal")
     assert len(widget.findChildren(QFrame, "smsOutgoing")) == 1
-    assert widget._threads[("history", "one")]["actions"] == [action]
+    assert widget._threads[("history", "one", "a")]["actions"] == [action]
     assert worker.requests == requests
 
 
@@ -265,18 +266,18 @@ def test_last_local_request_accepted_keeps_recipient_and_other_drafts(qtbot):
         "kind": "sms", "device_id": "a", "recipient": "+12025550123",
         "body": "A fictional reply", "transport": "provider_plaintext"}})
     widget.open_action(action)
-    assert widget.current_thread == ("local", "+12025550123")
+    assert widget.current_thread == ("local", "+12025550123", "a")
     requests = deepcopy(worker.requests)
     accepted = dict(action, state="upstream_accepted")
     widget.apply_snapshot(snapshot([message()], actions=[accepted]))
-    assert widget.current_thread == ("new", "+12025550123")
+    assert widget.current_thread == ("new", "+12025550123", "a")
     assert widget.recipient.text() == "+12025550123" and widget.recipient.isVisible()
     assert widget.composer.toPlainText() == "Saved recipient draft"
-    assert ("local", "+12025550123") not in widget._threads
+    assert ("local", "+12025550123", "a") not in widget._threads
     assert widget.findChild(QFrame, "smsLocal") is None
     assert widget.actions == [accepted]
     assert worker.requests == requests
-    widget._activate_thread(("history", "one"))
+    widget._activate_thread(("history", "one", "a"))
     assert widget.composer.toPlainText() == "Unrelated conversation draft"
 
 
@@ -287,20 +288,20 @@ def test_local_request_accepted_with_new_history_restores_its_reply_draft(qtbot)
         "kind": "sms", "device_id": "a", "recipient": "+12025550123",
         "body": "A fictional reply", "transport": "provider_plaintext"}})
     widget.open_action(action)
-    assert widget.current_thread == ("local", "+12025550123")
-    widget._drafts[("acct", "a", ("history", "two"))] = ("Saved phone-history draft", 3)
+    assert widget.current_thread == ("local", "+12025550123", "a")
+    widget._drafts[("acct", "a", ("history", "two", "a"))] = ("Saved phone-history draft", 3)
     requests = deepcopy(worker.requests)
     history = [message(), message(2, conversation="two", direction="outgoing",
         addresses=["+12025550123"], body="A fictional reply")]
     widget.apply_snapshot(snapshot(history, actions=[dict(action, state="upstream_accepted")]))
-    assert widget.current_thread == ("history", "two")
+    assert widget.current_thread == ("history", "two", "a")
     assert widget.composer.toPlainText() == "Saved phone-history draft"
     assert widget._route() == "+12025550123"
     assert not widget.recipient.isVisible()
     assert widget.findChild(QFrame, "smsLocal") is None
     assert len(widget.findChildren(QFrame, "smsOutgoing")) == 1
     assert worker.requests == requests
-    widget._activate_thread(("history", "one"))
+    widget._activate_thread(("history", "one", "a"))
     assert widget.composer.toPlainText() == "Unrelated conversation draft"
 
 
@@ -324,17 +325,17 @@ def test_ambiguous_creation_locks_exact_payload_and_uuid_until_explicit_reconcil
 
 def test_late_success_does_not_clear_or_review_other_thread_draft(qtbot):
     widget, worker = page(qtbot, [message(), message(2, conversation="two", addresses=["+12025550123"])])
-    widget._activate_thread(("history", "one"))
+    widget._activate_thread(("history", "one", "a"))
     reviewed, created = [], []
     widget.review_requested.connect(reviewed.append)
     widget.action_created.connect(created.append)
     request = create_request(widget, worker, "First thread pending")
-    widget._activate_thread(("history", "two"))
+    widget._activate_thread(("history", "two", "a"))
     widget.composer.setPlainText("Other thread draft")
     succeed(worker, request)
     assert not reviewed and len(created) == 1
     assert widget.composer.toPlainText() == "Other thread draft"
-    widget._activate_thread(("history", "one"))
+    widget._activate_thread(("history", "one", "a"))
     assert widget.composer.toPlainText() == ""
 
 
@@ -375,17 +376,17 @@ def test_same_phone_stale_selection_result_rejected_and_draft_version_protected(
 
 def test_phone_switch_restores_each_conversation_and_new_recipient_draft(qtbot):
     widget, worker = page(qtbot, [message(), message(2, conversation="two", addresses=["+12025550123"])])
-    widget._activate_thread(("history", "two"))
+    widget._activate_thread(("history", "two", "a"))
     widget.composer.setPlainText("Phone A thread two")
     widget.phone.setCurrentIndex(widget.phone.findData("b"))
     widget.start_new()
     widget.recipient.setText("+12025550124")
     widget.composer.setPlainText("Phone B new recipient")
     widget.phone.setCurrentIndex(widget.phone.findData("a"))
-    assert widget.current_thread == ("history", "two")
+    assert widget.current_thread == ("history", "two", "a")
     assert widget.composer.toPlainText() == "Phone A thread two"
     widget.phone.setCurrentIndex(widget.phone.findData("b"))
-    assert widget.current_thread == ("new", "+12025550124")
+    assert widget.current_thread == ("new", "+12025550124", "b")
     assert widget.recipient.text() == "+12025550124"
     assert widget.composer.toPlainText() == "Phone B new recipient"
 
@@ -396,7 +397,7 @@ def test_ambiguous_address_association_keeps_local_recipient_thread_and_activity
         "account_id": "acct"}), state="uncertain")
     widget, worker = page(qtbot, [message(body="Same body"), message(2, conversation="two")])
     widget.apply_snapshot(snapshot([message(body="Same body"), message(2, conversation="two")], actions=[action]))
-    local = ("local", "+639171234567")
+    local = ("local", "+639171234567", "a")
     assert widget._threads[local]["actions"] == [action]
     assert all(not thread["actions"] for key, thread in widget._threads.items() if key[0] == "history")
     widget.open_action(action)
@@ -479,7 +480,7 @@ def test_context_change_hides_previous_bubbles_synchronously(qtbot):
     assert all(not row.isVisible() and row.parentWidget() is None for row in previous_rows)
     assert not widget.timeline_content.findChildren(MessageText)
     assert widget.composer.height() == 86
-    widget._activate_thread(("history", "one"))
+    widget._activate_thread(("history", "one", "a"))
     previous_rows = [row for _, row in widget._rows]
     widget.phone.setCurrentIndex(widget.phone.findData("b"))
     assert all(not row.isVisible() and row.parentWidget() is None for row in previous_rows)
@@ -542,6 +543,7 @@ def test_narrow_main_window_partial_history_has_no_horizontal_overflow(qtbot, qa
             'last_success_at': 1780000000, 'unavailable_count': 3}
         worker.snapshot.emit(data)
         window.navigate(1)
+        window.sms_page.phone.setCurrentIndex(window.sms_page.phone.findData("a"))
         window.resize(850, 540)
         window.show()
         window.sms_page.composer.setPlainText('Fictional draft remains editable')
