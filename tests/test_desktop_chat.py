@@ -412,6 +412,12 @@ def test_history_insert_preserves_reading_anchor_and_bottom_follow(qtbot):
                 for number in range(20, 60)]
     widget, worker = page(qtbot, messages)
     scroll = widget.timeline.verticalScrollBar()
+    assert widget.current_thread == ("history", "one", "a")
+    assert len(widget._rows) == 40
+    # Wrapped QTextEdit heights and the QScrollArea range settle in separate
+    # queued layout passes. Synchronize on geometry, not the helper's 50 ms wait.
+    qtbot.waitUntil(lambda: scroll.maximum() > 0 and
+        widget.timeline_content.height() > widget.timeline.viewport().height(), timeout=1000)
     assert scroll.maximum() > 0
     scroll.setValue(scroll.maximum() // 2)
     anchor = widget._anchor()
@@ -583,3 +589,94 @@ def test_narrow_main_window_partial_history_has_no_horizontal_overflow(qtbot, qa
             manager._scheduled = False
         finally:
             manager._updating = False
+
+
+def test_bottom_follow_survives_early_zero_range_until_native_range_update(qtbot, monkeypatch):
+    records = [message(number) for number in range(1, 41)]
+    widget, worker = page(qtbot, records)
+    scroll = widget.timeline.verticalScrollBar()
+    qtbot.waitUntil(lambda: scroll.maximum() > 0, timeout=1000)
+    scroll.setValue(scroll.maximum())
+    widget.apply_snapshot(snapshot(records + [message(41)]))
+    with monkeypatch.context() as patch:
+        patch.setattr(scroll, 'maximum', lambda: 0)
+        widget._restore_timeline_scroll()
+        assert scroll.value() == 0
+        assert widget._scroll_restore is not None
+    # Reproduce Qt's later range notification after the early zero-range pass.
+    scroll.rangeChanged.emit(scroll.minimum(), scroll.maximum())
+    qtbot.waitUntil(lambda: scroll.maximum() > 0 and scroll.maximum() - scroll.value() <= 3,
+                    timeout=1000)
+    assert scroll.maximum() - scroll.value() <= 3
+
+
+@pytest.mark.parametrize('intent', ['wheel', 'drag', 'navigation'])
+def test_user_reading_intent_cancels_pending_timeline_restore(qtbot, intent):
+    from PyQt6.QtCore import QPoint, QPointF
+    from PyQt6.QtGui import QWheelEvent
+    from PyQt6.QtWidgets import QApplication
+    records = [message(number) for number in range(1, 41)]
+    widget, worker = page(qtbot, records)
+    scroll = widget.timeline.verticalScrollBar()
+    qtbot.waitUntil(lambda: scroll.maximum() > 0, timeout=1000)
+    scroll.setValue(scroll.maximum())
+    widget.apply_snapshot(snapshot(records + [message(41)]))
+    assert widget._scroll_restore is not None
+    if intent == 'wheel':
+        target = widget.timeline_content.findChild(MessageText).viewport()
+        event = QWheelEvent(QPointF(5, 5), QPointF(target.mapToGlobal(QPoint(5, 5))),
+            QPoint(), QPoint(0, 120), Qt.MouseButton.NoButton, Qt.KeyboardModifier.NoModifier,
+            Qt.ScrollPhase.NoScrollPhase, False)
+        QApplication.sendEvent(target, event)
+    elif intent == 'drag':
+        scroll.setSliderDown(True)
+        scroll.setSliderPosition(0)
+        scroll.setSliderDown(False)
+    else:
+        qtbot.keyClick(scroll, Qt.Key.Key_Home)
+    assert widget._scroll_restore is None
+    scroll.setValue(0)
+    qtbot.waitUntil(lambda: scroll.maximum() > 0 and
+        widget.timeline_content.height() > widget.timeline.viewport().height(), timeout=1000)
+    qtbot.wait(80)
+    assert scroll.value() == 0 and scroll.maximum() - scroll.value() > 3
+
+
+@pytest.mark.parametrize('scope', ['thread', 'phone', 'account'])
+def test_context_switch_rejects_previous_pending_scroll_restore(qtbot, scope):
+    records = [message(number) for number in range(1, 41)] + [
+        message(50, conversation='two', addresses=['+12025550123'])]
+    widget, worker = page(qtbot, records)
+    widget._activate_thread(('history', 'one', 'a'))
+    stale_restore = widget._scroll_restore
+    assert stale_restore is not None
+    if scope == 'thread':
+        widget._activate_thread(('history', 'two', 'a'))
+        expected = ('history', 'two', 'a')
+    elif scope == 'phone':
+        widget.phone.setCurrentIndex(widget.phone.findData('b'))
+        expected = None
+    else:
+        widget.apply_snapshot(snapshot([], account='new'))
+        expected = None
+    current_restore = widget._scroll_restore
+    stale_restore()
+    assert widget.current_thread == expected
+    assert widget._scroll_restore is current_restore
+    assert widget.timeline.verticalScrollBar().value() == 0
+
+
+def test_long_device_label_rewrap_keeps_visible_message_anchor(qtbot):
+    records = [message(number, body='Fictional retained message. ' * 3) for number in range(1, 41)]
+    widget, worker = page(qtbot, records)
+    scroll = widget.timeline.verticalScrollBar()
+    qtbot.waitUntil(lambda: scroll.maximum() > 0, timeout=1000)
+    scroll.setValue(scroll.maximum() // 2)
+    anchor = widget._anchor()
+    devices = deepcopy(PHONES)
+    devices[0]['nickname'] = 'A much longer fictional phone name that wraps across narrow message metadata'
+    widget.apply_snapshot({'devices': {'account_id': 'acct', 'devices': devices}})
+    qtbot.waitUntil(lambda: widget._anchor() and widget._anchor()[0] == anchor[0] and
+        abs(widget._anchor()[1] - anchor[1]) <= 3, timeout=1000)
+    assert widget._anchor()[0] == anchor[0]
+    assert abs(widget._anchor()[1] - anchor[1]) <= 3

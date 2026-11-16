@@ -7,7 +7,7 @@ import re
 import uuid
 import weakref
 
-from PyQt6.QtCore import QSize, Qt, QTimer, pyqtSignal
+from PyQt6.QtCore import QEvent, QSize, Qt, QTimer, pyqtSignal
 from PyQt6 import sip
 from PyQt6.QtGui import QIcon, QKeySequence, QPixmap, QShortcut, QTextOption
 from PyQt6.QtWidgets import (
@@ -125,6 +125,10 @@ class SmsPage(QWidget):
         self._timeline_signature = None
         self._rows = []
         self._render_generation = 0
+        self._scroll_restore = None
+        self._scroll_restore_timer = QTimer(self)
+        self._scroll_restore_timer.setSingleShot(True)
+        self._scroll_restore_timer.timeout.connect(self._restore_timeline_scroll)
         self.setObjectName("smsPage")
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -220,6 +224,13 @@ class SmsPage(QWidget):
         self.timeline.setObjectName("smsTimelineScroll")
         self.timeline.setWidgetResizable(True)
         self.timeline.setAccessibleName("SMS conversation history")
+        self.timeline.installEventFilter(self)
+        self.timeline.viewport().installEventFilter(self)
+        timeline_scroll = self.timeline.verticalScrollBar()
+        timeline_scroll.installEventFilter(self)
+        timeline_scroll.rangeChanged.connect(self._queue_timeline_restore)
+        timeline_scroll.actionTriggered.connect(self._cancel_timeline_restore)
+        timeline_scroll.sliderPressed.connect(self._cancel_timeline_restore)
         self.timeline_content = QWidget()
         self.timeline_content.setObjectName("smsTimeline")
         self.timeline_layout = QVBoxLayout(self.timeline_content)
@@ -504,6 +515,7 @@ class SmsPage(QWidget):
         return "account_id" not in part or (self.account_known and part["account_id"] == self.account_id)
 
     def _reset_account(self, account):
+        self._cancel_timeline_restore()
         if hasattr(self.worker, '_media_cache'):
             self.worker._media_cache.clear()
             self.worker._media_cache_account = account
@@ -946,6 +958,26 @@ class SmsPage(QWidget):
         # tooltip markup; accessibility keeps the complete plain-text version.
         self.sync_status.setToolTip("<qt>" + escape(description).replace("\n", "<br>") + "</qt>")
 
+    def _queue_timeline_restore(self, *unused):
+        if self._scroll_restore is not None:
+            self._scroll_restore_timer.start(0)
+
+    def _restore_timeline_scroll(self):
+        restore = self._scroll_restore
+        if restore is not None:
+            restore()
+
+    def _cancel_timeline_restore(self, *unused):
+        self._scroll_restore = None
+        self._scroll_restore_timer.stop()
+
+    def eventFilter(self, watched, event):
+        if event.type() in {QEvent.Type.Wheel, QEvent.Type.MouseButtonPress, QEvent.Type.KeyPress}:
+            # User reading/navigation intent wins over a queued layout restore.
+            # Native range clamps and our own setValue do not emit these events.
+            self._cancel_timeline_restore()
+        return super().eventFilter(watched, event)
+
     def _anchor(self):
         value = self.timeline.verticalScrollBar().value()
         for key, row in self._rows:
@@ -980,6 +1012,7 @@ class SmsPage(QWidget):
         near_bottom = scroll.maximum() - scroll.value() < 48
         anchor = self._anchor()
         old_value = scroll.value()
+        self._cancel_timeline_restore()
         self._timeline_signature = signature
         self._render_generation += 1
         generation = self._render_generation
@@ -1009,6 +1042,8 @@ class SmsPage(QWidget):
             meta.setObjectName("smsMeta")
             bubble_layout.addWidget(meta)
             body = MessageText(str(message.get("body") or ""))
+            body.installEventFilter(self)
+            body.viewport().installEventFilter(self)
             body.setAccessibleName("Outgoing SMS" if outgoing else "Incoming SMS")
             bubble_layout.addWidget(body)
             for index, unused in enumerate(message.get("image_urls", [])[:16]):
@@ -1049,38 +1084,47 @@ class SmsPage(QWidget):
         self.timeline_layout.addStretch()
         self.timeline_content.adjustSize()
 
+        page_ref = weakref.ref(self)
         def restore():
-            if sip.isdeleted(self) or generation != self._render_generation:
+            page = page_ref()
+            if (page is None or sip.isdeleted(page) or generation != page._render_generation or
+                    page._scroll_restore is not restore):
                 return
-            self.timeline_layout.activate()
+            page.timeline_layout.activate()
             if new_context or near_bottom:
                 scroll.setValue(scroll.maximum())
             elif anchor:
-                row = next((row for key, row in self._rows if key == anchor[0]), None)
+                row = next((row for key, row in page._rows if key == anchor[0]), None)
                 scroll.setValue(row.y() - anchor[1] if row else old_value)
             else:
                 scroll.setValue(old_value)
-        # Native wrapping settles after the viewport's layout pass.
-        QTimer.singleShot(0, restore)
-        QTimer.singleShot(30, restore)
+        # Keep one generation-scoped intent through deferred wrapping/range
+        # changes. An early zero range must not consume a bottom-follow request.
+        # Native user input cancels it; the next render supersedes it.
+        self._scroll_restore = restore
+        self._queue_timeline_restore()
 
     def _media_anchor(self):
+        self._cancel_timeline_restore()
         scroll = self.timeline.verticalScrollBar()
         self._image_anchor = (self._anchor(), scroll.value(), scroll.maximum() - scroll.value() < 48)
 
     def _restore_media_anchor(self):
         state = getattr(self, '_image_anchor', None)
         generation = self._render_generation
+        page_ref = weakref.ref(self)
         def restore():
-            if sip.isdeleted(self) or generation != self._render_generation or state is None:
+            page = page_ref()
+            if (page is None or sip.isdeleted(page) or generation != page._render_generation or state is None or
+                    page._scroll_restore is not restore):
                 return
-            self.timeline_layout.activate()
+            page.timeline_layout.activate()
             anchor, old_value, near_bottom = state
-            scroll = self.timeline.verticalScrollBar()
-            row = next((row for key, row in self._rows if anchor and key == anchor[0]), None)
+            scroll = page.timeline.verticalScrollBar()
+            row = next((row for key, row in page._rows if anchor and key == anchor[0]), None)
             scroll.setValue(scroll.maximum() if near_bottom else row.y() - anchor[1] if row else old_value)
-        QTimer.singleShot(0, restore)
-        QTimer.singleShot(30, restore)
+        self._scroll_restore = restore
+        self._queue_timeline_restore()
 
     def _card(self, name, outgoing):
         row = QWidget()
