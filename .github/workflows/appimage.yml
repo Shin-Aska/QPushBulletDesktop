@@ -3,7 +3,7 @@ name: Private AppImage candidate
 on:
   workflow_dispatch:
   push:
-    branches: ['build/**']
+    branches: ['main', 'build/**']
     tags: ['v*']
 
 permissions:

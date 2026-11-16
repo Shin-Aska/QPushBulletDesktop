@@ -4,7 +4,7 @@ The current package version remains **0.1.0**. Packaging preparation does not cr
 
 ## Build and retrieve a candidate
 
-The [AppImage workflow](../.github/workflows/appimage.yml) runs when a `build/**` branch is pushed. Once the workflow is present on the default branch, it can also be run with **Actions → Private AppImage candidate → Run workflow**, selecting the reviewed revision. Candidates require the repository to remain private. There are no PR/fork triggers, and the candidate job has only `contents: read`.
+The [AppImage workflow](../.github/workflows/appimage.yml) runs when `main` or a `build/**` branch is pushed. It can also be run with **Actions → Private AppImage candidate → Run workflow**, selecting the reviewed revision. Candidates require the repository to remain private. There are no PR/fork triggers, and the candidate job has only `contents: read`.
 
 The workflow installs OS dependencies only on its temporary Ubuntu 24.04 runner. It verifies the SHA256 of an exact official CPython 3.14.4 archive, seeds its temporary tool cache, and selects it through a commit-pinned `setup-python`. Separate environments run the full repository regression suite and freeze only the production desktop/web/MCP dependencies. Python distributions use exact version and SHA256 pins with `--require-hashes --only-binary=:all:`. SQLCipher must come from the pinned binary wheel; the workflow does not substitute Ubuntu's SQLCipher development package or build a different encryption engine.
 
@@ -32,7 +32,7 @@ The frozen executable supports normal desktop arguments and these dispatch selec
 
 ## Verification and remaining release gates
 
-CI runs source regression tests first, then the actual AppImage from outside the source checkout with `PYTHONPATH` and `PYTHONHOME` removed. [The external smoke harness](../packaging/smoke.py) uses synthetic temporary profiles, its own private session bus and fake KWallet, and an isolated Xvfb display. It exercises the bundled SQLCipher/FTS5, first-run desktop and packaged process behavior, and records exactly which checks completed. It never uses the owner's live profile, wallet, providers or systemd services. A successful workflow is necessary evidence; source/helper tests alone do not establish that an AppImage builds or runs.
+CI builds the AppImage, smoke-tests the actual artifact from outside the source checkout with `PYTHONPATH` and `PYTHONHOME` removed, then runs the full source regression suite. Successful candidate upload requires every stage and checksum verification to pass. [The external smoke harness](../packaging/smoke.py) uses synthetic temporary profiles, its own private session bus and fake KWallet, and an isolated Xvfb display. It exercises the bundled SQLCipher/FTS5, first-run desktop and packaged process behavior, and records exactly which checks completed. It never uses the owner's live profile, wallet, providers or systemd services. A successful workflow is necessary evidence; source/helper tests alone do not establish that an AppImage builds or runs.
 
 Ubuntu/Xvfb evidence does not certify native KDE Plasma 6 Wayland, real KWallet authorization, notification/tray integration, suspend/resume, or existing-profile upgrades on Kubuntu 26.04. Those remain explicit supported-desktop acceptance tasks in [the release plan](release-plan.md).
 
