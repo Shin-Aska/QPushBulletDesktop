@@ -281,7 +281,9 @@ class Harness:
 
     def key(self, window, value):
         self.run(['xdotool', 'windowfocus', '--sync', window])
-        self.run(['xdotool', 'key', '--window', window, '--clearmodifiers', value])
+        # XTEST delivers to the focused window on our private Xvfb display.
+        # A targeted X_SendEvent key-up races Ctrl+Q destroying that window.
+        self.run(['xdotool', 'key', '--clearmodifiers', value])
 
     def cached_apps(self):
         cache = Path(self.env['XDG_CACHE_HOME']) / 'pbdesk/runtimes'
