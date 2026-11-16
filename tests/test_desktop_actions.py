@@ -320,6 +320,8 @@ def test_worker_mutations_off_gui_thread_timeout_and_rejection_are_not_disconnec
             body = {"account_id": "fictional-account", "devices": DEVICES, "synced_at": None}
         elif request.url.path.endswith("actions"):
             body = {"account_id": "fictional-account", "actions": []}
+        elif request.url.path.endswith('sms'):
+            body = {'account_id': 'fictional-account', 'messages': [], 'sync': {'state': 'idle'}}
         else:
             body = WEB
         return httpx.Response(200, json=body)
@@ -509,7 +511,7 @@ def test_old_core_feature_gate_preserves_sms_cache_without_new_routes(qtbot, tmp
     worker.result.connect(results.append)
     worker.snapshot.connect(cached.append)
     worker.account_id, worker.account_known = 'fictional-account', True
-    worker.sms_cache['phone-a'] = {'messages': [sms_message(1)], 'sync': {'state': 'ready'}}
+    worker.sms_cache['phone-a'] = {'account_id': 'fictional-account', 'messages': [sms_message(1)], 'sync': {'state': 'ready'}}
     try:
         with qtbot.waitSignal(worker.snapshot, timeout=2000):
             worker.start()
@@ -759,6 +761,8 @@ def test_worker_checks_fresh_account_before_queued_create_and_tags_result(qtbot,
             value = {'account_id': account[0], 'devices': DEVICES}
         elif path.endswith('actions'):
             value = {'account_id': account[0], 'actions': []}
+        elif path.endswith('sms'):
+            value = {'account_id': account[0], 'messages': [], 'sync': {'state': 'idle'}}
         else:
             value = WEB
         return httpx.Response(200, json=value)

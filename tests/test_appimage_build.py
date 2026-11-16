@@ -150,3 +150,45 @@ def test_real_squashfs_accepts_explicit_epoch_with_inherited_source_date_epoch(t
                             check=True, capture_output=True, timeout=20)
     assert result.stdout == b'bounded SquashFS fixture\n'
     assert os.environ['SOURCE_DATE_EPOCH'] == '1700000001'
+
+
+def workflow_tag_guard():
+    workflow = (ROOT / '.github/workflows/appimage.yml').read_text()
+    step = workflow.split('      - name: Enforce deliberate final tag only\n', 1)[1].split('      - name:', 1)[0]
+    script = step.split('        run: |\n', 1)[1]
+    return '\n'.join(line[10:] for line in script.splitlines()) + '\n'
+
+
+@pytest.mark.parametrize('visibility', ['public', 'private'])
+@pytest.mark.parametrize('ref', ['refs/heads/main', 'refs/heads/build/candidate'])
+def test_workflow_candidates_accept_both_repository_visibilities(tmp_path, visibility, ref):
+    import os
+    import subprocess
+    # Any accidental visibility query would fail with the fake gh's exit status.
+    # Ordinary candidates must pass independently of repository visibility.
+    gh = tmp_path / 'gh'
+    gh.write_text('#!/bin/sh\nexit 91\n')
+    gh.chmod(0o755)
+    environment = {**os.environ, 'PATH': str(tmp_path), 'REF': ref,
+                   'GITHUB_REPOSITORY': 'Shin-Aska/QPushBulletDesktop',
+                   'REPOSITORY_VISIBILITY': visibility}
+    result = subprocess.run(['/bin/bash', '-e', '-c', workflow_tag_guard()],
+                            env=environment, capture_output=True, timeout=5)
+    assert result.returncode == 0, result.stderr.decode()
+
+
+def test_workflow_still_rejects_public_candidate_version_tag(tmp_path):
+    import os
+    import subprocess
+    import sys
+    gh = tmp_path / 'gh'
+    gh.write_text('#!/bin/sh\nprintf "%s\\n" public\n')
+    gh.chmod(0o755)
+    # Use the existing test interpreter; never install a separate runtime.
+    (tmp_path / 'python3').symlink_to(sys.executable)
+    environment = {**os.environ, 'PATH': str(tmp_path), 'REF': 'refs/tags/v0.1.0',
+                   'GITHUB_REPOSITORY': 'Shin-Aska/QPushBulletDesktop'}
+    result = subprocess.run(['/bin/bash', '-e', '-c', workflow_tag_guard()],
+                            cwd=ROOT, env=environment, capture_output=True, timeout=5)
+    assert result.returncode != 0
+    assert b'stable project version >= 1.0.0' in result.stderr

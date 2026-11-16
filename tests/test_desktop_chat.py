@@ -56,6 +56,7 @@ def page(qtbot, messages=None):
     widget.resize(1100, 740)
     widget.show()
     widget.apply_snapshot(snapshot(messages if messages is not None else [message()]))
+    widget.phone.setCurrentIndex(widget.phone.findData("a"))
     qtbot.wait(50)
     return widget, worker
 
@@ -170,7 +171,7 @@ def test_new_message_explicit_e164_drafts_preserved_per_recipient_and_thread(qtb
     widget.composer.setPlainText("Second new draft")
     widget.recipient.setText("+12025550123")
     assert widget.composer.toPlainText() == "First new draft"
-    widget._activate_thread(("history", "one"))
+    widget._activate_thread(("history", "one", "a"))
     assert widget.composer.toPlainText() == "Reply draft"
     widget.apply_snapshot(snapshot([message(), message(2)]))
     assert widget.composer.toPlainText() == "Reply draft"
@@ -194,7 +195,7 @@ def test_pending_create_uses_review_pipeline_no_approval_and_separate_local_card
     assert reviewed[0]["state"] == "pending_approval"
     assert widget.composer.toPlainText() == ""
     assert widget.findChild(QFrame, "smsLocal")
-    assert len(widget._threads[("history", "one")]["messages"]) == 1
+    assert len(widget._threads[("history", "one", "a")]["messages"]) == 1
     assert not any(command == "approve_action" for command, _ in worker.requests)
 
 
@@ -211,13 +212,13 @@ def test_accepted_request_disappears_from_chat_but_remains_in_activity(qtbot):
     history = [message(), message(2, direction="outgoing", body="A fictional reply")]
     requests = deepcopy(worker.requests)
     widget.apply_snapshot(snapshot(history, actions=actions))
-    assert widget.current_thread == ("history", "one")
+    assert widget.current_thread == ("history", "one", "a")
     assert widget.findChild(QFrame, "smsLocal") is None
     assert len(widget.findChildren(QFrame, "smsOutgoing")) == 1
     assert [text.toPlainText() for text in widget.timeline_content.findChildren(MessageText)] == [
         "Message 1", "A fictional reply"]
     assert widget.actions == actions
-    assert widget._threads[("history", "one")]["actions"] == []
+    assert widget._threads[("history", "one", "a")]["actions"] == []
     assert worker.requests == requests
     activity = ActivityDialog(widget)
     qtbot.addWidget(activity)
@@ -237,7 +238,7 @@ def test_unresolved_request_stays_visible_even_with_matching_phone_history(qtbot
     widget.apply_snapshot(snapshot([message(direction="outgoing", body="A fictional reply")], actions=[action]))
     assert widget.findChild(QFrame, "smsLocal")
     assert len(widget.findChildren(QFrame, "smsOutgoing")) == 1
-    assert widget._threads[("history", "one")]["actions"] == [action]
+    assert widget._threads[("history", "one", "a")]["actions"] == [action]
     assert worker.requests == requests
 
 
@@ -265,18 +266,18 @@ def test_last_local_request_accepted_keeps_recipient_and_other_drafts(qtbot):
         "kind": "sms", "device_id": "a", "recipient": "+12025550123",
         "body": "A fictional reply", "transport": "provider_plaintext"}})
     widget.open_action(action)
-    assert widget.current_thread == ("local", "+12025550123")
+    assert widget.current_thread == ("local", "+12025550123", "a")
     requests = deepcopy(worker.requests)
     accepted = dict(action, state="upstream_accepted")
     widget.apply_snapshot(snapshot([message()], actions=[accepted]))
-    assert widget.current_thread == ("new", "+12025550123")
+    assert widget.current_thread == ("new", "+12025550123", "a")
     assert widget.recipient.text() == "+12025550123" and widget.recipient.isVisible()
     assert widget.composer.toPlainText() == "Saved recipient draft"
-    assert ("local", "+12025550123") not in widget._threads
+    assert ("local", "+12025550123", "a") not in widget._threads
     assert widget.findChild(QFrame, "smsLocal") is None
     assert widget.actions == [accepted]
     assert worker.requests == requests
-    widget._activate_thread(("history", "one"))
+    widget._activate_thread(("history", "one", "a"))
     assert widget.composer.toPlainText() == "Unrelated conversation draft"
 
 
@@ -287,20 +288,20 @@ def test_local_request_accepted_with_new_history_restores_its_reply_draft(qtbot)
         "kind": "sms", "device_id": "a", "recipient": "+12025550123",
         "body": "A fictional reply", "transport": "provider_plaintext"}})
     widget.open_action(action)
-    assert widget.current_thread == ("local", "+12025550123")
-    widget._drafts[("acct", "a", ("history", "two"))] = ("Saved phone-history draft", 3)
+    assert widget.current_thread == ("local", "+12025550123", "a")
+    widget._drafts[("acct", "a", ("history", "two", "a"))] = ("Saved phone-history draft", 3)
     requests = deepcopy(worker.requests)
     history = [message(), message(2, conversation="two", direction="outgoing",
         addresses=["+12025550123"], body="A fictional reply")]
     widget.apply_snapshot(snapshot(history, actions=[dict(action, state="upstream_accepted")]))
-    assert widget.current_thread == ("history", "two")
+    assert widget.current_thread == ("history", "two", "a")
     assert widget.composer.toPlainText() == "Saved phone-history draft"
     assert widget._route() == "+12025550123"
     assert not widget.recipient.isVisible()
     assert widget.findChild(QFrame, "smsLocal") is None
     assert len(widget.findChildren(QFrame, "smsOutgoing")) == 1
     assert worker.requests == requests
-    widget._activate_thread(("history", "one"))
+    widget._activate_thread(("history", "one", "a"))
     assert widget.composer.toPlainText() == "Unrelated conversation draft"
 
 
@@ -324,17 +325,17 @@ def test_ambiguous_creation_locks_exact_payload_and_uuid_until_explicit_reconcil
 
 def test_late_success_does_not_clear_or_review_other_thread_draft(qtbot):
     widget, worker = page(qtbot, [message(), message(2, conversation="two", addresses=["+12025550123"])])
-    widget._activate_thread(("history", "one"))
+    widget._activate_thread(("history", "one", "a"))
     reviewed, created = [], []
     widget.review_requested.connect(reviewed.append)
     widget.action_created.connect(created.append)
     request = create_request(widget, worker, "First thread pending")
-    widget._activate_thread(("history", "two"))
+    widget._activate_thread(("history", "two", "a"))
     widget.composer.setPlainText("Other thread draft")
     succeed(worker, request)
     assert not reviewed and len(created) == 1
     assert widget.composer.toPlainText() == "Other thread draft"
-    widget._activate_thread(("history", "one"))
+    widget._activate_thread(("history", "one", "a"))
     assert widget.composer.toPlainText() == ""
 
 
@@ -375,17 +376,17 @@ def test_same_phone_stale_selection_result_rejected_and_draft_version_protected(
 
 def test_phone_switch_restores_each_conversation_and_new_recipient_draft(qtbot):
     widget, worker = page(qtbot, [message(), message(2, conversation="two", addresses=["+12025550123"])])
-    widget._activate_thread(("history", "two"))
+    widget._activate_thread(("history", "two", "a"))
     widget.composer.setPlainText("Phone A thread two")
     widget.phone.setCurrentIndex(widget.phone.findData("b"))
     widget.start_new()
     widget.recipient.setText("+12025550124")
     widget.composer.setPlainText("Phone B new recipient")
     widget.phone.setCurrentIndex(widget.phone.findData("a"))
-    assert widget.current_thread == ("history", "two")
+    assert widget.current_thread == ("history", "two", "a")
     assert widget.composer.toPlainText() == "Phone A thread two"
     widget.phone.setCurrentIndex(widget.phone.findData("b"))
-    assert widget.current_thread == ("new", "+12025550124")
+    assert widget.current_thread == ("new", "+12025550124", "b")
     assert widget.recipient.text() == "+12025550124"
     assert widget.composer.toPlainText() == "Phone B new recipient"
 
@@ -396,7 +397,7 @@ def test_ambiguous_address_association_keeps_local_recipient_thread_and_activity
         "account_id": "acct"}), state="uncertain")
     widget, worker = page(qtbot, [message(body="Same body"), message(2, conversation="two")])
     widget.apply_snapshot(snapshot([message(body="Same body"), message(2, conversation="two")], actions=[action]))
-    local = ("local", "+639171234567")
+    local = ("local", "+639171234567", "a")
     assert widget._threads[local]["actions"] == [action]
     assert all(not thread["actions"] for key, thread in widget._threads.items() if key[0] == "history")
     widget.open_action(action)
@@ -411,6 +412,12 @@ def test_history_insert_preserves_reading_anchor_and_bottom_follow(qtbot):
                 for number in range(20, 60)]
     widget, worker = page(qtbot, messages)
     scroll = widget.timeline.verticalScrollBar()
+    assert widget.current_thread == ("history", "one", "a")
+    assert len(widget._rows) == 40
+    # Wrapped QTextEdit heights and the QScrollArea range settle in separate
+    # queued layout passes. Synchronize on geometry, not the helper's 50 ms wait.
+    qtbot.waitUntil(lambda: scroll.maximum() > 0 and
+        widget.timeline_content.height() > widget.timeline.viewport().height(), timeout=1000)
     assert scroll.maximum() > 0
     scroll.setValue(scroll.maximum() // 2)
     anchor = widget._anchor()
@@ -479,7 +486,7 @@ def test_context_change_hides_previous_bubbles_synchronously(qtbot):
     assert all(not row.isVisible() and row.parentWidget() is None for row in previous_rows)
     assert not widget.timeline_content.findChildren(MessageText)
     assert widget.composer.height() == 86
-    widget._activate_thread(("history", "one"))
+    widget._activate_thread(("history", "one", "a"))
     previous_rows = [row for _, row in widget._rows]
     widget.phone.setCurrentIndex(widget.phone.findData("b"))
     assert all(not row.isVisible() and row.parentWidget() is None for row in previous_rows)
@@ -542,6 +549,7 @@ def test_narrow_main_window_partial_history_has_no_horizontal_overflow(qtbot, qa
             'last_success_at': 1780000000, 'unavailable_count': 3}
         worker.snapshot.emit(data)
         window.navigate(1)
+        window.sms_page.phone.setCurrentIndex(window.sms_page.phone.findData("a"))
         window.resize(850, 540)
         window.show()
         window.sms_page.composer.setPlainText('Fictional draft remains editable')
@@ -581,3 +589,94 @@ def test_narrow_main_window_partial_history_has_no_horizontal_overflow(qtbot, qa
             manager._scheduled = False
         finally:
             manager._updating = False
+
+
+def test_bottom_follow_survives_early_zero_range_until_native_range_update(qtbot, monkeypatch):
+    records = [message(number) for number in range(1, 41)]
+    widget, worker = page(qtbot, records)
+    scroll = widget.timeline.verticalScrollBar()
+    qtbot.waitUntil(lambda: scroll.maximum() > 0, timeout=1000)
+    scroll.setValue(scroll.maximum())
+    widget.apply_snapshot(snapshot(records + [message(41)]))
+    with monkeypatch.context() as patch:
+        patch.setattr(scroll, 'maximum', lambda: 0)
+        widget._restore_timeline_scroll()
+        assert scroll.value() == 0
+        assert widget._scroll_restore is not None
+    # Reproduce Qt's later range notification after the early zero-range pass.
+    scroll.rangeChanged.emit(scroll.minimum(), scroll.maximum())
+    qtbot.waitUntil(lambda: scroll.maximum() > 0 and scroll.maximum() - scroll.value() <= 3,
+                    timeout=1000)
+    assert scroll.maximum() - scroll.value() <= 3
+
+
+@pytest.mark.parametrize('intent', ['wheel', 'drag', 'navigation'])
+def test_user_reading_intent_cancels_pending_timeline_restore(qtbot, intent):
+    from PyQt6.QtCore import QPoint, QPointF
+    from PyQt6.QtGui import QWheelEvent
+    from PyQt6.QtWidgets import QApplication
+    records = [message(number) for number in range(1, 41)]
+    widget, worker = page(qtbot, records)
+    scroll = widget.timeline.verticalScrollBar()
+    qtbot.waitUntil(lambda: scroll.maximum() > 0, timeout=1000)
+    scroll.setValue(scroll.maximum())
+    widget.apply_snapshot(snapshot(records + [message(41)]))
+    assert widget._scroll_restore is not None
+    if intent == 'wheel':
+        target = widget.timeline_content.findChild(MessageText).viewport()
+        event = QWheelEvent(QPointF(5, 5), QPointF(target.mapToGlobal(QPoint(5, 5))),
+            QPoint(), QPoint(0, 120), Qt.MouseButton.NoButton, Qt.KeyboardModifier.NoModifier,
+            Qt.ScrollPhase.NoScrollPhase, False)
+        QApplication.sendEvent(target, event)
+    elif intent == 'drag':
+        scroll.setSliderDown(True)
+        scroll.setSliderPosition(0)
+        scroll.setSliderDown(False)
+    else:
+        qtbot.keyClick(scroll, Qt.Key.Key_Home)
+    assert widget._scroll_restore is None
+    scroll.setValue(0)
+    qtbot.waitUntil(lambda: scroll.maximum() > 0 and
+        widget.timeline_content.height() > widget.timeline.viewport().height(), timeout=1000)
+    qtbot.wait(80)
+    assert scroll.value() == 0 and scroll.maximum() - scroll.value() > 3
+
+
+@pytest.mark.parametrize('scope', ['thread', 'phone', 'account'])
+def test_context_switch_rejects_previous_pending_scroll_restore(qtbot, scope):
+    records = [message(number) for number in range(1, 41)] + [
+        message(50, conversation='two', addresses=['+12025550123'])]
+    widget, worker = page(qtbot, records)
+    widget._activate_thread(('history', 'one', 'a'))
+    stale_restore = widget._scroll_restore
+    assert stale_restore is not None
+    if scope == 'thread':
+        widget._activate_thread(('history', 'two', 'a'))
+        expected = ('history', 'two', 'a')
+    elif scope == 'phone':
+        widget.phone.setCurrentIndex(widget.phone.findData('b'))
+        expected = None
+    else:
+        widget.apply_snapshot(snapshot([], account='new'))
+        expected = None
+    current_restore = widget._scroll_restore
+    stale_restore()
+    assert widget.current_thread == expected
+    assert widget._scroll_restore is current_restore
+    assert widget.timeline.verticalScrollBar().value() == 0
+
+
+def test_long_device_label_rewrap_keeps_visible_message_anchor(qtbot):
+    records = [message(number, body='Fictional retained message. ' * 3) for number in range(1, 41)]
+    widget, worker = page(qtbot, records)
+    scroll = widget.timeline.verticalScrollBar()
+    qtbot.waitUntil(lambda: scroll.maximum() > 0, timeout=1000)
+    scroll.setValue(scroll.maximum() // 2)
+    anchor = widget._anchor()
+    devices = deepcopy(PHONES)
+    devices[0]['nickname'] = 'A much longer fictional phone name that wraps across narrow message metadata'
+    widget.apply_snapshot({'devices': {'account_id': 'acct', 'devices': devices}})
+    qtbot.waitUntil(lambda: widget._anchor() and widget._anchor()[0] == anchor[0] and
+        abs(widget._anchor()[1] - anchor[1]) <= 3, timeout=1000)
+    assert widget._anchor()[0] == anchor[0]
+    assert abs(widget._anchor()[1] - anchor[1]) <= 3

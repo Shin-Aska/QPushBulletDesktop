@@ -7,7 +7,7 @@ import re
 import uuid
 import weakref
 
-from PyQt6.QtCore import QSize, Qt, QTimer, pyqtSignal
+from PyQt6.QtCore import QEvent, QSize, Qt, QTimer, pyqtSignal
 from PyQt6 import sip
 from PyQt6.QtGui import QIcon, QKeySequence, QPixmap, QShortcut, QTextOption
 from PyQt6.QtWidgets import (
@@ -109,6 +109,8 @@ class SmsPage(QWidget):
         self.actions = []
         self.sms_cache = {}
         self.selected_device_id = None
+        self.filter_device_id = None
+        self._filter_contexts = {}
         self.selection_request_id = None
         self.current_thread = None
         self._threads = {}
@@ -123,6 +125,10 @@ class SmsPage(QWidget):
         self._timeline_signature = None
         self._rows = []
         self._render_generation = 0
+        self._scroll_restore = None
+        self._scroll_restore_timer = QTimer(self)
+        self._scroll_restore_timer.setSingleShot(True)
+        self._scroll_restore_timer.timeout.connect(self._restore_timeline_scroll)
         self.setObjectName("smsPage")
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -130,8 +136,9 @@ class SmsPage(QWidget):
         toolbar = QHBoxLayout()
         toolbar.setContentsMargins(0, 0, 0, 0)
         toolbar.setSpacing(8)
-        self.sync_status = plain_label("Choose a phone to read SMS history.")
-        self.sync_status.setWordWrap(False)
+        self.sync_status = plain_label("Stored SMS history across your phones.")
+        self.sync_status.setWordWrap(True)
+        self.sync_status.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         self.sync_status.setObjectName("smsMeta")
         toolbar.addWidget(self.sync_status)
         self.refresh_button = QPushButton("Refresh")
@@ -140,7 +147,6 @@ class SmsPage(QWidget):
         self.refresh_button.setIconSize(QSize(14, 14))
         self.refresh_button.clicked.connect(self.refresh)
         toolbar.addWidget(self.refresh_button)
-        toolbar.addStretch(1)
         self.new_button = primary(QPushButton("+ New message"))
         self.new_button.clicked.connect(self.start_new)
         toolbar.addWidget(self.new_button)
@@ -160,7 +166,9 @@ class SmsPage(QWidget):
         left_layout.addWidget(self.search)
         self.phone = QComboBox()
         self.phone.setObjectName("smsPhoneSelector")
-        self.phone.setAccessibleName("SMS phone")
+        self.phone.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.phone.setMinimumContentsLength(12)
+        self.phone.setAccessibleName("Filter SMS by phone")
         self.phone.currentIndexChanged.connect(self._phone_changed)
         left_layout.addWidget(self.phone)
         left_layout.addWidget(divider_line())
@@ -197,6 +205,7 @@ class SmsPage(QWidget):
         header_titles.setSpacing(2)
         self.heading = plain_label("Your SMS conversations")
         self.heading.setObjectName("smsHeading")
+        self.heading.setWordWrap(True)
         header_titles.addWidget(self.heading)
         self.context_label = plain_label("Select a conversation, or start a new message.")
         self.context_label.setObjectName("smsMeta")
@@ -215,6 +224,13 @@ class SmsPage(QWidget):
         self.timeline.setObjectName("smsTimelineScroll")
         self.timeline.setWidgetResizable(True)
         self.timeline.setAccessibleName("SMS conversation history")
+        self.timeline.installEventFilter(self)
+        self.timeline.viewport().installEventFilter(self)
+        timeline_scroll = self.timeline.verticalScrollBar()
+        timeline_scroll.installEventFilter(self)
+        timeline_scroll.rangeChanged.connect(self._queue_timeline_restore)
+        timeline_scroll.actionTriggered.connect(self._cancel_timeline_restore)
+        timeline_scroll.sliderPressed.connect(self._cancel_timeline_restore)
         self.timeline_content = QWidget()
         self.timeline_content.setObjectName("smsTimeline")
         self.timeline_layout = QVBoxLayout(self.timeline_content)
@@ -237,6 +253,13 @@ class SmsPage(QWidget):
         self.recipient.textChanged.connect(self._recipient_changed)
         self.recipient.hide()
         composer_layout.addWidget(self.recipient)
+        self.send_from = QComboBox()
+        self.send_from.setAccessibleName("Send SMS from phone")
+        self.send_from.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.send_from.setMinimumContentsLength(12)
+        self.send_from.currentIndexChanged.connect(self._sender_changed)
+        self.send_from.hide()
+        composer_layout.addWidget(self.send_from)
         self.composer = QTextEdit()
         self.composer.setObjectName("smsComposer")
         self.composer.setAcceptRichText(False)
@@ -409,7 +432,7 @@ class SmsPage(QWidget):
         self.threads.viewport().update()
 
     def _key(self):
-        if self.current_thread is None or not self.selected_device_id:
+        if self.current_thread is None:
             return None
         return (self.account_id, self.selected_device_id, self.current_thread)
 
@@ -423,6 +446,7 @@ class SmsPage(QWidget):
             previous = self._drafts.get(key, ("", 0))
             self._drafts[key] = (self.composer.toPlainText(), previous[1])
             self._contexts[(self.account_id, self.selected_device_id)] = self.current_thread
+            self._filter_contexts[self.filter_device_id] = self.current_thread
 
     def _load_draft(self):
         self._loading = True
@@ -443,7 +467,7 @@ class SmsPage(QWidget):
         if self._loading or not self.current_thread or self.current_thread[0] != "new":
             return
         self._save_draft()
-        self.current_thread = ("new", text.strip())
+        self.current_thread = ("new", text.strip(), self.selected_device_id)
         self._new_recipients[(self.account_id, self.selected_device_id)] = text
         self._load_draft()
 
@@ -466,16 +490,19 @@ class SmsPage(QWidget):
             # The worker guarantees account-consistent arrays in full snapshots.
             if actions is not None:
                 self.actions = [dict(item) for item in actions if self._part_current(item)]
-        sms = data.get("sms")
-        device_id = data.get("sms_device_id")
-        if isinstance(sms, dict) and device_id and self._part_current(sms):
-            request_id = data.get("sms_request_id")
-            if device_id != self.selected_device_id or not request_id or request_id == self.selection_request_id:
+        request_id = data.get("sms_request_id")
+        if not request_id or request_id == self.selection_request_id:
+            snapshots = data.get("sms_by_device")
+            if not isinstance(snapshots, dict):
+                snapshots = {data.get("sms_device_id"): data.get("sms")}
+            for device_id, sms in snapshots.items():
+                if not device_id or not isinstance(sms, dict) or not self._part_current(sms):
+                    continue
                 previous = self.sms_cache.get(device_id, {})
                 messages = [dict(item) for item in sms.get("messages", [])
                     if self._part_current(item) and item.get("device_id", device_id) == device_id]
                 sync = dict(sms.get("sync", {}))
-                if not messages and sync.get("error") and previous.get("messages"):
+                if not messages and (sync.get("error") or sms.get("read_error")) and previous.get("messages"):
                     messages = previous["messages"]
                     sync["last_success_at"] = previous.get("sync", {}).get("last_success_at")
                 self.sms_cache[device_id] = dict(sms, messages=messages, sync=sync)
@@ -488,6 +515,7 @@ class SmsPage(QWidget):
         return "account_id" not in part or (self.account_known and part["account_id"] == self.account_id)
 
     def _reset_account(self, account):
+        self._cancel_timeline_restore()
         if hasattr(self.worker, '_media_cache'):
             self.worker._media_cache.clear()
             self.worker._media_cache_account = account
@@ -500,7 +528,16 @@ class SmsPage(QWidget):
         self._pending_state.clear()
         self._uncertain_requests.clear()
         self.selected_device_id = None
+        self.filter_device_id = None
+        self._filter_contexts.clear()
+        # The worker starts in All devices and resets there with each account.
+        # Opening the page/setup must not enqueue a redundant read command.
         self.selection_request_id = None
+        if (getattr(self.worker, "device_id", None) is not None and
+                getattr(self.worker, "account_id", None) == account):
+            self.selection_request_id = str(uuid.uuid4())
+            self.worker.request("select_device", {"device_id": None,
+                "request_id": self.selection_request_id, "account_id": account})
         self.current_thread = None
         self._threads = {}
         self._contact_icons.clear()
@@ -510,72 +547,104 @@ class SmsPage(QWidget):
         self._loading = False
         self._timeline_signature = None
 
-    def _populate_phones(self):
-        selected = self.selected_device_id
-        known = {item["id"]: item for item in self.devices}
-        history_ids = (set(self.sms_cache) |
-            {item["id"] for item in self.devices if item.get("history", {}).get("count")} |
-            {item.get("device_id") for item in self.actions if item.get("kind") == "sms"})
-        selectable = [item for item in self.devices if item.get("can_sms") or item["id"] in history_ids]
-        for device_id in history_ids - set(known):
+    def _eligible_devices(self):
+        known = {item["id"]: dict(item) for item in self.devices}
+        retained = set(self.sms_cache) | {item.get("device_id") for item in self.actions if item.get("kind") == "sms"}
+        for device_id in retained - set(known):
             if device_id:
-                selectable.append({"id": device_id, "nickname": device_id, "active": False})
-        # Preserve an existing destination even when its metadata disappears.
-        if selected and selected not in {item["id"] for item in selectable}:
-            selectable.append({"id": selected, "nickname": selected, "active": False})
+                known[device_id] = {"id": device_id, "nickname": device_id, "active": False}
+        return [item for item in known.values() if item.get("can_sms") or
+            item.get("history", {}).get("count") or item["id"] in retained]
+
+    def _device_label(self, device_id):
+        if not device_id:
+            return "Choose a sending phone"
+        devices = self._eligible_devices()
+        device = next((item for item in devices if item["id"] == device_id), {"id": device_id})
+        name = str(device.get("nickname") or device_id)
+        duplicates = [item for item in devices if str(item.get("nickname") or item["id"]) == name]
+        if len(duplicates) > 1:
+            # Full IDs ensure even IDs with a shared suffix remain distinguishable.
+            name += " · " + device_id
+        if not (device.get("active") and device.get("can_sms")):
+            name += " · history only"
+        return name
+
+    def _populate_phones(self):
+        devices = self._eligible_devices()
         self.phone.blockSignals(True)
         self.phone.clear()
-        self.phone.addItem("Select a phone…", None)
-        for device in selectable:
-            ready = device.get("active") and device.get("can_sms")
-            label = str(device.get("nickname") or device["id"])
-            if not ready:
-                label += " · history only"
+        self.phone.addItem("All devices", None)
+        self.send_from.blockSignals(True)
+        self.send_from.clear()
+        self.send_from.addItem("Send from: choose a phone…", None)
+        for device in devices:
+            label = self._device_label(device["id"])
             self.phone.addItem(label, device["id"])
-        if selected is None:
-            selected = next((item["id"] for item in selectable if item.get("active") and item.get("can_sms")), None)
-            if selected is None and selectable:
-                selected = selectable[0]["id"]
-        self.phone.setCurrentIndex(max(0, self.phone.findData(selected)))
+            self.phone.setItemData(self.phone.count() - 1, device["id"], Qt.ItemDataRole.ToolTipRole)
+            if device.get("active") and device.get("can_sms"):
+                self.send_from.addItem("Send from: " + label, device["id"])
+                self.send_from.setItemData(self.send_from.count() - 1, device["id"], Qt.ItemDataRole.ToolTipRole)
+        self.phone.setCurrentIndex(max(0, self.phone.findData(self.filter_device_id)))
+        self.send_from.setCurrentIndex(max(0, self.send_from.findData(self.selected_device_id)))
         self.phone.blockSignals(False)
-        if selected != self.selected_device_id:
-            self._select_phone(selected)
+        self.send_from.blockSignals(False)
 
     def _phone_changed(self):
         self._select_phone(self.phone.currentData())
 
     def _select_phone(self, device_id):
-        if device_id == self.selected_device_id:
+        if device_id == self.filter_device_id:
             return
         self._save_draft()
-        self.selected_device_id = device_id
-        self.current_thread = self._contexts.get((self.account_id, device_id))
-        if self.current_thread and self.current_thread[0] == "new":
+        self.filter_device_id = device_id
+        context = self._filter_contexts.get(device_id) or self._contexts.get((self.account_id, device_id))
+        self.current_thread = context
+        self.selected_device_id = context[2] if context else device_id
+        if context and context[0] == "new":
             self._loading = True
-            self.recipient.setText(self._new_recipients.get((self.account_id, device_id), ""))
+            self.recipient.setText(context[1])
             self._loading = False
         self._timeline_signature = None
         self._rebuild_threads(new_context=True)
         self._load_draft()
         self._update_sync()
         self.selection_request_id = str(uuid.uuid4())
-        self.worker.request("select_device", {"device_id": device_id, "request_id": self.selection_request_id})
-        if device_id:
-            self.refresh()
+        self.worker.request("select_device", {"device_id": device_id,
+            "request_id": self.selection_request_id, "account_id": self.account_id})
+
+    def _sender_changed(self):
+        if not self.current_thread or self.current_thread[0] != "new":
+            return
+        self._save_draft()
+        old_key = self._key()
+        self.selected_device_id = self.send_from.currentData()
+        self.current_thread = ("new", self.recipient.text().strip(), self.selected_device_id)
+        if old_key and old_key[1] is None and self._key() not in self._drafts:
+            self._drafts[self._key()] = self._drafts.get(old_key, ("", 0))
+        self._new_recipients[(self.account_id, self.selected_device_id)] = self.recipient.text()
+        self._load_draft()
+        self._render_timeline(new_context=True)
 
     def refresh(self):
-        if self.selected_device_id and self.account_known and self.capabilities.get("features", {}).get("sms_history"):
-            self.worker.request("refresh_sms", {"device_id": self.selected_device_id,
+        if not self.account_known or not self.capabilities.get("features", {}).get("sms_history"):
+            return
+        devices = [self.filter_device_id] if self.filter_device_id else [item["id"] for item in
+            self._eligible_devices() if item.get("active") and item.get("can_sms")]
+        for device_id in devices:
+            self.worker.request("refresh_sms", {"device_id": device_id,
                 "request_id": str(uuid.uuid4()), "account_id": self.account_id})
 
     def _rebuild_threads(self, new_context=False):
         threads = {}
-        messages = self.sms_cache.get(self.selected_device_id, {}).get("messages", [])
+        messages = [dict(message, device_id=device_id) for device_id, snapshot in self.sms_cache.items()
+            if self.filter_device_id is None or device_id == self.filter_device_id
+            for message in snapshot.get("messages", [])]
         for message in messages:
             conversation = message.get("conversation_id")
             if conversation is None:
                 continue
-            key = ("history", str(conversation))
+            key = ("history", str(conversation), message["device_id"])
             threads.setdefault(key, {"messages": [], "actions": []})["messages"].append(message)
         for thread in threads.values():
             thread["messages"].sort(key=lambda item: (_order(item.get("timestamp")), str(item.get("id", ""))))
@@ -584,12 +653,12 @@ class SmsPage(QWidget):
             # Accepted requests remain in Message activity. They are not phone
             # messages, and keeping them here duplicates the synchronized SMS.
             # In particular, do not infer delivery by matching body/time text.
-            if (action.get("kind") != "sms" or action.get("device_id") != self.selected_device_id
+            if (action.get("kind") != "sms" or (self.filter_device_id is not None and action.get("device_id") != self.filter_device_id)
                     or action.get("state") == "upstream_accepted"):
                 continue
             recipient = action.get("recipient")
-            matches = [key for key, thread in threads.items() if key[0] == "history" and thread["recipient"] == recipient and recipient]
-            key = matches[0] if len(matches) == 1 else ("local", str(recipient or "Unknown recipient"))
+            matches = [key for key, thread in threads.items() if key[0] == "history" and thread["recipient"] == recipient and recipient and key[2] == action.get("device_id")]
+            key = matches[0] if len(matches) == 1 else ("local", str(recipient or "Unknown recipient"), action.get("device_id"))
             threads.setdefault(key, {"messages": [], "actions": [], "recipient": None})["actions"].append(action)
         self._threads = threads
         if self.current_thread and self.current_thread[0] == "local" and self.current_thread not in threads:
@@ -598,8 +667,8 @@ class SmsPage(QWidget):
             # person's conversation or leaving an empty local-request thread.
             recipient = self.current_thread[1]
             matches = [key for key, thread in threads.items()
-                       if key[0] == "history" and recipient and thread.get("recipient") == recipient]
-            self.current_thread = matches[0] if len(matches) == 1 else ("new", recipient if E164.fullmatch(recipient) else "")
+                       if key[0] == "history" and recipient and thread.get("recipient") == recipient and key[2] == self.selected_device_id]
+            self.current_thread = matches[0] if len(matches) == 1 else ("new", recipient if E164.fullmatch(recipient) else "", self.selected_device_id)
             if self.current_thread[0] == "new":
                 self._new_recipients[(self.account_id, self.selected_device_id)] = self.current_thread[1]
                 self._loading = True
@@ -640,12 +709,13 @@ class SmsPage(QWidget):
             title = self._thread_title(key, thread)
             records = thread["messages"]
             preview = (str(records[-1].get("body", "")) or ("Image attachment" if records[-1].get("image_urls") else "")) if records else "Local request · review in Activity"
-            searchable = title + " " + " ".join(str(item.get("body", "")) for item in records)
+            searchable = title + " " + self._device_label(key[2]) + " " + " ".join(str(item.get("body", "")) for item in records)
             if query and query not in searchable.casefold():
                 continue
             last_ts = records[-1].get("timestamp") if records else (thread["actions"][-1].get("created_at") if thread["actions"] else None)
-            desired.append((key, title + "\n" + preview[:90].replace("\n", " "), self._thread_icon(thread, title), {
+            desired.append((key, title + "\n" + self._device_label(key[2]) + "\n" + preview[:90].replace("\n", " "), self._thread_icon(thread, title), {
                 "title": title,
+                "device": self._device_label(key[2]),
                 "preview": preview.replace("\n", " "),
                 "last_timestamp": last_ts,
             }))
@@ -664,6 +734,7 @@ class SmsPage(QWidget):
                 if item.text() != text:
                     item.setText(text)
                 item.setIcon(icon)
+                item.setToolTip("<qt>" + escape(self._device_label(key[2]) + " · " + str(key[2])) + "</qt>")
                 if item.data(Qt.ItemDataRole.UserRole + 1) != metadata:
                     item.setData(Qt.ItemDataRole.UserRole + 1, metadata)
                 retained[key] = item
@@ -687,10 +758,16 @@ class SmsPage(QWidget):
             self._activate_thread(item.data(Qt.ItemDataRole.UserRole), True)
 
     def _activate_thread(self, key, new_context=False):
+        # Compatibility callers must already have an explicit selected route.
+        if len(key) == 2:
+            if not self.selected_device_id:
+                return
+            key = (*key, self.selected_device_id)
         if key == self.current_thread:
             return
         self._save_draft()
         self.current_thread = key
+        self.selected_device_id = key[2]
         self.recipient.hide()
         self._load_draft()
         selected = next((self.threads.item(index) for index in range(self.threads.count())
@@ -705,8 +782,9 @@ class SmsPage(QWidget):
 
     def start_new(self):
         self._save_draft()
+        self.selected_device_id = self.filter_device_id
         recipient = self._new_recipients.get((self.account_id, self.selected_device_id), "")
-        self.current_thread = ("new", recipient.strip())
+        self.current_thread = ("new", recipient.strip(), self.selected_device_id)
         self._loading = True
         self.recipient.setText(recipient)
         self._loading = False
@@ -722,9 +800,8 @@ class SmsPage(QWidget):
         if not any(item.get("id") == action.get("id") for item in self.actions):
             self.actions.append(dict(action))
         self._populate_phones()
-        index = self.phone.findData(action.get("device_id"))
-        if index >= 0:
-            self.phone.setCurrentIndex(index)
+        if self.filter_device_id is not None and self.filter_device_id != action.get("device_id"):
+            self.phone.setCurrentIndex(0)
         self._rebuild_threads()
         key = next((key for key, thread in self._threads.items() if any(item.get("id") == action.get("id") for item in thread["actions"])), None)
         if key is not None:
@@ -742,6 +819,8 @@ class SmsPage(QWidget):
     def validation_message(self):
         if not self.account_known or not self.account_id:
             return "Connect a provider account to prepare an SMS."
+        if not self.selected_device_id:
+            return "Choose a Send from phone before reviewing this message."
         device = next((item for item in self.devices if item["id"] == self.selected_device_id), {})
         if not device.get("active") or not device.get("can_sms"):
             return "This phone is history only. Choose an active SMS-capable phone for a new message."
@@ -767,7 +846,9 @@ class SmsPage(QWidget):
         self.send_button.setEnabled((state == "ambiguous" and pending.account_id == self.account_id) if pending else not self.validation_message())
         self.feedback.setText("The result is uncertain. Reconcile the exact original request; no SMS is sent by this button." if state == "ambiguous" else
             "Saving a pending request. Nothing is sent until you review and approve it." if pending else self.validation_message())
-        self.refresh_button.setEnabled(bool(self.selected_device_id) and bool(self.capabilities.get("features", {}).get("sms_history")))
+        self.refresh_button.setText("Refresh all devices" if self.filter_device_id is None else "Refresh")
+        self.refresh_button.setEnabled(bool(self._eligible_devices()) and bool(self.capabilities.get("features", {}).get("sms_history")))
+        self.send_from.setEnabled(pending is None)
         self.ai_context_changed.emit()
 
     def submit(self):
@@ -827,7 +908,10 @@ class SmsPage(QWidget):
             self.feedback.setText("The request was rejected. Your draft is kept; check the phone and recipient before trying again.")
 
     def _update_sync(self):
-        sync = self.sms_cache.get(self.selected_device_id, {}).get("sync", {})
+        sync = dict(self.sms_cache.get(self.filter_device_id, {}).get("sync", {}))
+        read_error = self.sms_cache.get(self.filter_device_id, {}).get("read_error")
+        if read_error:
+            sync["error"] = read_error
         state = sync.get("state")
         last = _time(sync.get("last_success_at"))
         unavailable = sync.get("unavailable_count", 0)
@@ -852,15 +936,47 @@ class SmsPage(QWidget):
             details.append("Sync state: " + str(state).replace("_", " ") + ".")
         if sync.get("error"):
             details.append("Details: " + str(sync["error"]))
-        if not self.selected_device_id:
-            text = "Choose a phone"
-            details = ["Choose a phone to read retained SMS history."]
+        if self.filter_device_id is None:
+            entries = self._eligible_devices()
+            problems = []
+            for device in entries:
+                cached = self.sms_cache.get(device["id"], {})
+                status = cached.get("sync", {})
+                error = cached.get("read_error") or status.get("error")
+                if error or status.get("state") in {"error", "locked", "rate_limited", "partial"}:
+                    problems.append(self._device_label(device["id"]) + ": " + str(error or status.get("state")))
+            text = "All devices · " + str(len(entries)) + " phones"
+            if problems:
+                text += " · " + str(len(problems)) + " need attention"
+            details = ["Stored history across all phones. Conversations stay separate for each device."] + problems
+            if problems:
+                details.append("Cached messages are retained; other phones remain available.")
         description = "\n".join(details)
         self.sync_status.setText(text)
         self.sync_status.setAccessibleDescription(description)
         # A controlled wrapper prevents Qt from interpreting provider detail as
         # tooltip markup; accessibility keeps the complete plain-text version.
         self.sync_status.setToolTip("<qt>" + escape(description).replace("\n", "<br>") + "</qt>")
+
+    def _queue_timeline_restore(self, *unused):
+        if self._scroll_restore is not None:
+            self._scroll_restore_timer.start(0)
+
+    def _restore_timeline_scroll(self):
+        restore = self._scroll_restore
+        if restore is not None:
+            restore()
+
+    def _cancel_timeline_restore(self, *unused):
+        self._scroll_restore = None
+        self._scroll_restore_timer.stop()
+
+    def eventFilter(self, watched, event):
+        if event.type() in {QEvent.Type.Wheel, QEvent.Type.MouseButtonPress, QEvent.Type.KeyPress}:
+            # User reading/navigation intent wins over a queued layout restore.
+            # Native range clamps and our own setValue do not emit these events.
+            self._cancel_timeline_restore()
+        return super().eventFilter(watched, event)
 
     def _anchor(self):
         value = self.timeline.verticalScrollBar().value()
@@ -873,6 +989,10 @@ class SmsPage(QWidget):
         thread = self._threads.get(self.current_thread, {"messages": [], "actions": []})
         is_new = bool(self.current_thread and self.current_thread[0] == "new")
         self.recipient.setVisible(is_new)
+        self.send_from.setVisible(is_new)
+        self.send_from.blockSignals(True)
+        self.send_from.setCurrentIndex(max(0, self.send_from.findData(self.selected_device_id)))
+        self.send_from.blockSignals(False)
         self.heading.setText("New message" if is_new else self._thread_title(self.current_thread, thread) if self.current_thread in self._threads else "Your SMS conversations")
         self.avatar.setPixmap(self._thread_icon(thread, self.heading.text()).pixmap(36, 36))
         self._sync_remote_avatar(thread)
@@ -880,13 +1000,19 @@ class SmsPage(QWidget):
         self.context_label.setText("Enter the complete phone number, including + and country code." if is_new else
             ("Phone history · " + route if route else "Phone history is read-only here. Use New message with an explicit number.") if thread["messages"] else
             "Local requests are separate from phone history. Review their exact payload in Activity.")
-        signature = (self.account_id, self.selected_device_id, self.current_thread, repr(thread))
+        if self.selected_device_id:
+            self.context_label.setText(self._device_label(self.selected_device_id) + " · " + self.context_label.text())
+        self.context_label.setWordWrap(True)
+        self.context_label.setToolTip("<qt>" + escape(str(self.selected_device_id or "Choose a sending phone")) + "</qt>")
+        signature = (self.account_id, self.selected_device_id, self.current_thread,
+            self._device_label(self.selected_device_id) if self.selected_device_id else None, repr(thread))
         if signature == self._timeline_signature:
             return
         scroll = self.timeline.verticalScrollBar()
         near_bottom = scroll.maximum() - scroll.value() < 48
         anchor = self._anchor()
         old_value = scroll.value()
+        self._cancel_timeline_restore()
         self._timeline_signature = signature
         self._render_generation += 1
         generation = self._render_generation
@@ -911,10 +1037,13 @@ class SmsPage(QWidget):
             outgoing = message.get("direction") == "outgoing"
             row, bubble, bubble_layout = self._card("smsOutgoing" if outgoing else "smsIncoming", outgoing)
             sender = "You · phone SMS" if outgoing else str(message.get("name") or ", ".join(message.get("addresses", [])) or "Unknown sender")
-            meta = plain_label(sender + " · " + (stamp.strftime("%H:%M") if stamp else "Unknown time"))
+            meta = plain_label(sender + " · " + self._device_label(self.selected_device_id) + " · " + (stamp.strftime("%H:%M") if stamp else "Unknown time"))
+            meta.setWordWrap(True)
             meta.setObjectName("smsMeta")
             bubble_layout.addWidget(meta)
             body = MessageText(str(message.get("body") or ""))
+            body.installEventFilter(self)
+            body.viewport().installEventFilter(self)
             body.setAccessibleName("Outgoing SMS" if outgoing else "Incoming SMS")
             bubble_layout.addWidget(body)
             for index, unused in enumerate(message.get("image_urls", [])[:16]):
@@ -937,7 +1066,7 @@ class SmsPage(QWidget):
             bubble_layout.addWidget(label)
             bubble_layout.addWidget(MessageText(str(action.get("body") or "")))
             date = _time(action.get("created_at"))
-            details = "To " + str(action.get("recipient") or "Unknown recipient")
+            details = self._device_label(action.get("device_id")) + " · To " + str(action.get("recipient") or "Unknown recipient")
             if date:
                 details += " · " + date.strftime("%d %b, %H:%M")
             bubble_layout.addWidget(plain_label(details))
@@ -955,38 +1084,47 @@ class SmsPage(QWidget):
         self.timeline_layout.addStretch()
         self.timeline_content.adjustSize()
 
+        page_ref = weakref.ref(self)
         def restore():
-            if sip.isdeleted(self) or generation != self._render_generation:
+            page = page_ref()
+            if (page is None or sip.isdeleted(page) or generation != page._render_generation or
+                    page._scroll_restore is not restore):
                 return
-            self.timeline_layout.activate()
+            page.timeline_layout.activate()
             if new_context or near_bottom:
                 scroll.setValue(scroll.maximum())
             elif anchor:
-                row = next((row for key, row in self._rows if key == anchor[0]), None)
+                row = next((row for key, row in page._rows if key == anchor[0]), None)
                 scroll.setValue(row.y() - anchor[1] if row else old_value)
             else:
                 scroll.setValue(old_value)
-        # Native wrapping settles after the viewport's layout pass.
-        QTimer.singleShot(0, restore)
-        QTimer.singleShot(30, restore)
+        # Keep one generation-scoped intent through deferred wrapping/range
+        # changes. An early zero range must not consume a bottom-follow request.
+        # Native user input cancels it; the next render supersedes it.
+        self._scroll_restore = restore
+        self._queue_timeline_restore()
 
     def _media_anchor(self):
+        self._cancel_timeline_restore()
         scroll = self.timeline.verticalScrollBar()
         self._image_anchor = (self._anchor(), scroll.value(), scroll.maximum() - scroll.value() < 48)
 
     def _restore_media_anchor(self):
         state = getattr(self, '_image_anchor', None)
         generation = self._render_generation
+        page_ref = weakref.ref(self)
         def restore():
-            if sip.isdeleted(self) or generation != self._render_generation or state is None:
+            page = page_ref()
+            if (page is None or sip.isdeleted(page) or generation != page._render_generation or state is None or
+                    page._scroll_restore is not restore):
                 return
-            self.timeline_layout.activate()
+            page.timeline_layout.activate()
             anchor, old_value, near_bottom = state
-            scroll = self.timeline.verticalScrollBar()
-            row = next((row for key, row in self._rows if anchor and key == anchor[0]), None)
+            scroll = page.timeline.verticalScrollBar()
+            row = next((row for key, row in page._rows if anchor and key == anchor[0]), None)
             scroll.setValue(scroll.maximum() if near_bottom else row.y() - anchor[1] if row else old_value)
-        QTimer.singleShot(0, restore)
-        QTimer.singleShot(30, restore)
+        self._scroll_restore = restore
+        self._queue_timeline_restore()
 
     def _card(self, name, outgoing):
         row = QWidget()
