@@ -1,0 +1,6 @@
+#!/bin/sh
+# APPIMAGE is the original executable, supplied by the type-2 runtime.
+set -eu
+APPDIR=${APPDIR:-$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)}
+export APPDIR
+exec "$APPDIR/usr/pbdesk/pbdesk" --pbdesk-bootstrap "$@"

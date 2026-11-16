@@ -5,6 +5,7 @@ import os
 import sys
 import secrets
 import subprocess
+from pbdesk.runtime import command, child_environment
 import httpx
 from pbdesk.credentials import service_token
 from pbdesk.services.client_lifecycle import stop_generation
@@ -146,7 +147,7 @@ class WebHost:
                 PBDESK_WEB_INSTANCE_ID=instance_id, PBDESK_STOP_GENERATION=generation,
                 PBDESK_STATE_DIR=str(self.settings.state_dir), PBDESK_CORE_PORT=str(self.settings.core_port),
                 PBDESK_WEB_PORT=str(self.settings.web_port))
-            process = await asyncio.to_thread(subprocess.Popen, [sys.executable, '-m', 'pbdesk.web'], env=env,
+            process = await asyncio.to_thread(subprocess.Popen, command('pbdesk.web'), env=child_environment(env),
                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
             self.process = OwnedWebProcess(process)
             for _ in range(60):

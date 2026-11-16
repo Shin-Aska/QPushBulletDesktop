@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import stat
 import subprocess
+from pbdesk.runtime import command, child_environment
 import sys
 import tempfile
 import time
@@ -286,8 +287,8 @@ async def launch_restart_helper(settings, instance_id):
     # Popen has no asyncio transport finalizer that could kill this helper when
     # the old core closes its event loop. The helper holds no client lease.
     process = await asyncio.to_thread(subprocess.Popen,
-        [sys.executable, '-m', 'pbdesk.services.core_settings', '--restart-helper', instance_id],
-        env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+        command('pbdesk.services.core_settings', '--restart-helper', instance_id),
+        env=child_environment(env), stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL, start_new_session=True)
     try:
         ready = await asyncio.wait_for(asyncio.to_thread(process.stdout.readline), 3)

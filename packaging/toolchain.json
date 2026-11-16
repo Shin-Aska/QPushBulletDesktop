@@ -1,0 +1,15 @@
+{
+  "python": {
+    "version": "3.14.4",
+    "url": "https://github.com/actions/python-versions/releases/download/3.14.4-25113653268/python-3.14.4-linux-24.04-x64.tar.gz",
+    "sha256": "2fda58ccb07f75bd70eb104106814234bcd9106576a64a371708e7cff3abb9f2"
+  },
+  "appimage_runtime": {
+    "version": "20251108",
+    "url": "https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64",
+    "sha256": "2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d"
+  },
+  "pyinstaller": "6.22.3",
+  "architecture": "x86_64",
+  "runner": "ubuntu-24.04"
+}

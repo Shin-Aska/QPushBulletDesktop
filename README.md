@@ -1,6 +1,6 @@
 # pbdesk
 
-[License](LICENSE) · [Privacy policy](PRIVACY.md) · [Changelog](CHANGELOG.md) · [First-release plan](docs/release-plan.md) · [Encrypted history](docs/encrypted-history.md)
+[License](LICENSE) · [Privacy policy](PRIVACY.md) · [Changelog](CHANGELOG.md) · [First-release plan](docs/release-plan.md) · [Encrypted history](docs/encrypted-history.md) · [Private AppImage builds](docs/appimage.md)
 
 A Linux-first Pushbullet desktop for Kubuntu 26.04, KDE Plasma 6 on Wayland, and standard CPython 3.14. One private Python core owns the SQLCipher-encrypted SQLite history, provider ingestion, notification delivery, and the optional web-host process. The native interface uses PyQt6 Widgets; no embedded browser, Node.js, CDN, or JavaScript build system is required.
 

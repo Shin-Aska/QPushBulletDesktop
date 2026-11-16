@@ -43,8 +43,12 @@ def application_directory():
     configured = os.environ.get("PBDESK_APPLICATION_DIR")
     if configured:
         return Path(configured).expanduser().resolve()
-    if getattr(sys,"frozen",False):
-        return Path(sys.executable).resolve().parent
+    if getattr(sys, "frozen", False):
+        from pbdesk.runtime import appimage_path
+        image = appimage_path()
+        if image is not None:
+            return image.parent
+        raise ValueError("Set PBDESK_APPLICATION_DIR or launch through the original AppImage")
     launcher = Path(sys.argv[0]).expanduser()
     if launcher.name.startswith("pbdesk") and launcher.is_file():
         return launcher.absolute().parent

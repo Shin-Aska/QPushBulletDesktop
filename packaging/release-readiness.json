@@ -1,0 +1,11 @@
+{
+  "final_release_ready": false,
+  "corresponding_source_complete": false,
+  "supported_desktop_acceptance_complete": false,
+  "encrypted_profile_upgrade_verified": false,
+  "blockers": [
+    "Complete and review matching GPL/LGPL/native corresponding-source and license material",
+    "Verify the actual AppImage on supported Kubuntu 26.04 KDE Plasma 6 Wayland",
+    "Record packaged upgrade, recovery, tray, notification and process-lifetime acceptance"
+  ]
+}

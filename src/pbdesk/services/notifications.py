@@ -2,6 +2,7 @@
 import asyncio
 import shutil
 import html
+from pbdesk.runtime import system_environment
 
 class Notifier:
     def __init__(self, enabled=False):
@@ -20,7 +21,7 @@ class Notifier:
         try:
             process = await asyncio.create_subprocess_exec(
                 self.command, "--app-name=pbdesk", "--", html.escape(item["title"] or "Pushbullet"), html.escape(item["body"][:1000]),
-                stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
+                stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL, env=system_environment())
             await asyncio.wait_for(process.wait(), timeout=5)
             self.outcome = "submitted" if process.returncode == 0 else "failed"
             return process.returncode == 0

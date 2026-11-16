@@ -250,3 +250,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# CI-only isolated build/test environments and generated AppImage files
+.build-venv/
+.test-venv/
+*.AppImage
+!packaging/pbdesk-appimage.spec
