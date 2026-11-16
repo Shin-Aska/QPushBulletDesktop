@@ -518,9 +518,14 @@ class SmsPage(QWidget):
         self.selected_device_id = None
         self.filter_device_id = None
         self._filter_contexts.clear()
-        self.selection_request_id = str(uuid.uuid4())
-        self.worker.request("select_device", {"device_id": None,
-            "request_id": self.selection_request_id, "account_id": account})
+        # The worker starts in All devices and resets there with each account.
+        # Opening the page/setup must not enqueue a redundant read command.
+        self.selection_request_id = None
+        if (getattr(self.worker, "device_id", None) is not None and
+                getattr(self.worker, "account_id", None) == account):
+            self.selection_request_id = str(uuid.uuid4())
+            self.worker.request("select_device", {"device_id": None,
+                "request_id": self.selection_request_id, "account_id": account})
         self.current_thread = None
         self._threads = {}
         self._contact_icons.clear()

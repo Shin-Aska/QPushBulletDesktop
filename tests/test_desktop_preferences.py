@@ -366,7 +366,8 @@ def test_narrow_partial_mms_wrapped_contact_keeps_native_actions(isolated, qtbot
                            'error': 'Fictional history unavailable', 'unavailable_count': 3}
     worker.snapshot.emit(data)
     window.navigate(1)
-    window.sms_page._activate_thread(('history', 'one'), True)
+    window.sms_page.phone.setCurrentIndex(window.sms_page.phone.findData('a'))
+    window.sms_page._activate_thread(('history', 'one', 'a'), True)
     window.resize(850, 540)
     window.show()
     worker.result.emit({'command': 'refresh_sms',

@@ -30,6 +30,7 @@ def unified(qtbot, duplicate_names=False):
 def test_default_combined_list_distinct_same_contact_device_labels_recency_search(qtbot):
     page, worker = unified(qtbot, duplicate_names=True)
     assert page.phone.currentText() == 'All devices' and page.filter_device_id is None
+    assert worker.requests == [] and page.selection_request_id is None
     assert set(page._threads) == {('history', 'same', 'a'), ('history', 'same', 'b')}
     assert page.threads.item(0).data(Qt.ItemDataRole.UserRole) == ('history', 'same', 'b')
     assert [page.threads.item(n).data(Qt.ItemDataRole.UserRole + 1)['device'] for n in range(2)] == ['My phone · b', 'My phone · a']
@@ -263,3 +264,31 @@ def test_device_metadata_change_updates_header_row_and_existing_bubble(qtbot):
     assert page.composer.toPlainText() == 'Keep this draft'
     assert 'history only' in page.validation_message()
     assert page.filter_device_id is None
+
+
+def test_initial_same_account_non_all_worker_filter_is_explicitly_reset(qtbot):
+    worker = FakeWorker()
+    worker.device_id = 'b'
+    worker.account_id = 'acct'
+    page = SmsPage(worker)
+    qtbot.addWidget(page)
+    page.apply_snapshot(snapshot([message()]))
+    assert len(worker.requests) == 1
+    command, payload = worker.requests[0]
+    assert command == 'select_device'
+    assert payload == {'device_id': None, 'account_id': 'acct',
+                       'request_id': page.selection_request_id}
+    assert page.selection_request_id and page.filter_device_id is None
+
+
+def test_account_reset_default_rejects_old_filter_generation_without_read_command(qtbot):
+    page, worker = unified(qtbot)
+    page.phone.setCurrentIndex(page.phone.findData('a'))
+    old_generation = page.selection_request_id
+    count = len(worker.requests)
+    page.apply_snapshot(snapshot([], account='new'))
+    assert len(worker.requests) == count
+    assert page.selection_request_id is None and page.filter_device_id is None
+    page.apply_snapshot({'sms_request_id': old_generation, 'sms_by_device': {
+        'a': {'account_id': 'new', 'messages': [message(90, account='new')]}}})
+    assert not page.sms_cache['a']['messages']
