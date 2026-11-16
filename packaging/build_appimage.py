@@ -127,6 +127,16 @@ def runtime_manifest(root):
     return identity
 
 
+def pack_squashfs(appdir, destination, *, epoch):
+    # mksquashfs rejects explicit timestamp flags alongside SOURCE_DATE_EPOCH.
+    # Keep the parent's reproducible-build environment for PyInstaller unchanged.
+    environment = os.environ.copy()
+    environment.pop('SOURCE_DATE_EPOCH', None)
+    run(['mksquashfs', appdir, destination, '-noappend', '-all-root', '-comp', 'zstd',
+         '-no-xattrs', '-mkfs-time', str(epoch), '-all-time', str(epoch),
+         '-processors', '2'], env=environment, timeout=120)
+
+
 def verified_download(record, destination):
     with urllib.request.urlopen(record['url'], timeout=60) as response, destination.open('wb') as output:
         shutil.copyfileobj(response, output)
@@ -220,8 +230,7 @@ def main(argv=None):
     runtime_binary = work / 'appimage-runtime'
     verified_download(toolchain['appimage_runtime'], runtime_binary)
     squashfs = work / 'filesystem.squashfs'
-    run(['mksquashfs', appdir, squashfs, '-noappend', '-all-root', '-comp', 'zstd',
-         '-no-xattrs', '-mkfs-time', str(epoch), '-all-time', str(epoch)])
+    pack_squashfs(appdir, squashfs, epoch=epoch)
     image = output / (prefix + '-x86_64.AppImage')
     with image.open('wb') as destination:
         for component in (runtime_binary, squashfs):

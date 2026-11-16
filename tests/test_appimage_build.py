@@ -127,3 +127,26 @@ def test_mcp_collection_filters_optional_cli_before_importing_packages():
     analysis = next(node for node in calls if isinstance(node.func, ast.Name) and node.func.id == 'Analysis')
     excluded = ast.literal_eval(next(item.value for item in analysis.keywords if item.arg == 'excludes'))
     assert {'mcp.cli', 'mcp.__main__'} <= set(excluded)
+
+
+def test_real_squashfs_accepts_explicit_epoch_with_inherited_source_date_epoch(tmp_path, monkeypatch):
+    import os
+    import shutil
+    import struct
+    import subprocess
+    if not shutil.which('mksquashfs') or not shutil.which('unsquashfs'):
+        pytest.skip('System squashfs tools are unavailable; no installation attempted')
+    source = tmp_path / 'source'
+    source.mkdir()
+    (source / 'fixture.txt').write_bytes(b'bounded SquashFS fixture\n')
+    destination = tmp_path / 'fixture.squashfs'
+    monkeypatch.setenv('SOURCE_DATE_EPOCH', '1700000001')
+    builder.pack_squashfs(source, destination, epoch=1700000000)
+    # Verify the real filesystem's timestamp and content, not a mocked command.
+    superblock = destination.read_bytes()[:12]
+    assert superblock[:4] == b'hsqs'
+    assert struct.unpack_from('<I', superblock, 8)[0] == 1700000000
+    result = subprocess.run(['unsquashfs', '-cat', str(destination), 'fixture.txt'],
+                            check=True, capture_output=True, timeout=20)
+    assert result.stdout == b'bounded SquashFS fixture\n'
+    assert os.environ['SOURCE_DATE_EPOCH'] == '1700000001'
