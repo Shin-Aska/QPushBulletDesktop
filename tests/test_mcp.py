@@ -47,7 +47,8 @@ server.httpx.AsyncClient = lambda **kwargs: actual(**kwargs, transport=httpx.Moc
 server.main()
 ''')
     async def run():
-        env = dict(os.environ, PBDESK_STATE_DIR=str(tmp_path / "state"))
+        env = dict(os.environ, PBDESK_STATE_DIR=str(tmp_path / "state"),
+                   PBDESK_APPLICATION_DIR=str(tmp_path / "application"))
         params = StdioServerParameters(command=sys.executable, args=[str(script)], env=env)
         async with stdio_client(params) as (read, write):
             async with ClientSession(read, write) as session:

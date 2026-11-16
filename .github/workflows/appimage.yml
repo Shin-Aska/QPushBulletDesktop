@@ -91,8 +91,6 @@ jobs:
           .build-venv/bin/python -m pip install --require-hashes --only-binary=:all: -r requirements-build.lock -r packaging/requirements-runtime.lock
           .build-venv/bin/python -m pip install --no-build-isolation --no-deps .
           .build-venv/bin/python -m pip check
-      - name: Run repository regression tests
-        run: .test-venv/bin/python -m pytest -q
       - name: Build self-contained private candidate
         run: .build-venv/bin/python packaging/build_appimage.py
       - name: Smoke actual AppImage outside checkout on isolated session bus and display
@@ -102,6 +100,8 @@ jobs:
           image=$(find "$PWD/dist" -maxdepth 1 -name 'pbdesk-*-x86_64.AppImage' -print -quit)
           test -n "$image"
           dbus-run-session -- xvfb-run -a .test-venv/bin/python packaging/smoke.py "$image" --output "$PWD/dist/smoke-evidence.json"
+      - name: Run repository regression tests
+        run: .test-venv/bin/python -m pytest -q
       - name: Bind smoke evidence to artifact checksums
         run: |
           cd dist
