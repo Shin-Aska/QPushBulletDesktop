@@ -116,20 +116,28 @@ def test_encrypted_hidden_source_tries_device_keys_and_control_has_no_inbox_row(
     asyncio.run(run())
 
 
-def test_sqlite_application_path_backup_conflict_owner_lock_and_permissions(tmp_path):
+def test_sqlite_application_path_explicit_migration_owner_lock_and_permissions(tmp_path):
+    import sqlite3
+    from test_history_security import plaintext
+    from pbdesk.services.history_security import HistorySecurity
     state=tmp_path/'state';application=tmp_path/'application'
-    old=Store(Settings(state));old.ingest(normalize(DEMO));old.close()
-    migrated=Store(Settings(state,application_dir=application))
+    plaintext(state/'pbdesk.sqlite3')
+    item={**normalize(DEMO), 'fingerprint':'fixture', 'notification_claimed':0, 'account_id':''}
+    with sqlite3.connect(state/'pbdesk.sqlite3') as conn:
+        columns=','.join('"'+key+'"' for key in item)
+        conn.execute(f'INSERT INTO items({columns}) VALUES ({",".join("?" for _ in item)})',tuple(item.values()))
+    migrated=HistorySecurity(Settings(state,application_dir=application)).migrate()
     assert migrated.path==application/'pbdesk.sqlite3'
     assert migrated.list_items()[0]['source_id']=='stored:'+DEMO['iden']
-    assert (state/'pbdesk.sqlite3').exists()
+    assert not (state/'pbdesk.sqlite3').exists()
+    assert list(application.glob('*.archive'))
     assert stat.S_IMODE(migrated.path.stat().st_mode)==0o600
     with pytest.raises(RuntimeError,match='already owns'):
         Store(Settings(tmp_path/'other-state',application_dir=application))
     migrated.close()
     reopened=Store(Settings(state,application_dir=application));reopened.close()
-    old=Store(Settings(state));old.set_setting('old-build-wrote',True);old.close()
-    with pytest.raises(RuntimeError,match='differing histories'):
+    plaintext(state/'pbdesk.sqlite3')
+    with pytest.raises(RuntimeError,match='explicit verified migration'):
         Store(Settings(state,application_dir=application))
     assert (application/'pbdesk.sqlite3').exists() and (state/'pbdesk.sqlite3').exists()
 

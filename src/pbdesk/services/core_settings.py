@@ -1,5 +1,6 @@
 """Core-owned settings, quiescent restart coordination, and bounded relaunch handoff."""
 import asyncio
+import anyio
 from contextlib import asynccontextmanager
 import json
 import os
@@ -120,13 +121,17 @@ async def finish_mutation(awaitable):
     try:
         return await asyncio.shield(task)
     except asyncio.CancelledError:
-        while not task.done():
-            try:
-                await asyncio.shield(task)
-            except asyncio.CancelledError:
-                continue
-            except Exception:
-                break
+        # HTTP middleware may cancel an AnyIO scope repeatedly. Shield that
+        # scope while draining the owned operation, otherwise cancellation can
+        # spin without yielding to the wallet/SQL completion callback.
+        with anyio.CancelScope(shield=True):
+            while not task.done():
+                try:
+                    await asyncio.shield(task)
+                except asyncio.CancelledError:
+                    continue
+                except Exception:
+                    break
         # Retrieve a late exception without changing the original cancellation.
         if task.done() and not task.cancelled():
             task.exception()

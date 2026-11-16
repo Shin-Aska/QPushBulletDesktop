@@ -3,6 +3,7 @@ import asyncio
 import base64
 import hashlib
 import json
+import sqlite3
 from pathlib import Path
 
 from alembic import command
@@ -17,6 +18,7 @@ from pbdesk.config import Settings
 from pbdesk.pushbullet.normalize import normalize, MAX_INLINE_IMAGE
 from pbdesk.pushbullet.sms import SmsHistory, thread_fingerprint
 from pbdesk.storage.database import Store
+from pbdesk.services.history_security import HistorySecurity
 
 
 def test_public_media_metadata_is_bounded_and_whitelisted():
@@ -51,7 +53,12 @@ def test_media_migration_retains_identity_history_keys_ciphertext_and_accounts(t
         conn.exec_driver_sql("INSERT INTO device_encryption VALUES ('a','phone','device','fixture-key-reference')")
         conn.exec_driver_sql("INSERT INTO sms_envelopes VALUES ('a','phone','phone_threads','{\"encrypted\":true,\"ciphertext\":\"fixture-cipher\"}')")
     engine.dispose()
-    store = Store(Settings(tmp_path))
+    security = HistorySecurity(Settings(tmp_path))
+    store = security.migrate()
+    security.finish_recovery_offer(store, saved=False)
+    with sqlite3.connect(path) as plaintext:
+        with pytest.raises(sqlite3.DatabaseError):
+            plaintext.execute('SELECT * FROM items').fetchall()
     assert store.item(41)['body'] == 'kept' and store.item(41)['icon'] is None
     old = store.sms_snapshot('phone')['messages'][0]
     assert old['id'] == 52 and old['image_urls'] == [] and old['recipients'] == []

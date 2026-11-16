@@ -32,7 +32,7 @@ def test_status_local_assets_and_security(tmp_path, monkeypatch):
     def handler(request):
         if request.url.path.endswith("health"):
             assert "Authorization" not in request.headers
-            return httpx.Response(200, json=health_response(settings, request.headers, "11111111-1111-1111-1111-111111111111", True))
+            return httpx.Response(200, json=health_response(settings, request.headers, "11111111-1111-1111-1111-111111111111", True, history_ready=True))
         assert request.headers["Authorization"].startswith("Bearer ")
         return httpx.Response(200, json={"provider_state": "<script>unsafe</script>"})
     monkeypatch.setattr(web.httpx, "AsyncClient", lambda **kwargs: actual(**kwargs, transport=httpx.MockTransport(handler)))
@@ -92,3 +92,20 @@ def test_foreign_core_never_receives_bearer(tmp_path, monkeypatch):
     assert len(seen) == 1
     assert seen[0].url.path == "/api/v1/health"
     assert "Authorization" not in seen[0].headers
+
+
+def test_locked_encrypted_core_never_reports_ready_or_sends_bearer(tmp_path, monkeypatch):
+    settings = Settings(tmp_path)
+    calls = []
+    def handler(request):
+        calls.append(request)
+        assert request.url.path == '/api/v1/health'
+        assert 'Authorization' not in request.headers
+        return httpx.Response(200, json=health_response(settings, request.headers,
+            '11111111-1111-1111-1111-111111111111', True, history_ready=False))
+    monkeypatch.setattr(web.httpx, 'AsyncClient', lambda **kwargs: ORIGINAL_CLIENT(**kwargs, transport=httpx.MockTransport(handler)))
+    client = TestClient(web.create_app(settings), base_url='http://127.0.0.1')
+    page = client.get('/')
+    assert 'Ready' not in page.text
+    assert 'Encrypted history is locked' in page.text
+    assert len(calls) == 1

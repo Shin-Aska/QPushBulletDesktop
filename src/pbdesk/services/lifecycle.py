@@ -76,6 +76,8 @@ def ensure_core(settings, timeout=12.0, demo=False, *, role="desktop", generatio
             health = _probe(settings, token, client) if role == "desktop" else _probe(settings, token, client, role)
             if health and health.get("client_lifecycle") != 1:
                 raise CoreStartupError("Core update ready: restart the shared core to enable coupled client lifecycle")
+            if health and health.get("history_encryption") != 1:
+                raise CoreStartupError("Restart the existing core to enable mandatory encrypted history. The running service has been left unchanged.")
             return health
         with httpx.Client(timeout=.5, trust_env=False) as client:
             health = probe(client)

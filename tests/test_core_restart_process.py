@@ -24,6 +24,12 @@ def verified_health(health):
         return None
 
 
+
+def verified_history_ready(health):
+    value = verified_health(health)
+    return value if (value and value.get('history_encryption') == 1
+                     and value.get('history_ready')) else None
+
 def restart(request, instance, request_id='restart-process'):
     payload = {'expected_instance_id': instance, 'request_id': request_id}
     for _ in range(20):
@@ -57,7 +63,7 @@ def test_graceful_restart_same_owned_web_survives_and_leases_recover(isolated):
     assert restart(request, old)['instance_id'] == old
     old_process.wait(timeout=8)
     assert old_process.returncode == 0
-    replacement = eventually(lambda: (value := verified_health(health)) and value['instance_id'] != old and value,
+    replacement = eventually(lambda: (value := verified_history_ready(health)) and value['instance_id'] != old and value,
                              timeout=15)
     eventually(lambda: desktop.instance_id == replacement['instance_id'])
     adopted = eventually(lambda: (value := request('GET', '/api/v1/web').json())['enabled'] and value)
@@ -84,14 +90,14 @@ def test_original_launch_profile_wins_over_default_client_recovery(isolated, tmp
             'body': 'fixture-only preserved event', 'created': 1704067200}]))
         command += ['--fixture', str(fixture)]
     old_process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    original = eventually(lambda: verified_health(health))
+    original = eventually(lambda: verified_history_ready(health))
     desktop = lease()
     # This client normally launches demo mode, deliberately unlike the fixture
     # profile; its recovery races the helper under the shared launcher lock.
     generation = desktop.generation
     restart(request, original['instance_id'])
     old_process.wait(timeout=8)
-    replacement = eventually(lambda: (value := verified_health(health)) and value['instance_id'] != original['instance_id'] and value,
+    replacement = eventually(lambda: (value := verified_history_ready(health)) and value['instance_id'] != original['instance_id'] and value,
                              timeout=15)
     eventually(lambda: desktop.instance_id == replacement['instance_id'])
     state = request('GET', '/api/v1/core/settings').json()
@@ -112,11 +118,11 @@ def test_standalone_restart_helper_holds_no_lease(isolated):
     settings, lease, health, request, children = isolated
     old_process = subprocess.Popen([sys.executable, '-m', 'pbdesk.cli', '--demo', '--standalone'],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    original = eventually(lambda: verified_health(health))
+    original = eventually(lambda: verified_history_ready(health))
     generation = stop_generation(settings)
     restart(request, original['instance_id'])
     old_process.wait(timeout=8)
-    replacement = eventually(lambda: (value := verified_health(health)) and value['instance_id'] != original['instance_id'] and value,
+    replacement = eventually(lambda: (value := verified_history_ready(health)) and value['instance_id'] != original['instance_id'] and value,
                              timeout=15)
     state = request('GET', '/api/v1/core/settings').json()
     assert state['lifecycle']['mode'] == 'standalone'

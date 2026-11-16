@@ -17,6 +17,9 @@ service-credentials.json
 .env
 .env.*
 .pbdesk-database.lock
+.pbdesk-history*
+.history-record-*
+pbdesk-recovery*.txt
 
 # Local agent / tool state (never commit)
 .aws/

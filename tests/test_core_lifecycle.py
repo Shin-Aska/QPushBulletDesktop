@@ -23,7 +23,7 @@ def test_authenticated_probe(tmp_path):
     import uuid
     settings=Settings(tmp_path)
     def server(request):
-        return httpx.Response(200,json=health_response(settings,request.headers,str(uuid.uuid4()),True))
+        return httpx.Response(200,json=health_response(settings,request.headers,str(uuid.uuid4()), True, history_ready=True))
     with httpx.Client(transport=httpx.MockTransport(server)) as client:
         assert _probe(settings,"not-transmitted",client)["ready"]
 
@@ -42,7 +42,7 @@ def test_available_systemd_uses_transient_unit(tmp_path,monkeypatch):
     from pbdesk.services import lifecycle
     settings=Settings(tmp_path)
     calls=[]
-    answers=iter([None,{"ready":True,"client_lifecycle":1}])
+    answers=iter([None,{"ready":True,"client_lifecycle":1,"history_encryption":1}])
     monkeypatch.delenv("PBDESK_LIFECYCLE",raising=False)
     monkeypatch.setattr(lifecycle,"_probe",lambda *a:next(answers))
     def runner(command,**kwargs):

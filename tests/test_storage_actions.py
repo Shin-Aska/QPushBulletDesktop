@@ -109,7 +109,8 @@ def test_migration_from_frozen_v1_preserves_history_and_search(tmp_path):
         assert not {'devices','actions','action_audit','locked_envelopes'} & set(inspect(conn).get_table_names())
         conn.exec_driver_sql("INSERT INTO items(source_id,type,title,body,created_at,fingerprint,notification_claimed) VALUES('stored:existing','note','existing','retained history','2024-01-01T00:00:00+00:00','fp',1)")
     engine.dispose()
-    store=Store(settings)
+    from pbdesk.services.history_security import HistorySecurity
+    store=HistorySecurity(settings).migrate()
     assert store.list_items('retained')[0]['source_id']=='stored:existing'
     with store.engine.connect() as conn:
         assert conn.exec_driver_sql('SELECT version_num FROM alembic_version').scalar()=='0007'

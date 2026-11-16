@@ -6,8 +6,10 @@ build-backend = "setuptools.build_meta"
 name = "pbdesk"
 version = "0.1.0"
 description = "Private Linux Pushbullet inbox core and native desktop"
+license = "GPL-3.0-only"
+license-files = ["LICENSE"]
 requires-python = ">=3.14"
-dependencies = ["fastapi==0.162.5", "uvicorn==0.54.0", "pydantic==2.14.3", "SQLAlchemy==2.1.8", "alembic==1.20.1", "httpx==0.28.1", "websockets==17.4", "keyring==25.7.0", "SecretStorage==3.5.0", "jeepney==0.9.0", "cryptography==50.0.2"]
+dependencies = ["fastapi==0.162.5", "uvicorn==0.54.0", "pydantic==2.14.3", "SQLAlchemy==2.1.8", "sqlcipher3==0.6.5", "alembic==1.20.1", "httpx==0.28.1", "websockets==17.4", "keyring==25.7.0", "SecretStorage==3.5.0", "jeepney==0.9.0", "cryptography==50.0.2"]
 
 [project.optional-dependencies]
 desktop = ["PyQt6==6.12.0"]
@@ -28,7 +30,11 @@ pbdesk-diagnostics = "pbdesk.cli:diagnostics_main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-pbdesk = ["storage/migrations/*.py", "storage/migrations/versions/*.py", "web/templates/**/*.html", "web/templates/*.html", "web/static/**/*", "web/vendor-manifest.json"]
+pbdesk = ["storage/migrations/*.py", "storage/migrations/versions/*.py", "desktop/assets/*.svg", "web/templates/**/*.html", "web/templates/*.html", "web/static/**/*", "web/vendor-manifest.json"]
+
+[tool.setuptools.data-files]
+"share/applications" = ["packaging/pbdesk.desktop"]
+"share/icons/hicolor/scalable/apps" = ["src/pbdesk/desktop/assets/pbdesk.svg"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

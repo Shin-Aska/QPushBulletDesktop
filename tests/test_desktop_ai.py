@@ -1,4 +1,5 @@
 """Synthetic Qt checks; no live account, wallet, model or provider calls."""
+import pytest
 import asyncio
 from copy import deepcopy
 import threading
@@ -140,7 +141,7 @@ def test_ai_worker_signed_identity_and_cancellable_stop(qtbot, tmp_path, monkeyp
     async def handle(request):
         calls.append(request)
         if request.url.path == '/api/v1/health':
-            return httpx.Response(200, json=health_response(settings, request.headers, str(uuid.uuid4()), True))
+            return httpx.Response(200, json=health_response(settings, request.headers, str(uuid.uuid4()), True, history_ready=True))
         entered.set()
         await asyncio.Event().wait()
     monkeypatch.setattr('pbdesk.desktop.ai_worker.httpx.AsyncClient', lambda **kw: actual_client(transport=httpx.MockTransport(handle), **kw))
@@ -482,7 +483,7 @@ def test_worker_models_and_digest_routes_use_only_verified_local_transport(qtbot
     def handle(request):
         calls.append(request)
         if request.url.path == '/api/v1/health':
-            return httpx.Response(200, json=health_response(settings, request.headers, str(uuid.uuid4()), True))
+            return httpx.Response(200, json=health_response(settings, request.headers, str(uuid.uuid4()), True, history_ready=True))
         return httpx.Response(200, json={'models': ['gpt-6-luna']} if request.method == 'GET' else digest())
     monkeypatch.setattr('pbdesk.desktop.ai_worker.httpx.AsyncClient', lambda **kw: actual_client(transport=httpx.MockTransport(handle), **kw))
     worker = AiWorker(settings)
@@ -520,3 +521,25 @@ def test_saved_configuration_supersedes_summary_startup_metadata(qtbot):
     client.result.emit({'request_id': old_id, 'ok': True, 'data': {'configured': False}})
     assert page.poll.isActive() and page._configured is True
     page.stop()
+
+
+@pytest.mark.parametrize('encrypted', [False, True])
+def test_ai_worker_rejects_signed_old_or_locked_replacement(qtbot, tmp_path, monkeypatch, encrypted):
+    settings = Settings(tmp_path)
+    actual = httpx.AsyncClient
+    calls = []
+    def handle(request):
+        calls.append(request)
+        assert request.url.path == '/api/v1/health'
+        assert 'Authorization' not in request.headers
+        kwargs = {'history_ready': False} if encrypted else {}
+        return httpx.Response(200, json=health_response(settings, request.headers, str(uuid.uuid4()), True, **kwargs))
+    monkeypatch.setattr('pbdesk.desktop.ai_worker.httpx.AsyncClient', lambda **kw: actual(transport=httpx.MockTransport(handle), **kw))
+    worker = AiWorker(settings)
+    with qtbot.waitSignal(worker.result, timeout=2000) as captured:
+        worker.start()
+        worker.request('ai_history', {'account_id': 'fictional'})
+    worker.stop()
+    assert worker.wait(2000)
+    assert captured.args[0]['ok'] is False
+    assert len(calls) == 1

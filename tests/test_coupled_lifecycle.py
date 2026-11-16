@@ -13,6 +13,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
+from history_process_helpers import provision_process_history
 from pbdesk.api.app import create_app
 from pbdesk.config import Settings
 from pbdesk.credentials import health_headers, health_response, service_token
@@ -48,7 +49,8 @@ def free_ports():
 def isolated(tmp_path, monkeypatch):
     core, web = free_ports()
     settings = Settings(tmp_path / 'state', core_port=core, web_port=web, application_dir=tmp_path / 'application')
-    settings.application_dir.mkdir()
+    settings.application_dir.mkdir(exist_ok=True)
+    provision_process_history(settings, tmp_path, monkeypatch)
     for key, value in {'PBDESK_STATE_DIR': settings.state_dir, 'PBDESK_APPLICATION_DIR': settings.application_dir,
         'PBDESK_CORE_PORT': core, 'PBDESK_WEB_PORT': web, 'PBDESK_LIFECYCLE': 'foreground',
         'PBDESK_LIFECYCLE_DEMO': '1', 'DBUS_SESSION_BUS_ADDRESS': 'unix:path=/nonexistent-pbdesk-test-bus', 'PBDESK_LEASE_TIMING': json.dumps(TIMING)}.items():
@@ -66,6 +68,10 @@ def isolated(tmp_path, monkeypatch):
     def lease(role='desktop'):
         client = ClientLease(settings, role, demo=True).start()
         clients.append(client)
+        # These ordinary lifecycle scenarios use provisioned history. A lease
+        # attaches to bootstrap transport before its asynchronous unlock finishes.
+        eventually(lambda: (value := health()) and value.get('history_encryption') == 1
+            and value.get('history_ready') and value['instance_id'] == client.instance_id)
         return client
     def health():
         with httpx.Client(timeout=.3, trust_env=False) as client:
@@ -157,7 +163,8 @@ def test_web_process_keeps_core_and_adopts_after_crash(isolated):
     old_core = health()['instance_id']
     children[0].kill()
     children[0].wait(timeout=5)
-    eventually(lambda: (value := health()) and value['instance_id'] != old_core)
+    eventually(lambda: (value := health()) and value['instance_id'] != old_core
+        and value.get('history_encryption') == 1 and value.get('history_ready'))
     adopted = eventually(lambda: (value := request('GET', '/api/v1/web').json())['enabled'] and value)
     assert adopted['instance_id'] == web['instance_id']
     assert adopted['ownership'] == 'adopted'

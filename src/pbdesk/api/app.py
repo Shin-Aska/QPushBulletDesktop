@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import time
+import uuid
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
@@ -24,6 +25,7 @@ from pbdesk.services.webhost import WebHost
 from pbdesk.services.client_lifecycle import LeaseRegistry, stop_generation
 from pbdesk.services.core_settings import CoreSettingsService, cancel_restart, finish_mutation
 from pbdesk.storage.database import Store
+from pbdesk.services.history_security import HistorySecurity, HistorySecurityError
 
 
 def create_app(settings=None, fixture_path=None, notifier=None, demo=False, notifications=False, provider_factory=None, standalone=False, lease_timing=None, launch_generation=None, restart_launcher=None):
@@ -39,96 +41,122 @@ def create_app(settings=None, fixture_path=None, notifier=None, demo=False, noti
         try:
             for role in ("desktop", "web", "mcp"):
                 await asyncio.to_thread(service_token, settings, role)
-            store = await asyncio.to_thread(Store, settings)
-            host.store = store
-            app.state.clients = LeaseRegistry(store.instance_id, launch_generation or await asyncio.to_thread(stop_generation, settings),
+            app.state.instance_id = str(uuid.uuid4())
+            app.state.history_security = HistorySecurity(settings)
+            app.state.history_lock = asyncio.Lock()
+            app.state.history_status_cache = {**await asyncio.to_thread(app.state.history_security.inspect),
+                'history_ready': False, 'unlocked': False}
+            app.state.store = None
+            app.state.host = host
+            app.state.provider = None
+            app.state.history_ready = False
+            app.state.clients = LeaseRegistry(app.state.instance_id, launch_generation or await asyncio.to_thread(stop_generation, settings),
                 lambda: app.state.shutdown_callback and app.state.shutdown_callback(), standalone=standalone, timing=lease_timing)
             tasks.append(asyncio.create_task(app.state.clients.run()))
-            app.state.store = store
-            app.state.host = host
-            app.state.provider_state = "demo" if demo or fixture_path else "unconfigured"
-            app.state.provider = None
-            app.state.ready = True
-            saved_notifications = await asyncio.to_thread(store.get_setting, "core_notifications_enabled", notifications)
-            adapter = notifier or Notifier(saved_notifications if type(saved_notifications) is bool else notifications)
-            app.state.notifier = adapter
-            async def consume_plain(payload):
-                push=payload.get('push') if isinstance(payload,dict) and payload.get('type')=='push' else payload
-                if isinstance(push,dict) and push.get('type')=='sms_changed':
+            async def activate(opened_store):
+                nonlocal store, provider
+                if app.state.history_ready:
+                    return
+                store = opened_store
+                store.instance_id = app.state.instance_id
+                app.state.store = store
+                host.store = store
+                app.state.provider_state = "demo" if demo or fixture_path else "unconfigured"
+                app.state.provider = None
+                saved_notifications = await asyncio.to_thread(store.get_setting, "core_notifications_enabled", notifications)
+                adapter = notifier or Notifier(saved_notifications if type(saved_notifications) is bool else notifications)
+                app.state.notifier = adapter
+                async def consume_plain(payload):
+                    push=payload.get('push') if isinstance(payload,dict) and payload.get('type')=='push' else payload
+                    if isinstance(push,dict) and push.get('type')=='sms_changed':
+                        selected=app.state.provider
+                        if selected is not None and hasattr(selected,'request_sms_refresh'):
+                            try:
+                                await selected.request_sms_refresh(push.get('source_device_iden'))
+                            except ValueError:
+                                await selected.request_sms_refresh()
+                        return None
+                    item = normalize(payload)
+                    if item is None:
+                        return None
                     selected=app.state.provider
-                    if selected is not None and hasattr(selected,'request_sms_refresh'):
-                        try:
-                            await selected.request_sms_refresh(push.get('source_device_iden'))
-                        except ValueError:
-                            await selected.request_sms_refresh()
-                    return None
-                item = normalize(payload)
-                if item is None:
-                    return None
-                selected=app.state.provider
-                account=getattr(selected,"account_id",None)
-                if account is None:
-                    account=await asyncio.to_thread(store.account_key)
-                change = await asyncio.to_thread(store.ingest, item,account)
-                if change and change["type"] == "item.created" and adapter.enabled:
-                    if await asyncio.to_thread(store.claim_notification, change["item_id"]):
-                        await adapter.notify(await asyncio.to_thread(store.item, change["item_id"]))
-                return change
-            encryption=EncryptionService(store,consume_plain)
-            app.state.encryption=encryption
-            ingest=encryption.ingest
-            app.state.ingest = ingest
-            dispatcher=Dispatcher(store,lambda:app.state.provider)
-            app.state.dispatcher=dispatcher
-            app.state.provider_reload_lock=asyncio.Lock()
-            app.state.configuration_lock=asyncio.Lock()
-            timing = app.state.clients.timing
-            profile = None if provider_factory is not None or notifier is not None else {
-                'demo': demo, 'fixture': str(Path(fixture_path).resolve()) if fixture_path else None,
-                'standalone': standalone, 'notifications': notifications,
-                'timing': {'renew': timing.renew, 'expiry': timing.expiry,
-                    'release_grace': timing.release_grace, 'startup_grace': timing.startup_grace}}
-            app.state.core_settings = CoreSettingsService(app, settings, profile, launcher=restart_launcher)
-            app.state.provider_task=None
-            if demo:
-                await ingest(DEMO)
-            if fixture_path:
-                payloads = json.loads(await asyncio.to_thread(Path(fixture_path).read_text))
-                if not isinstance(payloads, list) or len(payloads) > 10000:
-                    raise ValueError("Fixture must be a JSON array of at most 10000 events")
-                for payload in payloads:
-                    await ingest(payload)
-            async def start_provider():
-                if provider_factory is not None:
-                    selected=provider_factory(settings,store,ingest,encryption)
-                elif not demo and not fixture_path:
-                    from pbdesk.configuration import get
-                    established = await asyncio.to_thread(get, settings, 'setup', {})
-                    source = await asyncio.to_thread(get, settings, 'provider')
-                    token = (await asyncio.to_thread(provider_token, settings)
-                        if source is not None or established.get('completed') else None)
-                    if token:
+                    account=getattr(selected,"account_id",None)
+                    if account is None:
+                        account=await asyncio.to_thread(store.account_key)
+                    change = await asyncio.to_thread(store.ingest, item,account)
+                    if change and change["type"] == "item.created" and adapter.enabled:
+                        if await asyncio.to_thread(store.claim_notification, change["item_id"]):
+                            await adapter.notify(await asyncio.to_thread(store.item, change["item_id"]))
+                    return change
+                encryption=EncryptionService(store,consume_plain)
+                app.state.encryption=encryption
+                ingest=encryption.ingest
+                app.state.ingest = ingest
+                dispatcher=Dispatcher(store,lambda:app.state.provider)
+                app.state.dispatcher=dispatcher
+                app.state.provider_reload_lock=asyncio.Lock()
+                app.state.configuration_lock=asyncio.Lock()
+                timing = app.state.clients.timing
+                profile = None if provider_factory is not None or notifier is not None else {
+                    'demo': demo, 'fixture': str(Path(fixture_path).resolve()) if fixture_path else None,
+                    'standalone': standalone, 'notifications': notifications,
+                    'timing': {'renew': timing.renew, 'expiry': timing.expiry,
+                        'release_grace': timing.release_grace, 'startup_grace': timing.startup_grace}}
+                app.state.core_settings = CoreSettingsService(app, settings, profile, launcher=restart_launcher)
+                app.state.provider_task=None
+                await asyncio.to_thread(app.state.initialize_ai)
+                if demo:
+                    await ingest(DEMO)
+                if fixture_path:
+                    payloads = json.loads(await asyncio.to_thread(Path(fixture_path).read_text))
+                    if not isinstance(payloads, list) or len(payloads) > 10000:
+                        raise ValueError("Fixture must be a JSON array of at most 10000 events")
+                    for payload in payloads:
+                        await ingest(payload)
+                async def start_provider():
+                    if provider_factory is not None:
+                        selected=provider_factory(settings,store,ingest,encryption)
+                    elif not demo and not fixture_path:
                         from pbdesk.configuration import get
-                        from pbdesk.credentials import _save_provider_source
-                        if await asyncio.to_thread(get, settings, 'provider') is None:
-                            await asyncio.to_thread(_save_provider_source, settings, {'backend': 'keyring'})
-                    selected=Provider(token,store,ingest,settings=settings,encryption=encryption) if token else None
-                else:
-                    selected=None
-                app.state.provider=selected
-                if selected is not None:
-                    app.state.provider_task=asyncio.create_task(selected.run())
-                    tasks.append(app.state.provider_task)
-                return selected
-            app.state.start_provider=start_provider
-            try:
-                provider=await start_provider()
-            except CredentialLocked:
-                app.state.provider_state="locked"
-            tasks.append(asyncio.create_task(dispatcher.run()))
-            tasks.append(asyncio.create_task(host.watch()))
-            if await asyncio.to_thread(store.get_setting, "web_enabled", False):
-                tasks.append(asyncio.create_task(host.set_enabled(True)))
+                        established = await asyncio.to_thread(get, settings, 'setup', {})
+                        source = await asyncio.to_thread(get, settings, 'provider')
+                        token = (await asyncio.to_thread(provider_token, settings)
+                            if source is not None or established.get('completed') else None)
+                        if token:
+                            from pbdesk.configuration import get
+                            from pbdesk.credentials import _save_provider_source
+                            if await asyncio.to_thread(get, settings, 'provider') is None:
+                                await asyncio.to_thread(_save_provider_source, settings, {'backend': 'keyring'})
+                        selected=Provider(token,store,ingest,settings=settings,encryption=encryption) if token else None
+                    else:
+                        selected=None
+                    app.state.provider=selected
+                    if selected is not None:
+                        app.state.provider_task=asyncio.create_task(selected.run())
+                        tasks.append(app.state.provider_task)
+                    return selected
+                app.state.start_provider=start_provider
+                try:
+                    provider=await start_provider()
+                except CredentialLocked:
+                    app.state.provider_state="locked"
+                tasks.append(asyncio.create_task(dispatcher.run()))
+                tasks.append(asyncio.create_task(host.watch()))
+                if await asyncio.to_thread(store.get_setting, "web_enabled", False):
+                    tasks.append(asyncio.create_task(host.set_enabled(True)))
+                app.state.history_ready = True
+            app.state.activate_history = activate
+            async def resume_history():
+                async with app.state.history_lock:
+                    try:
+                        opened = await asyncio.to_thread(app.state.history_security.open_existing, interactive=False)
+                    except HistorySecurityError:
+                        return
+                    app.state.store = opened
+                    if not (await asyncio.to_thread(app.state.history_security.inspect))["recovery_offer_pending"]:
+                        await activate(opened)
+            app.state.ready = True
+            tasks.append(asyncio.create_task(finish_mutation(resume_history())))
             yield
         finally:
             app.state.ready = False
@@ -141,8 +169,9 @@ def create_app(settings=None, fixture_path=None, notifier=None, demo=False, noti
                 await app.state.provider.close()
             if getattr(app.state, "ai", None):
                 await app.state.ai.close()
-            if store:
-                await asyncio.to_thread(store.close)
+            opened = getattr(app.state, "store", None)
+            if opened:
+                await asyncio.to_thread(opened.close)
             lock.close()
 
     app = FastAPI(title="pbdesk private core", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
@@ -154,6 +183,8 @@ def create_app(settings=None, fixture_path=None, notifier=None, demo=False, noti
 
     @app.exception_handler(RequestValidationError)
     async def invalid_request(request,exc):
+        if request.url.path.startswith('/api/v1/history/'):
+            return JSONResponse(status_code=422, content={'detail': 'Invalid history security request'})
         return JSONResponse(status_code=422,content={'detail':[
             {'type':error['type'],'loc':error['loc'],'msg':error['msg']} for error in exc.errors()
         ]})
@@ -169,6 +200,12 @@ def create_app(settings=None, fixture_path=None, notifier=None, demo=False, noti
             raise HTTPException(403, "Web inbox is unavailable in this slice")
         if role == "mcp" and not (request.method == "GET" and (path in {"/api/v1/health", "/api/v1/capabilities", "/api/v1/items", "/api/v1/events", "/api/v1/devices", "/api/v1/actions"} or path.startswith("/api/v1/items/") or path.startswith("/api/v1/actions/"))) and not (request.method=="POST" and path=="/api/v1/actions"):
             raise HTTPException(403, "MCP may read or request an action; local desktop approval is required")
+        bootstrap = path.startswith("/api/v1/history/")
+        if bootstrap and role != "desktop":
+            raise HTTPException(403, "Local desktop authorization required")
+        permitted = path in {"/api/v1/health", "/api/v1/capabilities", "/api/v1/shutdown", "/api/v1/clients"} or path.startswith("/api/v1/clients/") or bootstrap
+        if not app.state.history_ready and not permitted:
+            raise HTTPException(423, "Unlock and protect local history in the desktop before continuing")
         return role
 
     def guard_mutation(function):
@@ -178,6 +215,8 @@ def create_app(settings=None, fixture_path=None, notifier=None, demo=False, noti
                 return await finish_mutation(function(*args, **kwargs))
         return guarded
 
+    from pbdesk.api.history_security import install_history_security_routes
+    install_history_security_routes(app, authorization)
     from pbdesk.api.core_settings import install_core_settings_routes
     install_core_settings_routes(app, authorization)
     from pbdesk.api.ai import install_ai_routes
@@ -196,7 +235,7 @@ def create_app(settings=None, fixture_path=None, notifier=None, demo=False, noti
 
     @app.get("/api/v1/health")
     async def health(request: Request):
-        body = await asyncio.to_thread(health_response, settings, request.headers, app.state.store.instance_id, app.state.ready)
+        body = await asyncio.to_thread(health_response, settings, request.headers, app.state.instance_id, app.state.ready, history_ready=app.state.history_ready)
         if body is None:
             raise HTTPException(401, "Signed service identity required")
         body["client_lifecycle"] = 1
@@ -204,11 +243,13 @@ def create_app(settings=None, fixture_path=None, notifier=None, demo=False, noti
 
     @app.get("/api/v1/capabilities", dependencies=[Depends(authorization)])
     async def capabilities():
+        if not app.state.history_ready:
+            return {"features": {"history_encryption": True, "client_lifecycle": True}, "history_ready": False}
         selected=app.state.provider
         provider_state=selected.state if selected else app.state.provider_state
         send_ready=bool(selected and selected.send_ready)
         devices=await asyncio.to_thread(app.state.store.device_list)
-        return {"account_id":await asyncio.to_thread(app.state.store.sms_account),"features":{"inbox":True,"search":True,"send":True,"send_note":True,"send_link":True,
+        return {"account_id":await asyncio.to_thread(app.state.store.sms_account),"history_ready":True,"features":{"history_encryption":True,"inbox":True,"search":True,"send":True,"send_note":True,"send_link":True,
                 "send_sms":any(device["can_sms"] for device in devices),"sms_history":True,"device_management":True,"devices":True,"e2e_decrypt":True,"ai":True,"ai_summary":True,"ai_draft_reply":True,"ai_saved_summaries":True,"media_images":True,"web_inbox":False,"client_lifecycle":True,"core_settings":True,"core_restart":True,"configuration":True},
             "provider_state":provider_state,"push_sync":await asyncio.to_thread(app.state.store.get_setting,"push_sync",{"state":"idle","last_success_at":None,"error":None}),"encryption_state":app.state.encryption.state,
             "encrypted_pending":await app.state.encryption.pending_count(),"send_ready":send_ready,
@@ -577,7 +618,7 @@ def create_app(settings=None, fixture_path=None, notifier=None, demo=False, noti
     async def shutdown():
         # Persist before stopping either process. Existing clients cannot undo Stop All.
         await asyncio.to_thread(stop_generation, settings, advance=True)
-        await asyncio.to_thread(cancel_restart, settings, app.state.store.instance_id)
+        await asyncio.to_thread(cancel_restart, settings, app.state.instance_id)
         app.state.restart_intent = False
         app.state.clients.stopping = True
         await app.state.host.set_enabled(False)

@@ -1,5 +1,7 @@
 """Desktop lifecycle and HTTP work. No network request runs on the GUI thread."""
 import queue
+import os
+from pathlib import Path
 import threading
 import time
 
@@ -9,6 +11,9 @@ from pbdesk.config import Settings
 from pbdesk.credentials import service_token, health_headers, verify_health
 from pbdesk.media_errors import IMAGE_ERRORS
 from pbdesk.services.client_lifecycle import ClientLease
+from pbdesk.storage.cipher import sync_directory
+
+HISTORY_COMMANDS = {"history_protect", "history_unlock", "history_migrate", "history_recover", "history_save", "history_finish", "history_status"}
 
 CORE_COMMANDS = {"core_settings", "core_settings_update", "core_restart", "configuration_get", "configure_provider", "preferences_update"}
 MUTATIONS = {"core_settings_update", "core_restart", "web", "shutdown", "refresh_devices", "reload_provider", "create_action", "edit_action", "approve_action", "cancel_action", "refresh_sms", "add_device", "rename_device", "remove_device", "encryption", "test_encryption", "resolve_registration"}
@@ -19,6 +24,7 @@ class AccountChangedError(ValueError):
 
 
 class CoreWorker(QThread):
+    history_security = pyqtSignal(dict)
     snapshot = pyqtSignal(dict)
     connection = pyqtSignal(str)
     failed = pyqtSignal(str)
@@ -71,7 +77,7 @@ class CoreWorker(QThread):
     def stop(self):
         self.stop_event.set()
         self.commands.put(("wake", None))
-        if self.lease and self.instance_id is None:
+        if self.lease:
             self.lease.stop_event.set()
 
     def _account(self, data):
@@ -101,9 +107,47 @@ class CoreWorker(QThread):
         identity = response.json()
         if not verify_health(self.settings, "desktop", proof, identity):
             raise ValueError("Port conflict: unverified core identity. Check PBDESK_CORE_PORT.")
+        if identity.get('history_encryption') != 1:
+            raise ValueError('Restart the existing core to enable mandatory encrypted history. The running service has been left unchanged.')
         if not identity.get("ready"):
             raise ValueError("The private core is not ready. Check pbdesk-diagnostics.")
         return identity
+
+    def _history_request(self, client, headers, command, value):
+        value = value or {}
+        if command == 'history_status':
+            response = client.get('/api/v1/history/security', headers=headers)
+        elif command == 'history_save':
+            response = client.post('/api/v1/history/recovery-key', headers=headers, timeout=120)
+            response.raise_for_status()
+            key = response.json()['recovery_key']
+            # An explicit user-chosen file is the only export destination. Never
+            # overwrite or follow links, and never send the key to GUI signals.
+            fd = os.open(value['path'], os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+            try:
+                with os.fdopen(fd, 'w') as stream:
+                    stream.write(key + '\n')
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                sync_directory(Path(value['path']).parent)
+            finally:
+                key = None
+            return {'saved': True}
+        else:
+            suffix = {'history_protect': 'protect', 'history_unlock': 'unlock', 'history_migrate': 'migrate',
+                      'history_recover': 'recover', 'history_finish': 'recovery-offer'}[command]
+            payload = None
+            if command == 'history_recover':
+                key = value.get('recovery_key')
+                if value.get('path'):
+                    with Path(value['path']).open() as stream:
+                        key = stream.read(16385).strip()
+                payload = {'recovery_key': key}
+            elif command == 'history_finish':
+                payload = {'saved': value['saved']}
+            response = client.post('/api/v1/history/' + suffix, json=payload, headers=headers, timeout=180)
+        response.raise_for_status()
+        return response.json()
 
     def _mutate(self, client, headers, command, value):
         if command == 'configuration_get':
@@ -283,7 +327,7 @@ class CoreWorker(QThread):
                 if command == "search":
                     self.query = value
                     next_poll = 0
-                if command not in MUTATIONS and command not in CORE_COMMANDS and command != "media_image" and time.monotonic() < next_poll:
+                if command not in MUTATIONS and command not in CORE_COMMANDS and command not in HISTORY_COMMANDS and command != "media_image" and time.monotonic() < next_poll:
                     continue
                 request_id = value.get("request_id") if isinstance(value, dict) else None
                 origin = {"account_id": value["account_id"]} if isinstance(value, dict) and "account_id" in value else {}
@@ -299,7 +343,35 @@ class CoreWorker(QThread):
                         self.result.emit({**origin, "command": command, "request_id": request_id, "error": message, "ambiguous": False, "status": None})
                     next_poll = time.monotonic() + (.2 if self.pending_restart else 2)
                     continue
-                if identity['instance_id'] != self.instance_id:
+                if command in HISTORY_COMMANDS:
+                    try:
+                        data = self._history_request(client, authorization, command, value)
+                        self.result.emit({'command': command, 'request_id': request_id, 'data': data})
+                    except (httpx.HTTPError, OSError, ValueError, KeyError):
+                        self.result.emit({'command': command, 'request_id': request_id,
+                            'error': 'The operation could not be confirmed. Check KWallet authorization or the selected recovery file, then retry. Refreshing reconciles an interrupted request.'})
+                    next_poll = 0
+                    continue
+                try:
+                    if identity.get('history_ready'):
+                        security = {'history_ready': True}
+                    else:
+                        response = client.get('/api/v1/history/security', headers=authorization)
+                        response.raise_for_status()
+                        security = response.json()
+                    self.history_security.emit(security)
+                except (httpx.HTTPError, ValueError):
+                    self.failed.emit('Encrypted history status is unavailable. Retry after checking the private core.')
+                    next_poll = time.monotonic() + 2
+                    continue
+                if not security.get('history_ready'):
+                    self.instance_id = identity['instance_id']
+                    if command in MUTATIONS or command in CORE_COMMANDS or command == 'media_image':
+                        self.result.emit({'command': command, 'request_id': request_id,
+                            'error': 'Unlock and protect local history before continuing.'})
+                    next_poll = time.monotonic() + 2
+                    continue
+                if identity['instance_id'] != self.instance_id or not self.features:
                     self.instance_id = identity['instance_id']
                     if self.lease:
                         self.lease.wake()

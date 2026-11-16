@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=pbdesk
+Comment=Pushbullet notifications and SMS on your Linux desktop
+Exec=pbdesk-desktop
+Icon=pbdesk
+Terminal=false
+Categories=Network;InstantMessaging;
+StartupWMClass=pbdesk

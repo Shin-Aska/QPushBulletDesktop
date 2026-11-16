@@ -304,7 +304,7 @@ def test_worker_mutations_off_gui_thread_timeout_and_rejection_are_not_disconnec
         requests.append(request)
         if request.url.path.endswith("health"):
             assert "Authorization" not in request.headers
-            return httpx.Response(200, json=health_response(settings, request.headers, "11111111-1111-1111-1111-111111111111", True))
+            return httpx.Response(200, json=health_response(settings, request.headers, "11111111-1111-1111-1111-111111111111", True, history_ready=True))
         assert request.headers["Authorization"].startswith("Bearer ")
         if request.method == "POST":
             assert request.extensions["timeout"]["read"] >= 20
@@ -491,7 +491,7 @@ def test_old_core_feature_gate_preserves_sms_cache_without_new_routes(qtbot, tmp
     def handle(request):
         seen.append(request)
         if request.url.path.endswith('health'):
-            return httpx.Response(200, json=health_response(settings, request.headers, '11111111-1111-1111-1111-111111111111', True))
+            return httpx.Response(200, json=health_response(settings, request.headers, '11111111-1111-1111-1111-111111111111', True, history_ready=True))
         if request.url.path.endswith('capabilities'):
             body = old_cap
         elif request.url.path.endswith('devices'):
@@ -639,7 +639,7 @@ def test_worker_discards_mixed_account_aggregate_before_ui_emission(qtbot, tmp_p
     monkeypatch.setattr('pbdesk.desktop.worker.ClientLease.start', lambda *args, **kwargs: None)
     def handle(request):
         if request.url.path.endswith('health'):
-            return httpx.Response(200, json=health_response(settings, request.headers, '11111111-1111-1111-1111-111111111111', True))
+            return httpx.Response(200, json=health_response(settings, request.headers, '11111111-1111-1111-1111-111111111111', True, history_ready=True))
         if request.url.path.endswith('capabilities'):
             body = dict(CAPABILITIES, account_id=account[0])
         elif request.url.path.endswith('items'):
@@ -750,7 +750,7 @@ def test_worker_checks_fresh_account_before_queued_create_and_tags_result(qtbot,
         seen.append(request)
         path = request.url.path
         if path.endswith('health'):
-            return httpx.Response(200, json=health_response(settings, request.headers, '11111111-1111-1111-1111-111111111111', True))
+            return httpx.Response(200, json=health_response(settings, request.headers, '11111111-1111-1111-1111-111111111111', True, history_ready=True))
         if path.endswith('capabilities'):
             value = dict(CAPABILITIES, account_id=account[0])
         elif path.endswith('items'):

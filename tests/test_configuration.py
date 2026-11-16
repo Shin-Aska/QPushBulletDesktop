@@ -12,6 +12,7 @@ from pbdesk.config import Settings
 from pbdesk.configuration import get, save_provider
 from pbdesk.credentials import service_token, provider_credential_source
 from pbdesk.storage.database import Store
+from pbdesk.services.history_security import HistorySecurity
 
 
 def auth(settings, role='desktop'):
@@ -33,7 +34,7 @@ def application(settings):
     return create_app(settings, provider_factory=lambda *args: FakeProvider())
 
 
-def test_legacy_import_retains_originals_and_sql_remains_authoritative(tmp_path):
+def test_explicit_legacy_import_archives_originals_and_sql_remains_authoritative(tmp_path):
     settings = Settings(tmp_path / 'state', application_dir=tmp_path / 'app')
     settings.state_dir.mkdir()
     values = {'provider-credential.json': {'backend': 'kwallet', 'wallet': 'existing',
@@ -45,14 +46,15 @@ def test_legacy_import_retains_originals_and_sql_remains_authoritative(tmp_path)
         path.write_text(json.dumps(value))
         path.chmod(0o600)
     originals = {name: (settings.state_dir / name).read_bytes() for name in values}
-    store = Store(settings)
+    store = HistorySecurity(settings).migrate()
     try:
         assert not snapshot(store)['setup']['required']
         assert provider_credential_source(settings)['wallet'] == 'existing'
         assert get(settings, 'ai')['revision'] == 'kept'
         assert get(settings, 'ui') == values['ui-preferences.json']
         assert 'must-not-import' not in json.dumps(get(settings, 'provider'))
-        assert all((settings.state_dir / name).read_bytes() == content for name, content in originals.items())
+        assert all(not (settings.state_dir / name).exists() for name in originals)
+        assert list(settings.application_dir.glob('*.archive'))
         update_preferences(store, {'main_page': 'summary'})
     finally:
         store.close()
@@ -74,10 +76,10 @@ def test_invalid_legacy_credentials_do_not_silently_become_new_setup(tmp_path):
     path.write_text('{broken')
     path.chmod(0o600)
     with pytest.raises(RuntimeError, match='originals were preserved'):
-        Store(settings)
+        HistorySecurity(settings).migrate()
     assert path.read_text() == '{broken'
     path.write_text(json.dumps({'backend': 'keyring'}))
-    store = Store(settings)
+    store = HistorySecurity(settings).migrate()
     assert snapshot(store)['setup']['completed']
     store.close()
 

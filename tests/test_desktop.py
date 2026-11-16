@@ -104,7 +104,7 @@ def test_worker_authenticated_snapshot_and_stop(qtbot, tmp_path, monkeypatch):
         seen.append(request)
         if request.url.path.endswith("health"):
             assert "Authorization" not in request.headers
-            return httpx.Response(200, json=health_response(settings, request.headers, "11111111-1111-1111-1111-111111111111", True))
+            return httpx.Response(200, json=health_response(settings, request.headers, "11111111-1111-1111-1111-111111111111", True, history_ready=True))
         assert request.headers["Authorization"].startswith("Bearer ")
         if request.url.path.endswith("items"):
             return httpx.Response(200, json={"items": [ITEM]})
@@ -139,7 +139,7 @@ def test_stop_all_does_not_respawn_from_another_desktop(qtbot, tmp_path, monkeyp
         if not online.is_set():
             raise httpx.ConnectError("core stopped", request=request)
         if request.url.path.endswith("health"):
-            return httpx.Response(200, json=health_response(settings, request.headers, "11111111-1111-1111-1111-111111111111", True))
+            return httpx.Response(200, json=health_response(settings, request.headers, "11111111-1111-1111-1111-111111111111", True, history_ready=True))
         if request.url.path.endswith("shutdown"):
             online.clear()
             return httpx.Response(200, json={"stopping": True})

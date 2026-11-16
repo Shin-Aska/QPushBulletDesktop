@@ -8,6 +8,10 @@ from pbdesk.config import Settings
 from pbdesk.credentials import service_token, health_headers, verify_health
 
 
+class HistoryUnavailable(ValueError):
+    pass
+
+
 def create_server(settings: Settings | None = None) -> MCPServer:
     settings = settings or Settings.from_env()
     token = service_token(settings, "mcp")
@@ -21,12 +25,19 @@ def create_server(settings: Settings | None = None) -> MCPServer:
                 health.raise_for_status()
                 if not verify_health(settings, "mcp", proof, health.json()):
                     raise ValueError("Unexpected private core identity")
+                identity = health.json()
+                if identity.get('history_encryption') != 1:
+                    raise HistoryUnavailable('Restart the existing core from the desktop to enable mandatory encrypted history.')
+                if not identity.get('ready') or not identity.get('history_ready'):
+                    raise HistoryUnavailable('Unlock and protect local history in the desktop before using MCP.')
                 if payload is None:
                     response = await client.get(path, params=params, headers={"Authorization": f"Bearer {token}"})
                 else:
                     response = await client.post(path, json=payload, headers={"Authorization": f"Bearer {token}"}, timeout=httpx.Timeout(20, connect=2))
                 response.raise_for_status()
                 return response.json()
+            except HistoryUnavailable:
+                raise
             except httpx.HTTPStatusError as exc:
                 if payload is not None and (exc.response.status_code >= 500 or exc.response.status_code == 408):
                     raise ValueError("Action creation could not be confirmed. Review desktop Outbox or reconcile using the exact same client_request_id and original payload. Do not retry with a new ID.") from None

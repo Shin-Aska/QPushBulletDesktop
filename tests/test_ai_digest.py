@@ -126,8 +126,10 @@ def test_singleflight_repeated_polls_cache_and_restart(synthetic):
         assert len(payload['input']) <= 24000 and 'tools' not in payload
         assert str(calls[0].url) == 'https://api.openai.com/v1/responses'
         cache_path = synthetic[0].state_dir / 'ai-runtime-state.json'
-        assert cache_path.stat().st_mode & 0o777 == 0o600
-        assert 'Please review this today' not in cache_path.read_text()
+        assert not cache_path.exists()
+        persisted = synthetic[1].get_setting('ai_runtime:ai-runtime-state.json')
+        assert isinstance(persisted, dict) and 'last_attempt' in persisted
+        assert 'Please review this today' not in json.dumps(persisted)
         await ai.close()
         restored = AiService(synthetic[0], lambda: synthetic[1], ai.client_factory)
         restarted_polls = await asyncio.gather(*(restored.digest('account') for _ in range(20)))

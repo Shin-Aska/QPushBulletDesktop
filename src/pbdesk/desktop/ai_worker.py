@@ -78,7 +78,8 @@ class AiWorker(QThread):
             health = await client.get('/api/v1/health', headers=proof)
             health.raise_for_status()
             body = health.json()
-            if not verify_health(self.settings, 'desktop', proof, body) or not body.get('ready'):
+            if (not verify_health(self.settings, 'desktop', proof, body) or not body.get('ready')
+                    or body.get('history_encryption') != 1 or not body.get('history_ready')):
                 raise ValueError()
             routes = {'ai_settings': ('GET', '/settings'), 'ai_save_settings': ('POST', '/settings'),
                       'ai_save_key': ('POST', '/key'), 'ai_use_key': ('POST', '/key/use'),

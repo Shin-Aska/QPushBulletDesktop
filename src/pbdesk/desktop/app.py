@@ -5,10 +5,11 @@ from html import escape
 import sys
 from PyQt6 import sip
 from PyQt6.QtCore import QAbstractListModel, QEvent, QModelIndex, QSize, Qt, QTimer, QUrl
-from PyQt6.QtGui import QAction, QDesktopServices, QIcon, QKeySequence
+from PyQt6.QtGui import QAction, QDesktopServices, QKeySequence
 from PyQt6.QtWidgets import (QApplication, QCheckBox, QDialog, QDialogButtonBox, QHBoxLayout, QLabel, QLineEdit, QListView, QMainWindow, QMenu, QMessageBox, QPushButton, QSplitter, QSystemTrayIcon, QTextBrowser, QVBoxLayout, QWidget, QComboBox, QTableView, QAbstractItemView, QHeaderView, QStackedWidget, QInputDialog, QTabWidget, QScrollArea)
 from pbdesk.config import Settings
 from .worker import CoreWorker
+from .history_security import HistorySecurityDialog
 from .core_settings import CoreSettings
 from .actions import ComposeDialog, ReviewDialog, action_preview, plain_label
 from .models import DeviceModel
@@ -22,7 +23,7 @@ from .setup import AccountSetup
 from .theme import apply_theme, primary, colors, current_scheme, set_color_scheme, theme_signals
 from .status import DesktopStatus, merge_capabilities
 from .notification_content import NotificationBrowser, notification_html, valid_http_url
-from .widgets import NotificationDelegate, PillDelegate, card_frame, divider_line, make_icon
+from .widgets import NotificationDelegate, PillDelegate, application_icon, card_frame, divider_line, make_icon
 from .devices import AddDeviceDialog, EncryptionDialog, RemoveDeviceDialog, request
 
 
@@ -95,6 +96,7 @@ class MainWindow(QMainWindow):
         self.registration_pending = None
         self.web_state = {'enabled': False, 'url': '', 'host': '127.0.0.1', 'port': 8766, 'error': None}
         self.setWindowTitle('pbdesk — Notifications')
+        self.setWindowIcon(application_icon())
         self.resize(1200, 790)
         self.setMinimumSize(850, 540)
         root = QWidget()
@@ -231,7 +233,7 @@ class MainWindow(QMainWindow):
         self.build_menu()
         self.tray = None
         if QSystemTrayIcon.isSystemTrayAvailable():
-            self.tray = QSystemTrayIcon(QIcon.fromTheme('mail-message-new', self.style().standardIcon(self.style().StandardPixmap.SP_ComputerIcon)), self)
+            self.tray = QSystemTrayIcon(self.windowIcon(), self)
             self.tray.setToolTip('pbdesk')
             tray_menu = QMenu(self)
             tray_menu.addAction('Show pbdesk', self.show_from_tray)
@@ -1065,7 +1067,7 @@ class MainWindow(QMainWindow):
         self.appearance.setCurrentIndex(self.appearance.findData(current_scheme(QApplication.instance())))
         self.appearance.blockSignals(False)
         palette = colors(self.palette())
-        self.brand_icon.setPixmap(make_icon('brand', palette['text'], 22).pixmap(22, 22))
+        self.brand_icon.setPixmap(self.windowIcon().pixmap(QSize(28, 28), self.devicePixelRatioF()))
         self.settings_button.setIcon(make_icon('settings', palette['text'], 16))
         self.refresh_inbox_button.setIcon(make_icon('refresh', palette['muted'], 14))
         self.refresh_devices_button.setIcon(make_icon('refresh', palette['muted'], 14))
@@ -1193,19 +1195,31 @@ def main():
     args = parser.parse_args()
     app = QApplication(sys.argv[:1])
     app.setApplicationName("pbdesk")
+    app.setDesktopFileName("pbdesk")
+    app.setWindowIcon(application_icon())
     app.setQuitOnLastWindowClosed(False)
     settings = Settings.from_env()
     worker = CoreWorker(settings, demo=args.demo)
-    ai_client = AiWorker(settings)
-    window = MainWindow(worker, ai_client)
-    # On startup failure keep the actionable error window open until the user exits.
-    worker.finished.connect(lambda: app.quit() if window._exiting else None)
-    window.show()
+    apply_theme(app)
+    bootstrap = HistorySecurityDialog(worker)
+    opened = {}
+    def history_status(state):
+        if not state.get('history_ready') or opened:
+            return
+        ai_client = AiWorker(settings)
+        window = MainWindow(worker, ai_client)
+        opened.update(window=window, ai_client=ai_client)
+        window.show()
+        ai_client.start()
+    worker.history_security.connect(history_status)
+    bootstrap.finished.connect(lambda: app.quit() if not bootstrap.finished_setup else None)
+    worker.finished.connect(lambda: app.quit() if opened and opened['window']._exiting else None)
+    bootstrap.show()
     worker.start()
-    ai_client.start()
     exit_code = app.exec()
-    ai_client.stop()
-    ai_client.wait(3000)
+    if opened:
+        opened['ai_client'].stop()
+        opened['ai_client'].wait(3000)
     worker.stop()
     worker.wait()
     raise SystemExit(exit_code)

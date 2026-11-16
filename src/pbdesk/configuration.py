@@ -1,9 +1,7 @@
 """Non-secret configuration in the existing core-owned application database."""
-from contextlib import closing
 import json
 import os
 import re
-import sqlite3
 import stat
 import weakref
 
@@ -34,9 +32,14 @@ def get(settings, name, default=None):
         return default
     if path.is_symlink() or path.stat().st_uid != os.getuid():
         raise RuntimeError('Application configuration is inaccessible')
-    with closing(sqlite3.connect(path.as_uri() + '?mode=ro', uri=True)) as conn:
+    from pbdesk.services.history_security import existing_key
+    from pbdesk.storage.cipher import connect
+    conn = connect(path, existing_key(settings), readonly=True)
+    try:
         row = conn.execute('SELECT value FROM settings WHERE key=?', (PREFIX + name,)).fetchone()
-    return json.loads(row[0]) if row else default
+        return json.loads(row[0]) if row else default
+    finally:
+        conn.close()
 
 
 def put(settings, name, value):
@@ -145,3 +148,41 @@ def import_legacy(settings, store):
                 value=json.dumps({'completed': True, 'version': 1}))
                 .on_conflict_do_nothing(index_elements=['key']))
         conn.execute(insert(settings_table).values(key=PREFIX + 'import_v1', value='true'))
+
+
+def archived_configuration(artifacts):
+    """Validate selected legacy records before migration changes any files."""
+    names = {'provider-credential.json': ('provider', provider_reference),
+        'ai-settings.json': ('ai', ai_settings),
+        'ui-preferences.json': ('ui', lambda value: value if isinstance(value, dict) else {})}
+    result = {}
+    for filename, content in artifacts:
+        specification = names.get(filename)
+        if specification is None:
+            continue
+        name, validate = specification
+        try:
+            value = validate(json.loads(content))
+        except (ValueError, TypeError, KeyError):
+            raise RuntimeError('Legacy configuration is invalid; originals were preserved') from None
+        if name in result and result[name] != value:
+            raise RuntimeError('Conflicting legacy configuration files were preserved for review')
+        result[name] = value
+    return result
+
+
+def import_archived(store, values):
+    """Import verified archive records; established encrypted SQL values win."""
+    from sqlalchemy import select
+    from sqlalchemy.dialects.sqlite import insert
+    from pbdesk.storage.database import settings_table
+    with store.writing() as conn:
+        for name, value in values.items():
+            conn.execute(insert(settings_table).values(key=PREFIX + name, value=json.dumps(value))
+                .on_conflict_do_nothing(index_elements=['key']))
+        provider = conn.execute(select(settings_table.c.value).where(
+            settings_table.c.key == PREFIX + 'provider')).scalar_one_or_none()
+        if provider:
+            conn.execute(insert(settings_table).values(key=PREFIX + 'setup',
+                value=json.dumps({'completed': True, 'version': 1}))
+                .on_conflict_do_nothing(index_elements=['key']))

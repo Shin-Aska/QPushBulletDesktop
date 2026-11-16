@@ -58,15 +58,13 @@ def test_routes_crud_account_versions_metadata_and_history_no_cloud(tmp_path, mo
         assert options['conversations'] == [{'device_id':'history-phone','conversation_id':'thread','name':'Alice'}]
         assert 'This body' not in json.dumps(options)
         # History imports independently of digest/configured state; opening it is local only.
-        legacy_path=settings.state_dir/'ai-digest-cache.json'
         stamp=time.time()
         legacy={'model':DEFAULT_MODEL,'text':'Old valid cache','generated_at':stamp-1,
             'window_start':stamp-86400,'window_end':stamp-1,'counts':{'notifications':1,'sms':0,'total':1},
             'fingerprint':'b'*64,'truncated':False}
-        legacy_path.write_text(json.dumps({'entries':[{'account_id':'account','model':DEFAULT_MODEL,
-            'scope':'recent','result':legacy,'valid_until':stamp+60}]}))
-        legacy_path.chmod(0o600)
-        # New process normally loads the legacy file before its first HTTP read.
+        store.set_setting('ai_runtime:ai-digest-cache.json', {'entries':[{'account_id':'account','model':DEFAULT_MODEL,
+            'scope':'recent','result':legacy,'valid_until':stamp+60}]})
+        # Migration imports cache data into encrypted settings before HTTP reads.
         client.app.state.ai._restored=client.app.state.ai._load_digest_cache()
         imported=request('GET','/history',params={'account_id':'account'}).json()['items']
         assert len(imported)==1 and imported[0]['origin']=='legacy'
@@ -163,7 +161,7 @@ def test_generation_metrics_dedup_clone_and_rapid_activation_capture(tmp_path, m
         store.close()
 
 
-def test_legacy_import_private_idempotent_unknown_metrics_preserves_file(tmp_path):
+def test_encrypted_legacy_import_idempotent_ignores_late_plaintext_file(tmp_path):
     settings=Settings(tmp_path)
     store=Store(settings)
     store.set_setting('pushbullet_account_id','account')
@@ -176,6 +174,10 @@ def test_legacy_import_private_idempotent_unknown_metrics_preserves_file(tmp_pat
     path.chmod(0o600)
     before=path.read_bytes()
     async def run():
+        ignored=AiService(settings,lambda:store,lambda **kw:pytest.fail('cloud'))
+        assert ignored._restored == {}
+        await ignored.close()
+        store.set_setting('ai_runtime:ai-digest-cache.json', json.loads(before))
         for _ in range(2):
             ai=AiService(settings,lambda:store,lambda **kw:pytest.fail('cloud'))
             assert (await ai.digest('account'))['status']=='unconfigured'

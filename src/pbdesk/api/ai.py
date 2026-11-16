@@ -93,9 +93,15 @@ class RetentionMutation(VersionMutation):
 
 def install_ai_routes(app, authorization, settings):
     from pbdesk.storage.summaries import SummaryConflict, SummaryNotFound, normalize_config
-    service = AiService(settings, lambda: app.state.store)
-    app.state.ai = service
-    service.operation_gate = lambda: app.state.core_settings.gate.operation()
+    service = None
+    app.state.ai = None
+    def initialize():
+        nonlocal service
+        if service is None:
+            service = AiService(settings, lambda: app.state.store)
+            service.operation_gate = lambda: app.state.core_settings.gate.operation()
+            app.state.ai = service
+    app.state.initialize_ai = initialize
 
     async def desktop(role=Depends(authorization)):
         if role != 'desktop':

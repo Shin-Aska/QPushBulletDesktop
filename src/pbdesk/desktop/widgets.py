@@ -1,4 +1,6 @@
 """Shared PyQt6 icons, card containers, and custom item delegates for pbdesk."""
+from pathlib import Path
+
 from PyQt6.QtCore import QRect, QRectF, QSize, Qt
 from PyQt6.QtGui import QColor, QFont, QFontMetrics, QIcon, QPainter, QPainterPath, QPalette, QPen, QPixmap
 from PyQt6.QtWidgets import QApplication, QFrame, QStyle, QStyleOptionFocusRect, QStyledItemDelegate
@@ -6,8 +8,15 @@ from PyQt6.QtWidgets import QApplication, QFrame, QStyle, QStyleOptionFocusRect,
 from .theme import colors
 
 
+def application_icon():
+    """Load the bundled Device relay mark at the size and scale Qt requests."""
+    return QIcon(str(Path(__file__).with_name('assets') / 'pbdesk.svg'))
+
+
 def make_icon(kind, color=None, size=18):
-    """Draw crisp geometric vector icons via QPainter with no external assets."""
+    """Draw UI icons or load the bundled scalable application mark."""
+    if kind == 'brand':
+        return application_icon()
     color = color or colors()["text"]
     pixmap = QPixmap(size, size)
     pixmap.fill(Qt.GlobalColor.transparent)
@@ -55,16 +64,6 @@ def make_icon(kind, color=None, size=18):
         painter.drawRoundedRect(QRectF(4 * s, 2.5 * s, 10 * s, 13 * s), 1 * s, 1 * s)
         for y, end in ((6, 11.5), (9, 11.5), (12, 9)):
             painter.drawLine(int(6.5 * s), int(y * s), int(end * s), int(y * s))
-    elif kind == 'brand':
-        painter.setBrush(QColor(color))
-        painter.setPen(Qt.PenStyle.NoPen)
-        path = QPainterPath()
-        path.moveTo(2.5 * s, 8.8 * s)
-        path.lineTo(15.5 * s, 3 * s)
-        path.lineTo(12.2 * s, 15 * s)
-        path.lineTo(8.5 * s, 10.6 * s)
-        path.closeSubpath()
-        painter.drawPath(path)
     painter.end()
     return QIcon(pixmap)
 

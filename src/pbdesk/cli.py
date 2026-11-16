@@ -9,6 +9,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import time
 from pbdesk.config import Settings
 
 
@@ -39,16 +40,50 @@ def desktop_main():
     return main()
 
 
+
+class HistoryNotReady(RuntimeError):
+    """A CLI command must not cross the encrypted-history bootstrap gate."""
+
+
+HISTORY_SETUP_HINT = ('Open pbdesk to protect or unlock local history, then retry. '
+                      'Restart an older core to enable mandatory encrypted history.')
+
+
+def wait_for_history_ready(settings, *, timeout=12.0):
+    """Wait only on signed health reads; never authorize a wallet or replay work."""
+    import httpx
+    from pbdesk.services.lifecycle import _probe, CoreStartupError
+    deadline = time.monotonic() + timeout
+    with httpx.Client(timeout=1, trust_env=False, follow_redirects=False) as client:
+        while True:
+            try:
+                identity = _probe(settings, None, client)
+            except CoreStartupError:
+                raise HistoryNotReady(HISTORY_SETUP_HINT) from None
+            if identity is not None:
+                if identity.get('history_encryption') != 1:
+                    raise HistoryNotReady(HISTORY_SETUP_HINT)
+                if identity.get('ready') and identity.get('history_ready'):
+                    return identity
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise HistoryNotReady(HISTORY_SETUP_HINT)
+            time.sleep(min(.1, remaining))
+
 def web_main():
     """Control web through core; the gateway is never another data owner."""
     parser = argparse.ArgumentParser(description="Optional local web host control")
     parser.add_argument("action", choices=["status", "enable", "disable"], nargs="?", default="status")
     args = parser.parse_args()
     from pbdesk.credentials import service_token
-    from pbdesk.services.lifecycle import ensure_core
+    from pbdesk.services.lifecycle import ensure_core, CoreStartupError
     import httpx
     settings = Settings.from_env()
-    ensure_core(settings)
+    try:
+        ensure_core(settings)
+        wait_for_history_ready(settings)
+    except (CoreStartupError, HistoryNotReady):
+        parser.exit(1, HISTORY_SETUP_HINT + '\n')
     with httpx.Client(base_url=settings.core_url, trust_env=False, timeout=8,
                       headers={"Authorization": "Bearer " + service_token(settings, "desktop")}) as client:
         response = client.get("/api/v1/web") if args.action == "status" else client.post("/api/v1/web", json={"enabled": args.action == "enable"})
@@ -69,6 +104,7 @@ def configure_connection(settings, reference, token=None):
     lease = ClientLease(settings)
     try:
         lease.start()
+        wait_for_history_ready(settings)
         with httpx.Client(base_url=settings.core_url, trust_env=False, follow_redirects=False,
                 timeout=85, headers={'Authorization': 'Bearer ' + service_token(settings, 'desktop')}) as client:
             response = client.get('/api/v1/configuration')
@@ -78,8 +114,10 @@ def configure_connection(settings, reference, token=None):
                 value['token'] = token
             response = client.post('/api/v1/configuration/provider', json=value)
             response.raise_for_status()
+    except HistoryNotReady:
+        raise
     except Exception:
-        raise RuntimeError('Could not save connection settings. Unlock the credential store and use Settings → Account; restart an older core first.') from None
+        raise RuntimeError('Could not save connection settings. ' + HISTORY_SETUP_HINT + ' Use Settings → Account after unlocking the credential store.') from None
     finally:
         lease.close()
 
@@ -95,10 +133,14 @@ def admin_main(argv=None):
     settings = Settings.from_env()
     from pbdesk.credentials import CredentialLocked, revoke_service_token
     if args.action == "reload-provider":
-        from pbdesk.services.lifecycle import ensure_core
+        from pbdesk.services.lifecycle import ensure_core, CoreStartupError
         from pbdesk.credentials import service_token
         import httpx
-        ensure_core(settings)
+        try:
+            ensure_core(settings)
+            wait_for_history_ready(settings)
+        except (CoreStartupError, HistoryNotReady):
+            parser.exit(1, HISTORY_SETUP_HINT + '\n')
         with httpx.Client(base_url=settings.core_url,trust_env=False,follow_redirects=False,timeout=30,
                 headers={"Authorization":"Bearer "+service_token(settings,"desktop")}) as client:
             response=client.post("/api/v1/provider/reload")
@@ -109,7 +151,7 @@ def admin_main(argv=None):
             configure_connection(settings, {'backend': 'kwallet', 'folder': args.folder, 'entry': args.entry, 'wallet': args.wallet or 'kdewallet'})
         except (CredentialLocked, RuntimeError) as exc:
             parser.exit(1, str(exc) + ". No credential source was changed.\n")
-        print("Selected existing KWallet password entry. Its location was saved in SQLite and synchronization is starting.")
+        print("Selected existing KWallet password entry. Its location was saved in encrypted history and synchronization is starting.")
     elif args.action == "provider-token":
         token = getpass.getpass("Pushbullet access token (secure keyring only): ")
         if not token.strip():
@@ -118,7 +160,7 @@ def admin_main(argv=None):
             configure_connection(settings, {'backend': 'keyring'}, token)
         except (CredentialLocked, RuntimeError) as exc:
             parser.exit(1, str(exc) + "; unlock Secret Service/KWallet and retry. No token was saved to a file.\n")
-        print("Provider token securely saved and verified. SQLite connection settings were updated.")
+        print("Provider token securely saved and verified. Encrypted connection settings were updated.")
     elif args.action == "revoke-service":
         if not args.role:
             parser.error("--role is required")
@@ -143,36 +185,39 @@ def admin_main(argv=None):
 
 
 def diagnostics_main():
-    from pbdesk.credentials import CredentialLocked, secure_backend, health_headers, verify_health, provider_credential_source
-    import sqlite3
+    from pbdesk.credentials import health_headers, verify_health
+    from pbdesk.storage.cipher import driver
     import httpx
     settings = Settings.from_env()
     versions = {}
-    for name in ("pbdesk", "fastapi", "uvicorn", "pydantic", "SQLAlchemy", "alembic", "httpx", "websockets", "keyring", "cryptography", "PyQt6", "Jinja2", "mcp"):
+    for name in ("pbdesk", "fastapi", "uvicorn", "pydantic", "SQLAlchemy", "alembic", "httpx", "websockets", "keyring", "cryptography", "PyQt6", "Jinja2", "mcp", "sqlcipher3"):
         try:
             versions[name] = importlib.metadata.version(name)
         except importlib.metadata.PackageNotFoundError:
             versions[name] = "not installed"
-    report = {"python": sys.version.split()[0], "dependencies": versions, "sqlite": sqlite3.sqlite_version}
-    with sqlite3.connect(":memory:") as conn:
-        try:
-            conn.execute("CREATE VIRTUAL TABLE probe USING fts5(value)")
-            report["fts5"] = True
-        except sqlite3.OperationalError:
-            report["fts5"] = False
+    report = {"python": sys.version.split()[0], "dependencies": versions}
     try:
-        source = provider_credential_source(settings)
-        report["provider_credential_source"] = source
-        report["credential_backend"] = "org.kde.KWallet (configured)" if source["backend"] == "kwallet" else type(secure_backend()).__module__
-    except CredentialLocked:
-        report["credential_backend"] = "locked/unavailable (no plaintext fallback)"
+        cipher = driver()
+        with cipher.connect(':memory:') as conn:
+            report['sqlcipher'] = conn.execute('PRAGMA cipher_version').fetchone()[0]
+            conn.execute('CREATE VIRTUAL TABLE probe USING fts5(value)')
+            report['fts5'] = True
+    except Exception:
+        report['sqlcipher'] = 'unavailable; encrypted history cannot open'
+        report['fts5'] = False
+    from pbdesk.services.history_security import HistorySecurity
+    report['history_security'] = HistorySecurity(settings).inspect()['state']
+    report['credential_backend'] = 'Existing KWallet; authorization happens in desktop setup'
     try:
         with httpx.Client(timeout=1, trust_env=False) as client:
             headers = health_headers(settings, "desktop")
             response = client.get(settings.core_url + "/api/v1/health", headers=headers)
             body = response.json()
             report["core"] = "ready" if response.status_code == 200 and verify_health(settings, "desktop", headers, body) and body["ready"] else "incompatible/unready"
-            if report["core"] == "ready":
+            if report["core"] == "ready" and body.get("history_encryption") != 1:
+                report["core"] = "restart required for mandatory encrypted history"
+            if report["core"] == "ready" and body.get("history_encryption") == 1:
+                report["history_ready"] = body.get("history_ready", False)
                 from pbdesk.credentials import service_token
                 caps = client.get(settings.core_url + "/api/v1/capabilities", headers={"Authorization": "Bearer " + service_token(settings, "desktop")}).json()
                 report["provider_state"] = caps.get("provider_state", "unknown")

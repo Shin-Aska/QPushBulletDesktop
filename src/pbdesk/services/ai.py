@@ -3,18 +3,15 @@ import asyncio
 import json
 import hashlib
 from datetime import datetime, timezone
-import os
 import re
 import secrets
-import stat
-import tempfile
 import threading
 import time
 from dataclasses import dataclass, field
 
 import httpx
 from sqlalchemy import select, and_, or_, func
-from pbdesk.credentials import private_dir, provider_credential_source
+from pbdesk.credentials import provider_credential_source
 
 AI_ENTRY = 'ai-openai-api-key'
 AI_REFERENCE = {'backend': 'kwallet', 'wallet': 'kdewallet', 'folder': 'Pushbullet', 'entry': AI_ENTRY}
@@ -958,12 +955,10 @@ class AiService:
     def _load_digest_cache(self, filename='ai-digest-cache.json'):
         """Restore only bounded, still-valid summaries; never source messages or API keys."""
         try:
-            fd = os.open(self.settings.state_dir / filename, os.O_RDONLY | os.O_NOFOLLOW)
-            with os.fdopen(fd) as stream:
-                info = os.fstat(stream.fileno())
-                if info.st_uid != os.getuid() or not stat.S_ISREG(info.st_mode) or stat.S_IMODE(info.st_mode) != 0o600:
-                    return {}
-                data = json.loads(stream.read(4 * 1024 * 1024 + 1))
+            store = self.store_getter()
+            if store is None:
+                return {}
+            data = store.get_setting('ai_runtime:' + filename, {})
             if not isinstance(data, dict) or not isinstance(data.get('entries'), list):
                 return {}
             now = time.time()
@@ -1031,24 +1026,11 @@ class AiService:
             else:
                 failures.pop(identity, None)
         last_attempt = 0 if self._last_paid == float('-inf') else now - max(0, time.monotonic() - self._last_paid)
-        data = json.dumps({'entries': [], 'last_attempt': last_attempt, 'failures': list(failures.values())[:128]})
-        # All summaries are bounded; this is also a hard defense against unexpected growth.
-        if len(data.encode()) > 4 * 1024 * 1024:
+        data = {'entries': [], 'last_attempt': last_attempt, 'failures': list(failures.values())[:128]}
+        if len(json.dumps(data).encode()) > 4 * 1024 * 1024:
             return
         def write():
-            root = private_dir(self.settings)
-            fd, temporary = tempfile.mkstemp(dir=root, prefix='.ai-digest-')
-            try:
-                with os.fdopen(fd, 'w') as stream:
-                    stream.write(data)
-                    stream.flush()
-                    os.fsync(stream.fileno())
-                os.replace(temporary, root / 'ai-runtime-state.json')
-            finally:
-                if os.path.exists(temporary):
-                    os.unlink(temporary)
-        try:
-            await self.local(write)
-        except OSError:
-            # A read-only state folder must not turn a successful digest into a failed one.
-            pass
+            store = self.store_getter()
+            if store is not None:
+                store.set_setting('ai_runtime:ai-runtime-state.json', data)
+        await self.local(write)

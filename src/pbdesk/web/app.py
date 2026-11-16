@@ -107,12 +107,14 @@ def create_app(settings: Settings | None = None, *, standalone=False) -> FastAPI
                 identity = health.json()
                 if not verify_health(settings, "web", proof, identity):
                     raise ValueError("Unexpected core identity")
+                if identity.get('history_encryption') != 1 or not identity.get('history_ready'):
+                    raise ValueError('Encrypted history unavailable')
                 capabilities = await client.get("/api/v1/capabilities", headers={"Authorization": f"Bearer {token}"})
                 capabilities.raise_for_status()
                 ready = bool(identity.get("ready"))
                 provider = str(capabilities.json().get("provider_state", "unknown"))
         except (httpx.HTTPError, ValueError, KeyError):
-            error = "The private core is unavailable. Open the desktop application or run pbdesk-diagnostics."
+            error = "Encrypted history is locked or the private core is unavailable. Open the desktop to protect or unlock history; restart an older core."
         return templates.TemplateResponse(request=request, name="status.html", context={"ready": ready, "provider": provider, "error": error})
 
     return app

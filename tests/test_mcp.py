@@ -22,7 +22,7 @@ actual = httpx.AsyncClient
 def respond(request):
     if request.url.path.endswith('health'):
         assert 'Authorization' not in request.headers
-        return httpx.Response(200, json=health_response(settings, request.headers, '11111111-1111-1111-1111-111111111111', True))
+        return httpx.Response(200, json=health_response(settings, request.headers, '11111111-1111-1111-1111-111111111111', True, history_ready=True))
     assert request.headers['Authorization'].startswith('Bearer ')
     if request.url.path.endswith('capabilities'):
         return httpx.Response(200, json={'features': {'send': False, 'inbox': True}, 'provider_state': 'fixture'})
@@ -85,3 +85,31 @@ server.main()
                 assert "allow_provider_plaintext" not in schema.input_schema["properties"]
                 assert "Pushbullet can process" in schema.description
     asyncio.run(run())
+
+
+def test_mcp_rejects_old_or_locked_core_before_bearer_history(tmp_path, monkeypatch):
+    import httpx
+    import pytest
+    from pbdesk.config import Settings
+    from pbdesk.credentials import health_response
+    from pbdesk.mcp_server import server
+    settings = Settings(tmp_path)
+    actual = httpx.AsyncClient
+    calls = []
+    mode = 'old'
+    def respond(request):
+        calls.append(request)
+        assert request.url.path == '/api/v1/health'
+        assert 'Authorization' not in request.headers
+        kwargs = {} if mode == 'old' else {'history_ready': False}
+        return httpx.Response(200, json=health_response(settings, request.headers,
+            '11111111-1111-1111-1111-111111111111', True, **kwargs))
+    monkeypatch.setattr(server.httpx, 'AsyncClient', lambda **kwargs: actual(**kwargs, transport=httpx.MockTransport(respond)))
+    application = server.create_server(settings)
+    async def run():
+        nonlocal mode
+        for mode in ('old', 'locked'):
+            with pytest.raises(Exception):
+                await application.call_tool('search_notifications', {'query': 'fictional'})
+    asyncio.run(run())
+    assert len(calls) == 2

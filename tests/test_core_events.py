@@ -1,3 +1,4 @@
+from history_client_helpers import wait_for_encrypted_history
 import asyncio
 import json
 from pathlib import Path
@@ -26,6 +27,7 @@ def test_event_replay_and_resync(tmp_path):
     async def run():
         app=create_app(Settings(tmp_path),demo=True)
         async with app.router.lifespan_context(app):
+            await wait_for_encrypted_history(app)
             # Test stream iterator without HTTP client buffering an infinite response.
             route=next(route for route in app.routes if route.path=="/api/v1/events")
             class Request:

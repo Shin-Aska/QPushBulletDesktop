@@ -31,7 +31,7 @@ def test_preferences_use_authenticated_api_and_queued_changes_flush_on_exit(tmp_
         path = request.url.path
         if path.endswith('/health'):
             assert 'authorization' not in request.headers
-            return httpx.Response(200, json=health_response(settings, request.headers, OLD, True))
+            return httpx.Response(200, json=health_response(settings, request.headers, OLD, True, history_ready=True))
         assert request.headers.get('authorization', '').startswith('Bearer ')
         if path.endswith('/capabilities'):
             return httpx.Response(200, json={'features': {'configuration': True}})
@@ -66,7 +66,7 @@ def test_image_failure_reports_reason_without_private_details_or_retry(tmp_path,
     def handle(request):
         path = request.url.path
         if path.endswith('/health'):
-            return httpx.Response(200, json=health_response(settings, request.headers, OLD, True))
+            return httpx.Response(200, json=health_response(settings, request.headers, OLD, True, history_ready=True))
         assert request.headers.get('authorization', '').startswith('Bearer ')
         if path.endswith('/capabilities'):
             return httpx.Response(200, json={'account_id': 'acct',
@@ -113,7 +113,7 @@ def test_core_commands_verify_identity_strip_patch_id_and_coalesce_restart(tmp_p
             health_count += 1
             instance = NEW if health_count >= 6 else OLD
             assert 'authorization' not in request.headers
-            return httpx.Response(200, json=health_response(settings, request.headers, instance, True))
+            return httpx.Response(200, json=health_response(settings, request.headers, instance, True, history_ready=True))
         assert request.headers.get('authorization', '').startswith('Bearer ')
         if path.endswith('/capabilities'):
             return httpx.Response(200, json={'account_id': 'retained-account', 'features': {'core_settings': True, 'core_restart': True}})
@@ -178,7 +178,7 @@ def test_old_core_settings_capability_is_actionable_and_sends_no_settings_call(t
     def handle(request):
         calls.append(request)
         if request.url.path.endswith('/health'):
-            return httpx.Response(200, json=health_response(settings, request.headers, OLD, True))
+            return httpx.Response(200, json=health_response(settings, request.headers, OLD, True, history_ready=True))
         assert request.url.path.endswith('/capabilities')
         return httpx.Response(200, json={'features': {}})
     monkeypatch.setattr('pbdesk.desktop.worker.ClientLease', FakeLease)
@@ -198,7 +198,7 @@ def test_ambiguous_restart_is_not_reposted_or_falsely_confirmed(tmp_path, monkey
     def handle(request):
         path = request.url.path
         if path.endswith('/health'):
-            return httpx.Response(200, json=health_response(settings, request.headers, OLD, True))
+            return httpx.Response(200, json=health_response(settings, request.headers, OLD, True, history_ready=True))
         if path.endswith('/capabilities'):
             return httpx.Response(200, json={'features': {'core_settings': True, 'core_restart': True}})
         assert path.endswith('/core/restart')
@@ -229,7 +229,7 @@ def test_lost_restart_reconciles_idle_same_instance_then_allows_explicit_new_req
     def handle(request):
         path = request.url.path
         if path.endswith('/health'):
-            return httpx.Response(200, json=health_response(settings, request.headers, OLD, True))
+            return httpx.Response(200, json=health_response(settings, request.headers, OLD, True, history_ready=True))
         if path.endswith('/capabilities'):
             return httpx.Response(200, json={'features': {'core_settings': True, 'core_restart': True}})
         if path.endswith('/core/settings'):

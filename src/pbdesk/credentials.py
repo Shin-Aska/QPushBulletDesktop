@@ -169,7 +169,7 @@ def health_headers(settings, role):
     return {"X-PBDesk-Role": role, "X-PBDesk-Nonce": nonce, "X-PBDesk-Proof": proof}
 
 
-def health_response(settings, headers, instance_id, ready):
+def health_response(settings, headers, instance_id, ready, *, history_ready=None):
     import re
     role = headers.get("x-pbdesk-role", headers.get("X-PBDesk-Role", ""))
     nonce = headers.get("x-pbdesk-nonce", headers.get("X-PBDesk-Nonce", ""))
@@ -182,6 +182,10 @@ def health_response(settings, headers, instance_id, ready):
         return None
     body = {"application": "pbdesk-core", "api_version": 1, "instance_id": instance_id, "ready": ready}
     body["proof"] = _health_mac(token, "pbdesk-health-response-v1\n" + role + "\n" + nonce + "\n" + instance_id + "\n" + ("1" if ready else "0"))
+    if history_ready is not None:
+        body['history_encryption'] = 1
+        body['history_ready'] = bool(history_ready)
+        body['proof'] = _health_mac(token, "pbdesk-health-response-v2\n" + role + "\n" + nonce + "\n" + instance_id + "\n" + ("1" if ready else "0") + "\n" + ("1" if history_ready else "0"))
     return body
 
 
@@ -204,6 +208,10 @@ def verify_health(settings, role, headers, body):
     if headers.get("X-PBDesk-Role", headers.get("x-pbdesk-role")) != role:
         return False
     expected = _health_mac(service_token(settings, role), "pbdesk-health-response-v1\n" + role + "\n" + nonce + "\n" + instance_id + "\n" + ("1" if body["ready"] else "0"))
+    if 'history_encryption' in body or 'history_ready' in body:
+        if type(body.get('history_encryption')) is not int or body['history_encryption'] != 1 or type(body.get('history_ready')) is not bool:
+            return False
+        expected = _health_mac(service_token(settings, role), "pbdesk-health-response-v2\n" + role + "\n" + nonce + "\n" + instance_id + "\n" + ("1" if body['ready'] else "0") + "\n" + ("1" if body['history_ready'] else "0"))
     proof = body.get("proof")
     return isinstance(proof, str) and secrets.compare_digest(expected, proof)
 

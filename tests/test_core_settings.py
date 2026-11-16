@@ -1,4 +1,5 @@
 """Core configuration/restart tests use private temporary state and fake adapters."""
+from history_client_helpers import wait_for_encrypted_history
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import json
@@ -221,6 +222,7 @@ def test_approval_in_flight_retains_gate_until_thread_commit(tmp_path, monkeypat
         settings = Settings(tmp_path)
         app = create_app(settings, demo=True, restart_launcher=fake_launcher)
         async with app.router.lifespan_context(app):
+            await wait_for_encrypted_history(app)
             app.state.shutdown_callback = lambda: None
             draft = prepare(app.state.store)
             entered, release = threading.Event(), threading.Event()
@@ -267,6 +269,7 @@ def test_cancelled_restart_preparation_completes_owned_transaction(tmp_path, mon
                 await asyncio.to_thread(release.wait)
         app = create_app(settings, demo=True, restart_launcher=launcher)
         async with app.router.lifespan_context(app):
+            await wait_for_encrypted_history(app)
             app.state.shutdown_callback = lambda: shutdowns.append(True)
             original = core_settings.publish_restart
             def publication(*args):
@@ -295,6 +298,7 @@ def test_cancelled_settings_write_applies_committed_live_value(tmp_path, monkeyp
         monkeypatch.setattr('pbdesk.services.notifications.shutil.which', lambda *a: '/fake/notify-send')
         app = create_app(settings, demo=True)
         async with app.router.lifespan_context(app):
+            await wait_for_encrypted_history(app)
             entered, release = threading.Event(), threading.Event()
             original = app.state.store.set_setting
             def blocked(key, value):
@@ -368,6 +372,7 @@ def test_active_send_refuses_restart_without_cancelling_or_replaying(tmp_path):
         settings = Settings(tmp_path)
         app = create_app(settings, demo=True, restart_launcher=fake_launcher)
         async with app.router.lifespan_context(app):
+            await wait_for_encrypted_history(app)
             app.state.shutdown_callback = lambda: None
             draft = prepare(app.state.store, approve=True)
             entered, release = asyncio.Event(), asyncio.Event()
@@ -428,6 +433,7 @@ def test_stop_all_cancels_restart_publication_race(tmp_path, monkeypatch):
         entered, release = threading.Event(), threading.Event()
         app = create_app(settings, demo=True, restart_launcher=fake_launcher)
         async with app.router.lifespan_context(app):
+            await wait_for_encrypted_history(app)
             app.state.shutdown_callback = lambda: None
             generation = stop_generation(settings)
             original = core_settings.publish_restart

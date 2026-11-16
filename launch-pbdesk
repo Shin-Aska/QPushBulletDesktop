@@ -1,0 +1,22 @@
+#!/bin/sh
+# Run this configured development checkout without opening an editor.
+set -eu
+
+project_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+python_path="$project_dir/.venv/bin/python"
+
+if [ ! -x "$python_path" ]; then
+    printf '%s\n' 'The existing .venv/bin/python is missing. See README.md for environment setup.' >&2
+    exit 1
+fi
+
+export PYTHONPATH="$project_dir/src"
+export PYTHONUNBUFFERED=1
+export PBDESK_LIFECYCLE="${PBDESK_LIFECYCLE:-foreground}"
+export PBDESK_STATE_DIR="${PBDESK_STATE_DIR:-$project_dir/.runtime/editor}"
+export PBDESK_APPLICATION_DIR="${PBDESK_APPLICATION_DIR:-$project_dir}"
+export PBDESK_CORE_PORT="${PBDESK_CORE_PORT:-18765}"
+export PBDESK_WEB_PORT="${PBDESK_WEB_PORT:-18766}"
+
+cd -- "$project_dir"
+exec "$python_path" -m pbdesk.desktop "$@"

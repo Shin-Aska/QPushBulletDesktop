@@ -246,7 +246,8 @@ def test_additive_0006_migration_preserves_every_existing_table(tmp_path):
         assert after == schema
         assert conn.exec_driver_sql('PRAGMA foreign_key_check').all() == []
     engine.dispose()
-    store = Store(Settings(tmp_path / 'state', application_dir=root))
+    from pbdesk.services.history_security import HistorySecurity
+    store = HistorySecurity(Settings(tmp_path / 'state', application_dir=root)).migrate()
     try:
         assert store.path == path
         assert len(store.summaries.list_presets('synthetic-account')) == 2

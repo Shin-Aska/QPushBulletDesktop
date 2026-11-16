@@ -1,19 +1,15 @@
 """Core-owned SQLite persistence; clients must use the private API."""
 from datetime import datetime, timezone
-from contextlib import closing
 import hashlib
 import fcntl
 import os
-import sqlite3
-import tempfile
 import json
 from pathlib import Path
 import uuid
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import (create_engine, event, MetaData, Table, Column, Integer,
+from sqlalchemy import (create_engine, MetaData, Table, Column, Integer,
                         Text, ForeignKey, select, insert, update, func, text)
-from pbdesk.credentials import private_dir
 from pbdesk.storage.workflows import WorkflowStore
 from pbdesk.storage.sms import SmsStore
 from pbdesk.storage.summaries import SummaryRepository
@@ -33,31 +29,38 @@ settings_table = Table("settings", metadata, Column("key", Text, primary_key=Tru
 PUBLIC = ("id", "source_id", "type", "title", "body", "url", "device_id", "created_at", "source_device_id", "target_device_id", "decrypted", "application_name", "icon", "file_name", "file_type", "file_url")
 
 class Store(WorkflowStore, SmsStore):
-    def __init__(self, settings):
+    def __init__(self, settings, *, database_key=None, _lock_fd=None):
         self.settings = settings
-        legacy = private_dir(settings) / "pbdesk.sqlite3"
         root = settings.application_dir
         root.mkdir(parents=True, exist_ok=True)
         self.path = root / "pbdesk.sqlite3"
         if self.path.is_symlink():
             raise RuntimeError("Database must not be a symbolic link")
-        self._database_lock = os.open(root / ".pbdesk-database.lock", os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+        from pbdesk.services.history_security import existing_key
+        self._database_key = database_key if database_key is not None else existing_key(settings)
+        if not isinstance(self._database_key, bytes) or len(self._database_key) != 32:
+            raise RuntimeError("A verified history encryption key is required")
+        self._database_lock = _lock_fd
+        if self._database_lock is None:
+            self._database_lock = os.open(root / ".pbdesk-database.lock", os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+            try:
+                fcntl.flock(self._database_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                os.close(self._database_lock)
+                raise RuntimeError("A pbdesk core already owns this application database") from None
         try:
-            fcntl.flock(self._database_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            os.close(self._database_lock)
-            raise RuntimeError("A pbdesk core already owns this application database") from None
-        try:
+            legacy = settings.state_dir / "pbdesk.sqlite3"
             if legacy.resolve() != self.path.resolve() and legacy.exists():
-                if self.path.exists():
-                    self._check_legacy_source(legacy)
-                else:
-                    self._migrate_database(legacy)
+                raise RuntimeError("Legacy history requires explicit verified migration")
+            if self.path.exists() and self.path.stat().st_size:
+                with self.path.open("rb") as stream:
+                    if stream.read(16) == b"SQLite format 3\x00":
+                        raise RuntimeError("Plaintext history requires explicit verified migration")
             if not self.path.exists():
-                fd=os.open(self.path,os.O_CREAT|os.O_EXCL|os.O_WRONLY|os.O_NOFOLLOW,0o600)
+                fd = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW, 0o600)
                 os.close(fd)
             if self.path.stat().st_uid != os.getuid():
-                raise RuntimeError('Database must be owned by the current user')
+                raise RuntimeError("Database must be owned by the current user")
             self.path.chmod(0o600)
             self._open_database()
         except BaseException:
@@ -69,53 +72,11 @@ class Store(WorkflowStore, SmsStore):
             self._database_lock = None
             raise
 
-    @staticmethod
-    def _legacy_digest(connection):
-        digest=hashlib.sha256()
-        for line in connection.iterdump():
-            digest.update(line.encode())
-        return digest.hexdigest()
-
-    def _check_legacy_source(self,legacy):
-        # The retained source is intentional; a changed source indicates a split
-        # history after an old build ran, requiring explicit reconciliation.
-        try:
-            with closing(sqlite3.connect(f'file:{self.path}?mode=ro',uri=True)) as target:
-                row=target.execute("SELECT value FROM settings WHERE key='database_legacy_source'").fetchone()
-            marker=json.loads(row[0]) if row else None
-            with closing(sqlite3.connect(f'file:{legacy}?mode=ro',uri=True)) as source:
-                valid=marker and marker.get('path')==str(legacy.resolve()) and marker.get('digest')==self._legacy_digest(source)
-            if not valid:
-                raise ValueError()
-        except Exception:
-            raise RuntimeError('Both legacy and application databases exist with differing histories; preserve both and reconcile before startup') from None
-
-    def _migrate_database(self, legacy):
-        # Read a consistent WAL-aware snapshot. Keep the source and its sidecars.
-        fd, name = tempfile.mkstemp(dir=self.path.parent, prefix=".pbdesk-migration-")
-        os.close(fd)
-        try:
-            with closing(sqlite3.connect(f"file:{legacy}?mode=ro", uri=True)) as source, closing(sqlite3.connect(name)) as target:
-                source.backup(target)
-                # The backup inherits WAL mode: checkpoint before the atomic rename.
-                target.execute("PRAGMA journal_mode=DELETE")
-                marker={'path':str(legacy.resolve()),'digest':self._legacy_digest(target)}
-                target.execute("INSERT OR REPLACE INTO settings(key,value) VALUES (?,?)",('database_legacy_source',json.dumps(marker)))
-                target.commit()
-                if target.execute("PRAGMA quick_check").fetchone()[0] != "ok":
-                    raise RuntimeError("Legacy database backup failed integrity check")
-            os.replace(name, self.path)
-        finally:
-            if os.path.exists(name):
-                os.unlink(name)
-
     def _open_database(self):
-        self.engine = create_engine(f"sqlite:///{self.path}", connect_args={"check_same_thread": False, "timeout": 5})
-        @event.listens_for(self.engine, "connect")
-        def configure(dbapi, record):
-            dbapi.execute("PRAGMA foreign_keys=ON")
-            dbapi.execute("PRAGMA busy_timeout=5000")
-            dbapi.execute("PRAGMA journal_mode=WAL")
+        from pbdesk.storage.cipher import connect, driver
+        from sqlalchemy.pool import QueuePool
+        self.engine = create_engine("sqlite://", module=driver(), poolclass=QueuePool,
+            creator=lambda: connect(self.path, self._database_key))
         config = Config()
         config.set_main_option("script_location", str(Path(__file__).parent / "migrations"))
         with self.engine.begin() as conn:
@@ -142,6 +103,7 @@ class Store(WorkflowStore, SmsStore):
         from pbdesk.configuration import unregister
         unregister(self.settings, self)
         self.engine.dispose()
+        self._database_key = None
         if self._database_lock is not None:
             os.close(self._database_lock)
             self._database_lock = None
