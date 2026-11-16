@@ -105,3 +105,25 @@ def test_build_is_refused_outside_temporary_actions_runner(monkeypatch):
     with pytest.raises(SystemExit) as exc:
         builder.main([])
     assert exc.value.code == 2
+
+
+def test_mcp_collection_filters_optional_cli_before_importing_packages():
+    # Inspect the actual spec without importing or installing the CI-only builder.
+    # Filtering the mcp.cli package itself is necessary: filtering its children
+    # alone would still import __init__, which exits when typer is absent.
+    import ast
+    tree = ast.parse((ROOT / 'packaging/pbdesk-appimage.spec').read_text())
+    calls = [node for node in ast.walk(tree) if isinstance(node, ast.Call)]
+    collect = next(node for node in calls if isinstance(node.func, ast.Name)
+                   and node.func.id == 'collect_submodules' and node.args
+                   and isinstance(node.args[0], ast.Constant) and node.args[0].value == 'mcp')
+    predicate_ast = next(item.value for item in collect.keywords if item.arg == 'filter')
+    predicate = eval(compile(ast.Expression(predicate_ast), '<spec-filter>', 'eval'))
+    for name in ['mcp.cli', 'mcp.cli.cli', 'mcp.cli.__main__', 'mcp.__main__']:
+        assert not predicate(name), name
+    for name in ['mcp', 'mcp.server', 'mcp.server.mcpserver', 'mcp.server.stdio',
+                 'mcp.client', 'mcp.client.stdio', 'mcp.shared']:
+        assert predicate(name), name
+    analysis = next(node for node in calls if isinstance(node.func, ast.Name) and node.func.id == 'Analysis')
+    excluded = ast.literal_eval(next(item.value for item in analysis.keywords if item.arg == 'excludes'))
+    assert {'mcp.cli', 'mcp.__main__'} <= set(excluded)

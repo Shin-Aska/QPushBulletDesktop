@@ -14,8 +14,13 @@ for package in ('pbdesk', 'sqlcipher3'):
     binaries += package_binaries
     hiddenimports += package_imports
 for package in ('sqlalchemy.dialects.sqlite', 'keyring.backends', 'uvicorn.protocols',
-                'uvicorn.loops', 'uvicorn.lifespan', 'mcp', 'alembic'):
+                'uvicorn.loops', 'uvicorn.lifespan', 'alembic'):
     hiddenimports += collect_submodules(package)
+# The SDK's optional command-line package exits during import without mcp[cli].
+# Filter before recursion so collection never imports it; pbdesk uses the SDK.
+hiddenimports += collect_submodules(
+    'mcp', filter=lambda name: name not in ('mcp.cli', 'mcp.__main__')
+    and not name.startswith('mcp.cli.'))
 hiddenimports += ['PyQt6.QtSvg', 'PyQt6.QtDBus', 'PyQt6.QtNetwork']
 # importlib.metadata is used by diagnostics, Alembic and backend discovery.
 for name in ['pbdesk'] + names:
@@ -27,7 +32,8 @@ datas += [(str(root / 'LICENSE'), 'licenses/pbdesk'),
 a = Analysis([str(root / 'packaging/entrypoint.py')], pathex=[],
              binaries=binaries, datas=datas, hiddenimports=hiddenimports,
              hookspath=[], hooksconfig={}, runtime_hooks=[],
-             excludes=['pytest', 'selenium', 'build', 'pip', 'PyInstaller', 'tkinter'],
+             excludes=['pytest', 'selenium', 'build', 'pip', 'PyInstaller', 'tkinter',
+                       'mcp.cli', 'mcp.__main__'],
              noarchive=False, optimize=0)
 pyz = PYZ(a.pure)
 exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name='pbdesk',
