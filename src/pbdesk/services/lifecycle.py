@@ -10,6 +10,7 @@ import sys
 import time
 import httpx
 from pbdesk.credentials import private_dir, service_token, health_headers, verify_health
+from pbdesk.runtime import command as runtime_command, child_environment, system_environment
 
 class CoreStartupError(RuntimeError):
     pass
@@ -97,7 +98,7 @@ def ensure_core(settings, timeout=12.0, demo=False, *, role="desktop", generatio
             if restart and restart["expires_at"] <= time.time():
                 raise CoreStartupError("Restart handoff expired; start the core explicitly with its original launch options")
             started = False
-            command = [sys.executable, "-m", "pbdesk.cli", "--foreground"]
+            command = runtime_command("pbdesk.cli", "--foreground")
             if restart:
                 profile = restart['profile']
                 if profile['notifications']:
@@ -117,12 +118,12 @@ def ensure_core(settings, timeout=12.0, demo=False, *, role="desktop", generatio
             if os.environ.get("PBDESK_LIFECYCLE") != "foreground":
                 try:
                     manager_probe = subprocess.run(["systemctl", "--user", "show-environment"],
-                        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=1)
+                        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=1, env=system_environment())
                     manager_available = manager_probe.returncode == 0
                 except (OSError, subprocess.TimeoutExpired):
                     pass
             if manager_available:
-                transient = ["systemd-run", "--user", "--collect", "--service-type=exec",
+                transient = ["systemd-run", "--user", "--collect", "--service-type=exec", "--expand-environment=no",
                     "--unit=pbdesk-core-" + unit_hash + "-" + secrets.token_hex(4),
                     "--property=UMask=0077",
                     "--property=KillMode=process",
@@ -133,10 +134,11 @@ def ensure_core(settings, timeout=12.0, demo=False, *, role="desktop", generatio
                     "--setenv=PBDESK_STOP_GENERATION=" + current,
                     *["--setenv=" + key + "=" + os.environ[key] for key in ("PBDESK_LEASE_TIMING", "PBDESK_LIFECYCLE_DEMO") if key in os.environ and not (restart and key == "PBDESK_LEASE_TIMING")],
                     *(["--setenv=PBDESK_LEASE_TIMING=" + json.dumps(restart["profile"]["timing"])] if restart else []),
+                    *(["--setenv=PYINSTALLER_RESET_ENVIRONMENT=1"] if getattr(sys, "frozen", False) else []),
                     *command]
                 try:
                     result = subprocess.run(transient, stdin=subprocess.DEVNULL,
-                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=min(4, max(.1, deadline-time.monotonic())))
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=min(4, max(.1, deadline-time.monotonic())), env=system_environment())
                     if result.returncode:
                         raise CoreStartupError("User service manager rejected core startup; inspect systemctl --user status and configured ports")
                     started = True
@@ -150,7 +152,7 @@ def ensure_core(settings, timeout=12.0, demo=False, *, role="desktop", generatio
                 # No credential in argv/env/log. Core logs are private and sanitized.
                 log_fd = os.open(root / "core.log", os.O_CREAT | os.O_APPEND | os.O_WRONLY | os.O_NOFOLLOW, 0o600)
                 try:
-                    child = subprocess.Popen(command, env=env, stdin=subprocess.DEVNULL,
+                    child = subprocess.Popen(command, env=child_environment(env), stdin=subprocess.DEVNULL,
                         stdout=log_fd, stderr=log_fd, start_new_session=True, close_fds=True)
                 finally:
                     os.close(log_fd)

@@ -11,6 +11,7 @@ import subprocess
 import sys
 import time
 from pbdesk.config import Settings
+from pbdesk.runtime import command, appimage_path, system_environment
 
 
 def core_main(argv=None):
@@ -172,13 +173,15 @@ def admin_main(argv=None):
         root.mkdir(parents=True, exist_ok=True)
         def quote(value):
             return '"' + str(value).replace('\\', '\\\\').replace('"', '\\"').replace('%', '%%') + '"'
-        unit = "[Unit]\nDescription=pbdesk private inbox core\n\n[Service]\nType=simple\nExecStart=" + quote(sys.executable) + " -m pbdesk.cli --foreground --standalone\n"
+        image = appimage_path() if getattr(sys, "frozen", False) else None
+        launch = [str(image), "--core", "--foreground", "--standalone"] if image else command("pbdesk.cli", "--foreground", "--standalone")
+        unit = "[Unit]\nDescription=pbdesk private inbox core\n\n[Service]\nType=simple\nExecStart=" + " ".join(quote(part) for part in launch) + "\n"
         for key, value in {"PBDESK_APPLICATION_DIR": str(settings.application_dir), "PBDESK_STATE_DIR": str(settings.state_dir), "PBDESK_CORE_PORT": str(settings.core_port), "PBDESK_WEB_PORT": str(settings.web_port)}.items():
             unit += "Environment=" + quote(key + "=" + value) + "\n"
         unit += "Restart=on-failure\nRestartSec=3\nKillMode=process\nUMask=0077\n\n[Install]\nWantedBy=default.target\n"
         path = root / "pbdesk-core.service"
         path.write_text(unit)
-        result = subprocess.run(["systemctl", "--user", "daemon-reload"], check=False)
+        result = subprocess.run(["systemctl", "--user", "daemon-reload"], check=False, env=system_environment())
         if result.returncode:
             parser.exit(1, "Unit written, but user systemd is unavailable. Run daemon-reload in your desktop session.\n")
         print(f"Installed {path}. Login autostart remains off; use systemctl --user enable explicitly if wanted.")
@@ -226,7 +229,7 @@ def diagnostics_main():
     except (httpx.HTTPError, ValueError):
         report["core"] = "unavailable"
     try:
-        result = subprocess.run(["systemctl", "--user", "is-active", "pbdesk-core.service"], capture_output=True, text=True, timeout=2)
+        result = subprocess.run(["systemctl", "--user", "is-active", "pbdesk-core.service"], capture_output=True, text=True, timeout=2, env=system_environment())
         report["service"] = result.stdout.strip() or "user service manager unavailable"
     except (OSError, subprocess.TimeoutExpired):
         report["service"] = "unavailable"

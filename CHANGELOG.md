@@ -48,6 +48,6 @@ Target: the first public stable release, **1.0.0**. No release has been tagged o
 
 - Encryption has been developed against isolated fixtures. The existing live profile and running older core have not been migrated or restarted by this change; activation requires the explicit protection flow. See [encrypted history](docs/encrypted-history.md).
 
-- The selected public distribution target is an **AppImage built through GitHub Actions and distributed through GitHub Releases**. The build/release pipeline and standalone packaged runtime remain to be implemented and verified; they are not delivered by this changelog entry.
+- The selected public distribution target is an **AppImage built through GitHub Actions and distributed through GitHub Releases**. The private candidate pipeline and standalone packaged runtime are implemented. Private `main`/build-branch pushes and manual runs build the AppImage and require packaged smoke checks, full regression tests and verified checksums before successful candidate upload. No 1.0 release has been published. Native supported-desktop acceptance and complete third-party license/corresponding-source material remain release gates. See [private AppImage candidates](docs/appimage.md).
 - The project uses `GPL-3.0-only`. Bundled components retain their applicable licenses, notices, and corresponding-source requirements.
 - See [the release plan](docs/release-plan.md) for the agreed packaging target and remaining acceptance checks, and [feature parity](docs/feature-parity.md) for current feature boundaries.
