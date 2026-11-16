@@ -115,16 +115,24 @@ jobs:
           if-no-files-found: error
           retention-days: 2
           compression-level: 0
-      - name: Upload failure evidence only
+      - name: Upload unverified candidate and sanitized failure evidence
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: pbdesk-appimage-failure-${{ github.run_id }}
+          name: pbdesk-appimage-unverified-failure-${{ github.run_id }}
+          # Explicit files only: never include synthetic profiles, cache, wallet
+          # material or raw child logs. Failed candidates are NOT validated builds.
           path: |
             dist/smoke-evidence.json
+            dist/pbdesk-*-x86_64.AppImage
+            dist/pbdesk-*-build-info.json
+            dist/pbdesk-*-SHA256SUMS
+            dist/pbdesk-*-source.tar.gz
+            dist/pbdesk-*-licenses.tar.gz
             build/appimage/pyinstaller/pbdesk-appimage/warn-pbdesk-appimage.txt
           if-no-files-found: ignore
           retention-days: 1
+          compression-level: 0
 
   # This remains fail-closed while readiness.json records the 1.0 source/legal and
   # supported-desktop blockers. A deliberate matching >=1.0.0 tag can create only

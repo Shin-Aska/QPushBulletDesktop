@@ -27,7 +27,58 @@ import time
 
 
 class SmokeFailure(RuntimeError):
-    pass
+    def __init__(self, message, *, command_role=None, returncode=None):
+        super().__init__(message)
+        self.smoke_command_role = command_role
+        self.smoke_returncode = returncode
+
+
+def command_role(arguments):
+    """Describe a command without recording arbitrary arguments or paths."""
+    executable = Path(str(arguments[0])).name if arguments else ''
+    option = str(arguments[1]) if len(arguments) > 1 else ''
+    if executable == 'xdotool':
+        return {'windowfocus': 'xdotool_windowfocus', 'key': 'xdotool_key',
+                'search': 'xdotool_search'}.get(option, 'xdotool')
+    if executable == 'dbus-daemon':
+        return 'private_dbus_daemon'
+    if executable == 'Xvfb':
+        return 'private_xvfb'
+    if Path(option).name == 'fake_kwallet.py':
+        return 'private_fake_kwallet'
+    return {'--core': 'appimage_core', '--web': 'appimage_web_control',
+            '--admin': 'appimage_admin', '--mcp': 'appimage_mcp',
+            '--diagnostics': 'appimage_diagnostics', '--appimage-extract': 'appimage_extract',
+            '--demo': 'appimage_desktop_demo', '': 'appimage_desktop'}.get(option, 'external_command')
+
+
+def exception_diagnostics(exception, *, _seen=None):
+    """Frame locations and numeric error codes only: never exception values.
+
+    In particular, OSError.filename, command argv/output, frame source lines,
+    locals, exception notes and the exception's string representation are absent.
+    Preserve a cleanup exception's context so it cannot hide the original site.
+    """
+    seen = set() if _seen is None else _seen
+    seen.add(id(exception))
+    details = {'exception': type(exception).__name__, 'frames': []}
+    if isinstance(exception, OSError) and type(exception.errno) is int:
+        details['errno'] = exception.errno
+    role = getattr(exception, 'smoke_command_role', None)
+    if role is not None:
+        details['command_role'] = role
+    returncode = getattr(exception, 'smoke_returncode', None)
+    if type(returncode) is int:
+        details['returncode'] = returncode
+    frame = exception.__traceback__
+    while frame is not None:
+        details['frames'].append({'filename': Path(frame.tb_frame.f_code.co_filename).name,
+                                  'line': frame.tb_lineno, 'function': frame.tb_frame.f_code.co_name})
+        frame = frame.tb_next
+    linked = exception.__cause__ or exception.__context__
+    if linked is not None and id(linked) not in seen and len(seen) < 8:
+        details['cause' if exception.__cause__ is not None else 'context'] = exception_diagnostics(linked, _seen=seen)
+    return details
 
 
 def free_ports():
@@ -139,9 +190,13 @@ class Harness:
             raise SmokeFailure(name)
 
     def spawn(self, arguments, *, env=None, stdout=None, pass_fds=()):
-        child = subprocess.Popen(list(map(str, arguments)), cwd=self.cwd, env=env or self.env,
-                                 stdin=subprocess.DEVNULL, stdout=stdout or self.log, stderr=self.log,
-                                 start_new_session=True, pass_fds=pass_fds)
+        try:
+            child = subprocess.Popen(list(map(str, arguments)), cwd=self.cwd, env=env or self.env,
+                                     stdin=subprocess.DEVNULL, stdout=stdout or self.log, stderr=self.log,
+                                     start_new_session=True, pass_fds=pass_fds)
+        except OSError as exc:
+            exc.smoke_command_role = command_role(arguments)
+            raise
         self.processes.append(child)
         return child
 
@@ -152,9 +207,11 @@ class Harness:
         except subprocess.TimeoutExpired:
             child.kill()
             child.wait()
-            raise SmokeFailure('Packaged command timed out') from None
+            raise SmokeFailure('Packaged command timed out', command_role=command_role(arguments),
+                               returncode=child.returncode) from None
         if child.returncode:
-            raise SmokeFailure('Packaged command failed')
+            raise SmokeFailure('Packaged command failed', command_role=command_role(arguments),
+                               returncode=child.returncode)
         return stdout.decode('utf-8')
 
     def private_services(self):
@@ -479,7 +536,9 @@ def main(argv=None):
                 if harness:
                     harness.close()
     except Exception as exc:
+        report['status'] = 'fail'
         report['failure'] = str(exc) if isinstance(exc, SmokeFailure) else type(exc).__name__
+        report['failure_diagnostics'] = exception_diagnostics(exc)
     finally:
         report.pop('_input_image', None)
         output.parent.mkdir(parents=True, exist_ok=True)

@@ -1,5 +1,7 @@
 """External smoke-fixture tests; none build or substitute an AppImage."""
 import importlib.util
+import errno
+import json
 import os
 from pathlib import Path
 import select
@@ -165,3 +167,83 @@ def test_harness_private_services_start_and_clean_up_exact_owned_children(tmp_pa
     finally:
         harness.close()
     assert not owned.intersection(smoke.descendants(os.getpid()))
+
+
+def test_failure_diagnostics_include_errno_and_locations_without_values():
+    secret = 'fictional-private-token-do-not-record'
+    def failed_operation():
+        raise OSError(errno.EIO, secret, '/private/' + secret)
+    try:
+        failed_operation()
+    except OSError as exception:
+        exception.add_note(secret)
+        details = smoke.exception_diagnostics(exception)
+    assert details['exception'] == 'OSError'
+    assert details['errno'] == errno.EIO
+    assert details['frames'][-1]['function'] == 'failed_operation'
+    assert details['frames'][-1]['filename'] == Path(__file__).name
+    assert all(set(frame) == {'filename', 'line', 'function'} for frame in details['frames'])
+    assert secret not in json.dumps(details)
+    assert '/private/' not in json.dumps(details)
+
+
+def test_failure_diagnostics_preserve_original_when_cleanup_masks_failure():
+    try:
+        try:
+            raise OSError(errno.EIO, 'fictional-private-original')
+        finally:
+            raise OSError(errno.ENOENT, 'fictional-private-cleanup')
+    except OSError as exception:
+        details = smoke.exception_diagnostics(exception)
+    assert details['errno'] == errno.ENOENT
+    assert details['context']['errno'] == errno.EIO
+    assert details['context']['frames']
+    assert 'fictional-private-' not in json.dumps(details)
+
+
+def test_command_failure_reports_role_and_returncode_without_argv_or_output(monkeypatch):
+    harness = object.__new__(smoke.Harness)
+    child = SimpleNamespace(returncode=19, communicate=lambda timeout: (b'fictional-private-output', None))
+    monkeypatch.setattr(harness, 'spawn', lambda *args, **kwargs: child)
+    with pytest.raises(smoke.SmokeFailure) as caught:
+        harness.run(['xdotool', 'key', '--window', 'fictional-private-argument'])
+    details = smoke.exception_diagnostics(caught.value)
+    assert details['command_role'] == 'xdotool_key'
+    assert details['returncode'] == 19
+    assert 'fictional-private-' not in json.dumps(details)
+
+
+def test_command_spawn_error_reports_role_and_errno_without_filename(monkeypatch, tmp_path):
+    harness = object.__new__(smoke.Harness)
+    harness.cwd, harness.env, harness.log = tmp_path, {}, None
+    def unavailable_command(*args, **kwargs):
+        raise OSError(errno.ENOENT, 'fictional-private-error', '/private/fictional-private-file')
+    monkeypatch.setattr(smoke.subprocess, 'Popen', unavailable_command)
+    with pytest.raises(OSError) as caught:
+        harness.spawn(['xdotool', 'windowfocus', '--sync', 'fictional-private-window'])
+    details = smoke.exception_diagnostics(caught.value)
+    assert details['command_role'] == 'xdotool_windowfocus'
+    assert details['errno'] == errno.ENOENT
+    assert 'fictional-private-' not in json.dumps(details)
+
+
+def test_cleanup_failure_cannot_leave_successful_evidence(monkeypatch, tmp_path, capsys):
+    class FixtureHarness:
+        def __init__(self, *args):
+            pass
+        def exercise(self):
+            pass
+        def close(self):
+            raise OSError(errno.EIO, 'fictional-private-cleanup-value')
+    candidate = tmp_path / 'fixture-input-only'
+    candidate.write_bytes(b'not executed')
+    output = tmp_path / 'evidence.json'
+    monkeypatch.setattr(smoke, 'Harness', FixtureHarness)
+    monkeypatch.setattr(smoke.shutil, 'which', lambda *args, **kwargs: '/fixture/command')
+    assert smoke.main([str(candidate), '--output', str(output)]) == 1
+    report = json.loads(output.read_text())
+    assert report['status'] == 'fail'
+    assert report['failure_diagnostics']['errno'] == errno.EIO
+    assert report['failure_diagnostics']['frames'][-1]['function'] == 'close'
+    assert 'fictional-private-cleanup-value' not in output.read_text()
+    assert 'fictional-private-cleanup-value' not in capsys.readouterr().out
