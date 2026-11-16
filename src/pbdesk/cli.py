@@ -61,6 +61,29 @@ def mcp_main():
     return main()
 
 
+def configure_connection(settings, reference, token=None):
+    """Local admin uses the same signed core API as native setup."""
+    import httpx
+    from pbdesk.services.client_lifecycle import ClientLease
+    from pbdesk.credentials import service_token
+    lease = ClientLease(settings)
+    try:
+        lease.start()
+        with httpx.Client(base_url=settings.core_url, trust_env=False, follow_redirects=False,
+                timeout=85, headers={'Authorization': 'Bearer ' + service_token(settings, 'desktop')}) as client:
+            response = client.get('/api/v1/configuration')
+            response.raise_for_status()
+            value = {**reference, 'expected_revision': response.json()['setup']['revision']}
+            if token is not None:
+                value['token'] = token
+            response = client.post('/api/v1/configuration/provider', json=value)
+            response.raise_for_status()
+    except Exception:
+        raise RuntimeError('Could not save connection settings. Unlock the credential store and use Settings → Account; restart an older core first.') from None
+    finally:
+        lease.close()
+
+
 def admin_main(argv=None):
     parser = argparse.ArgumentParser(description="Local secure setup (web accounts deferred)")
     parser.add_argument("action", choices=["provider-token", "use-kwallet", "reload-provider", "revoke-service", "install-service"])
@@ -70,7 +93,7 @@ def admin_main(argv=None):
     parser.add_argument("--entry", default="api-key", help="KWallet password entry (default: api-key)")
     args = parser.parse_args(argv)
     settings = Settings.from_env()
-    from pbdesk.credentials import CredentialLocked, store_provider_token, revoke_service_token, use_kwallet
+    from pbdesk.credentials import CredentialLocked, revoke_service_token
     if args.action == "reload-provider":
         from pbdesk.services.lifecycle import ensure_core
         from pbdesk.credentials import service_token
@@ -83,19 +106,19 @@ def admin_main(argv=None):
             print(json.dumps(response.json(),indent=2))
     elif args.action == "use-kwallet":
         try:
-            use_kwallet(settings, folder=args.folder, entry=args.entry, wallet=args.wallet)
-        except CredentialLocked as exc:
+            configure_connection(settings, {'backend': 'kwallet', 'folder': args.folder, 'entry': args.entry, 'wallet': args.wallet or 'kdewallet'})
+        except (CredentialLocked, RuntimeError) as exc:
             parser.exit(1, str(exc) + ". No credential source was changed.\n")
-        print("Selected existing KWallet password entry. Only its location was saved. Restart the core to connect.")
+        print("Selected existing KWallet password entry. Its location was saved in SQLite and synchronization is starting.")
     elif args.action == "provider-token":
         token = getpass.getpass("Pushbullet access token (secure keyring only): ")
         if not token.strip():
             parser.error("Access token cannot be empty")
         try:
-            store_provider_token(token, settings)
-        except CredentialLocked as exc:
+            configure_connection(settings, {'backend': 'keyring'}, token)
+        except (CredentialLocked, RuntimeError) as exc:
             parser.exit(1, str(exc) + "; unlock Secret Service/KWallet and retry. No token was saved to a file.\n")
-        print("Provider token securely saved and read-back verified. Restart core to connect.")
+        print("Provider token securely saved and verified. SQLite connection settings were updated.")
     elif args.action == "revoke-service":
         if not args.role:
             parser.error("--role is required")

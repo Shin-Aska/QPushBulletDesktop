@@ -140,7 +140,9 @@ def test_settings_switch_scheme_rerenders_selected_content_and_preserves_context
     scheme.setCurrentIndex(scheme.findData('dark'))
     qtbot.wait(20)
     assert current_scheme(qapp) == 'dark' and changed
-    assert (tmp_path / 'ui-preferences.json').exists()
+    from pbdesk.desktop.preferences import read_preferences
+    assert read_preferences()['color_scheme'] == 'dark'
+    assert not (tmp_path / 'ui-preferences.json').exists()
     assert widget.list.currentIndex().data(Qt.ItemDataRole.UserRole)['id'] == 2
     assert widget.sms_page.composer.toPlainText() == 'Fictional unsent draft'
     assert widget.capabilities == before_cap and widget.inbox_sync.text() == before_sync

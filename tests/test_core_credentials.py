@@ -30,7 +30,7 @@ class FakeWalletBus:
     def send_and_get_reply(self, message, *, timeout):
         method = message.header.fields[HeaderFields.member]
         self.calls.append(message)
-        assert 0 < timeout <= 5
+        assert 0 < timeout <= 45
         reply = self.replies[method]
         if isinstance(reply, Exception):
             raise reply
@@ -90,11 +90,11 @@ def test_reference_contains_only_location_and_uses_exact_entry(tmp_path, monkeyp
     monkeypatch.setattr(kwallet, "read_password", read)
     monkeypatch.setattr(credentials, "secure_backend", lambda: pytest.fail("Must not fall back to another store"))
     credentials.use_kwallet(settings, wallet="kdewallet")
-    path = tmp_path / "provider-credential.json"
-    assert json.loads(path.read_text()) == {
+    path = tmp_path / "pbdesk.sqlite3"
+    assert credentials.provider_credential_source(settings) == {
         "backend": "kwallet", "wallet": "kdewallet", "folder": "Pushbullet", "entry": "api-key",
     }
-    assert "fake-provider-token" not in path.read_text()
+    assert b"fake-provider-token" not in path.read_bytes()
     assert path.stat().st_mode & 0o777 == 0o600
     assert credentials.provider_token(settings) == "fake-provider-token"
     assert calls == [("Pushbullet", "api-key", "kdewallet")] * 2
@@ -134,12 +134,15 @@ def test_legacy_keyring_and_explicit_token_setup_remain_supported(tmp_path, monk
     credentials.store_provider_token("new-fake-token", settings)
     assert credentials.provider_credential_source(settings) == {"backend": "keyring"}
     assert credentials.provider_token(settings) == "new-fake-token"
-    assert "new-fake-token" not in (tmp_path / "provider-credential.json").read_text()
+    assert b"new-fake-token" not in (tmp_path / "pbdesk.sqlite3").read_bytes()
 
 
 def test_invalid_reference_fails_closed(tmp_path, monkeypatch):
     settings = Settings(tmp_path)
-    credentials._save_provider_source(settings, {"backend": "plaintext"})
+    from pbdesk.storage.database import Store
+    store = Store(settings)
+    store.set_setting('configuration:provider', {'backend': 'plaintext'})
+    store.close()
     monkeypatch.setattr(credentials, "secure_backend", lambda: pytest.fail("Invalid source must not fall back"))
     with pytest.raises(credentials.CredentialLocked):
         credentials.provider_token(settings)
@@ -155,6 +158,8 @@ def test_diagnostics_source_excludes_unrecognized_fields(tmp_path):
 
 def test_local_kwallet_setup_cli_does_not_print_token(tmp_path, monkeypatch, capsys):
     from pbdesk.cli import admin_main
+    monkeypatch.setattr('pbdesk.cli.configure_connection', lambda settings, reference, token=None:
+        credentials.use_kwallet(settings, reference['folder'], reference['entry'], reference['wallet']))
     monkeypatch.setattr(Settings, "from_env", classmethod(lambda cls: Settings(tmp_path)))
     monkeypatch.setattr(kwallet, "read_password", lambda *args: "fake-provider-token")
     admin_main(["use-kwallet", "--folder", "Pushbullet", "--entry", "api-key"])
@@ -172,7 +177,7 @@ def test_e2e_password_uses_same_selected_kwallet_and_preserves_exact_unicode(tmp
     monkeypatch.setattr(credentials,"secure_backend",lambda:pytest.fail("Selected source must not fall back"))
     assert credentials.e2e_password(settings)==" é exact password \n"
     assert calls==[("Pushbullet","e2e-password","kdewallet")]
-    assert "exact password" not in (tmp_path/"provider-credential.json").read_text()
+    assert b"exact password" not in (tmp_path/"pbdesk.sqlite3").read_bytes()
 
 
 def test_optional_keyring_e2e_entry_and_locked_state(tmp_path,monkeypatch):
@@ -201,6 +206,19 @@ def test_new_device_kwallet_entry_write_is_explicit_verified_and_never_overwrite
         with pytest.raises(kwallet.KWalletUnavailable):
             kwallet.write_new_password('Pushbullet',entry,'replacement','kdewallet')
         assert not fake_bus.calls
+
+
+def test_provider_setup_can_create_folder_but_never_replace_an_entry(fake_bus):
+    fake_bus.replies.update(hasFolder=False, createFolder=True, hasEntry=False,
+        writePassword=0, readPassword='fixture-new-token')
+    kwallet.write_provider_password('Pushbullet', 'api-key', 'fixture-new-token', 'kdewallet')
+    methods = [message.header.fields[HeaderFields.member] for message in fake_bus.calls]
+    assert methods.index('createFolder') < methods.index('writePassword') < methods.index('readPassword')
+    fake_bus.calls.clear()
+    fake_bus.replies.update(hasFolder=True, hasEntry=True)
+    with pytest.raises(kwallet.KWalletUnavailable):
+        kwallet.write_provider_password('Pushbullet', 'api-key', 'replacement', 'kdewallet')
+    assert 'writePassword' not in [message.header.fields[HeaderFields.member] for message in fake_bus.calls]
 
 
 def test_simultaneous_kwallet_creators_cannot_overwrite_new_entry(monkeypatch):

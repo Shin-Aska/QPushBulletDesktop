@@ -81,10 +81,14 @@ def test_system_preserves_installed_style_palette_and_font(theme_app):
 def test_preference_roundtrip_invalid_and_initialize_once(theme_app, tmp_path):
     app = theme_app
     path = tmp_path / 'state' / 'ui-preferences.json'
+    from pbdesk.desktop.preferences import read_preferences, receive_preferences
     set_color_scheme(app, 'dark')
-    assert json.loads(path.read_text()) == {'color_scheme': 'dark'}
+    assert read_preferences() == {'color_scheme': 'dark'}
+    assert not path.exists()
     assert current_scheme(app) == 'dark'
-    path.write_text('{"color_scheme":"light"}')
+    from pbdesk.desktop import preferences
+    preferences._states.clear()  # A fresh process restores its session mirror from core.
+    receive_preferences({'color_scheme': 'light'})
     apply_theme(app)
     assert current_scheme(app) == 'dark'  # Initialization is deliberately idempotent.
     manager = theme_signals(app)
@@ -92,16 +96,16 @@ def test_preference_roundtrip_invalid_and_initialize_once(theme_app, tmp_path):
     manager._last_colors = None  # Simulate a fresh UI process with the same state directory.
     apply_theme(app)
     assert current_scheme(app) == 'light'
-    for invalid in ('broken json', '[]', '{"color_scheme":"unknown"}', '{"color_scheme":[]}'):
+    for invalid in ('unknown', []):
         apply_theme(app, 'system')
-        path.write_text(invalid)
+        receive_preferences({'color_scheme': invalid})
         manager._last_colors = None
         apply_theme(app)
         assert current_scheme(app) == 'system'
     with pytest.raises(ValueError):
         set_color_scheme(app, 'invalid')
     assert not (tmp_path / 'app').exists()
-    assert sorted(item.name for item in (tmp_path / 'state').iterdir()) == ['ui-preferences.json']
+    assert not path.exists()
 
 
 def test_live_system_palette_events_and_explicit_reset(theme_app, qtbot):

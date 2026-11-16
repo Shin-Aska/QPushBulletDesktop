@@ -40,39 +40,23 @@ def validate_model(model):
 
 
 def load_settings(settings):
+    from pbdesk.configuration import get, ai_settings
     try:
-        fd = os.open(settings.state_dir / 'ai-settings.json', os.O_RDONLY | os.O_NOFOLLOW)
-        with os.fdopen(fd) as stream:
-            info = os.fstat(stream.fileno())
-            if info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o600:
-                raise ValueError()
-            data = json.loads(stream.read(4097))
-        model = validate_model(data['model'])
-        if type(data.get('configured')) is not bool:
-            raise ValueError()
-        return {'model': model, 'configured': data['configured'], 'revision': str(data.get('revision', 'initial'))[:100], 'key_reference': dict(AI_REFERENCE)}
-    except FileNotFoundError:
-        return {'model': DEFAULT_MODEL, 'configured': False, 'revision': 'initial', 'key_reference': dict(AI_REFERENCE)}
+        data = get(settings, 'ai')
+        data = ai_settings(data) if data is not None else {
+            'model': DEFAULT_MODEL, 'configured': False, 'revision': 'initial'}
+        return {**data, 'key_reference': dict(AI_REFERENCE)}
     except Exception:
         raise AiError('AI settings are invalid or inaccessible.') from None
 
 
 def save_settings(settings, model=None, configured=None):
+    from pbdesk.configuration import put
     current = load_settings(settings)
     data = {'model': validate_model(model if model is not None else current['model']),
             'configured': current['configured'] if configured is None else bool(configured),
             'revision': secrets.token_hex(16)}
-    root = private_dir(settings)
-    fd, temporary = tempfile.mkstemp(dir=root, prefix='.ai-settings-')
-    try:
-        with os.fdopen(fd, 'w') as stream:
-            json.dump(data, stream)
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.replace(temporary, root / 'ai-settings.json')
-    finally:
-        if os.path.exists(temporary):
-            os.unlink(temporary)
+    put(settings, 'ai', data)
     return {**data, 'key_reference': dict(AI_REFERENCE)}
 
 

@@ -17,7 +17,8 @@ from .activity import ActivityDialog
 from .ai import SummaryPage, AISettings, SmsAiAssistant
 from .ai_worker import AiWorker
 from .chat import SmsPage
-from .preferences import read_preferences, update_preferences
+from .preferences import read_preferences, update_preferences, bind_preferences, receive_preferences
+from .setup import AccountSetup
 from .theme import apply_theme, primary, colors, current_scheme, set_color_scheme, theme_signals
 from .status import DesktopStatus, merge_capabilities
 from .notification_content import NotificationBrowser, notification_html, valid_http_url
@@ -73,6 +74,9 @@ class MainWindow(QMainWindow):
         super().__init__()
         apply_theme(QApplication.instance())
         self.worker = worker
+        bind_preferences(worker)
+        self._preferences_restored = False
+        self._setup_prompted = False
         self.ai_client = ai_client
         self._exiting = False
         self.devices, self.actions, self.items = [], [], []
@@ -243,7 +247,7 @@ class MainWindow(QMainWindow):
             worker.result.connect(self.command_result)
         theme_signals(QApplication.instance()).changed.connect(self.refresh_theme)
         page = read_preferences().get('main_page', 'notifications')
-        self.navigate(('notifications', 'sms', 'summary').index(page) if page in ('notifications', 'sms', 'summary') else 0)
+        self.navigate(('notifications', 'sms', 'summary').index(page) if page in ('notifications', 'sms', 'summary') else 0, persist=False)
         self.refresh_theme()
         self.update_status()
 
@@ -265,14 +269,15 @@ class MainWindow(QMainWindow):
         exit_action = menu.addAction('Exit desktop', self.exit_desktop)
         exit_action.setShortcut(QKeySequence.StandardKey.Quit)
 
-    def navigate(self, index):
+    def navigate(self, index, persist=True):
         if index not in range(len(self.navigation)):
             return
         self.tabs.setCurrentIndex(index)
         if index == 2:
             self.update_summary_context()
         try:
-            update_preferences({'main_page': ('notifications', 'sms', 'summary')[index]})
+            if persist:
+                update_preferences({'main_page': ('notifications', 'sms', 'summary')[index]})
         except OSError as error:
             self.show_error('Could not save the startup page: ' + str(error))
         for i, button in enumerate(self.navigation):
@@ -827,7 +832,7 @@ class MainWindow(QMainWindow):
         command = result['command']
         # These surfaces own their inline status and recovery controls. They
         # must neither raise a global banner nor clear an unrelated command error.
-        if command in {'media_image', 'core_settings', 'core_settings_update', 'core_restart'}:
+        if command in {'media_image', 'core_settings', 'core_settings_update', 'core_restart', 'configuration_get', 'configure_provider'}:
             return
         if command == 'refresh_devices':
             self.refresh_devices_button.setEnabled(True)
@@ -904,6 +909,20 @@ class MainWindow(QMainWindow):
         if 'devices' in data:
             self.devices_status.setText('Last refreshed ' + stamp(data['devices'].get('synced_at')))
         self.web_label.setText('Local web: ' + ('on' if self.web_state.get('enabled') else 'off'))
+        configuration = data.get('configuration')
+        if isinstance(configuration, dict):
+            preferences = receive_preferences(configuration['preferences'])
+            if not self._preferences_restored:
+                self._preferences_restored = True
+                page = preferences.get('main_page', 'notifications')
+                self.navigate(('notifications', 'sms', 'summary').index(page) if page in ('notifications', 'sms', 'summary') else 0, persist=False)
+            scheme = preferences.get('color_scheme', 'system')
+            if scheme in ('system', 'dark', 'light') and scheme != current_scheme(QApplication.instance()):
+                apply_theme(QApplication.instance(), scheme)
+            self.account_setup.apply_configuration(configuration)
+            if configuration['setup']['required'] and not self._setup_prompted:
+                self._setup_prompted = True
+                self.show_settings('Account')
         if 'items' in data and not self.command_error:
             self.error.hide()
 
@@ -935,6 +954,8 @@ class MainWindow(QMainWindow):
         appearance_layout.addWidget(description)
         appearance_layout.addStretch()
         self.settings_tabs.addTab(appearance_page, 'Appearance')
+        self.account_setup = AccountSetup(self.worker, dialog)
+        self.settings_tabs.addTab(self.account_setup, 'Account')
         self.settings_tabs.addTab(self.devices_page, 'Devices')
         self.ai_settings = AISettings(self.ai_client, self.settings_dialog)
         self.settings_tabs.addTab(self.ai_settings, 'AI')
@@ -956,7 +977,7 @@ class MainWindow(QMainWindow):
         self.web_open_button.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(self.web_state['url'])))
         for widget in (self.web_enabled, self.web_settings_state, self.web_open_button):
             web_layout.addWidget(widget)
-        credentials = plain_label('Pushbullet credentials are read locally from kdewallet → Pushbullet. api-key and the shared e2e-password stay in KWallet.')
+        credentials = plain_label('Configure the saved connection in Account settings. Access tokens and encryption passwords stay in the selected secure wallet; application settings use SQLite.')
         credentials.setWordWrap(True)
         web_layout.addWidget(credentials)
         notice = plain_label('In coupled mode, desktop and local web server processes keep the core alive. '

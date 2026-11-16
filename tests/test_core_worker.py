@@ -21,6 +21,37 @@ class FakeLease:
     def close(self): pass
 
 
+@pytest.mark.parametrize('queued_at_exit', [False, True])
+def test_preferences_use_authenticated_api_and_queued_changes_flush_on_exit(tmp_path, monkeypatch, queued_at_exit):
+    import json
+    settings = Settings(tmp_path)
+    actual = httpx.Client
+    patches = []
+    def handle(request):
+        path = request.url.path
+        if path.endswith('/health'):
+            assert 'authorization' not in request.headers
+            return httpx.Response(200, json=health_response(settings, request.headers, OLD, True))
+        assert request.headers.get('authorization', '').startswith('Bearer ')
+        if path.endswith('/capabilities'):
+            return httpx.Response(200, json={'features': {'configuration': True}})
+        if path == '/api/v1/configuration':
+            return httpx.Response(200, json={'setup': {'required': False}, 'preferences': {}})
+        assert path == '/api/v1/configuration/preferences' and request.method == 'PATCH'
+        value = json.loads(request.content)
+        patches.append(value)
+        return httpx.Response(200, json={'preferences': value})
+    monkeypatch.setattr('pbdesk.desktop.worker.ClientLease', FakeLease)
+    monkeypatch.setattr('pbdesk.desktop.worker.httpx.Client', lambda **kwargs: actual(**kwargs, transport=httpx.MockTransport(handle)))
+    worker = CoreWorker(settings)
+    worker.result.connect(lambda value: worker.stop())
+    if queued_at_exit:
+        worker.request('configuration_get', {'request_id': 'read'})
+    worker.request('preferences_update', {'request_id': 'preference', 'changes': {'main_page': 'sms', 'color_scheme': 'dark'}})
+    worker.run()
+    assert patches == [{'main_page': 'sms', 'color_scheme': 'dark'}]
+
+
 @pytest.mark.parametrize('outcome, expected', [
     (422, 'source_blocked'), (410, 'unavailable'), (413, 'too_large'),
     (415, 'format'), (502, 'download_failed'), (504, 'timeout'),

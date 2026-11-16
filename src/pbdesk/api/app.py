@@ -81,6 +81,7 @@ def create_app(settings=None, fixture_path=None, notifier=None, demo=False, noti
             dispatcher=Dispatcher(store,lambda:app.state.provider)
             app.state.dispatcher=dispatcher
             app.state.provider_reload_lock=asyncio.Lock()
+            app.state.configuration_lock=asyncio.Lock()
             timing = app.state.clients.timing
             profile = None if provider_factory is not None or notifier is not None else {
                 'demo': demo, 'fixture': str(Path(fixture_path).resolve()) if fixture_path else None,
@@ -101,7 +102,16 @@ def create_app(settings=None, fixture_path=None, notifier=None, demo=False, noti
                 if provider_factory is not None:
                     selected=provider_factory(settings,store,ingest,encryption)
                 elif not demo and not fixture_path:
-                    token=await asyncio.to_thread(provider_token,settings)
+                    from pbdesk.configuration import get
+                    established = await asyncio.to_thread(get, settings, 'setup', {})
+                    source = await asyncio.to_thread(get, settings, 'provider')
+                    token = (await asyncio.to_thread(provider_token, settings)
+                        if source is not None or established.get('completed') else None)
+                    if token:
+                        from pbdesk.configuration import get
+                        from pbdesk.credentials import _save_provider_source
+                        if await asyncio.to_thread(get, settings, 'provider') is None:
+                            await asyncio.to_thread(_save_provider_source, settings, {'backend': 'keyring'})
                     selected=Provider(token,store,ingest,settings=settings,encryption=encryption) if token else None
                 else:
                     selected=None
@@ -199,7 +209,7 @@ def create_app(settings=None, fixture_path=None, notifier=None, demo=False, noti
         send_ready=bool(selected and selected.send_ready)
         devices=await asyncio.to_thread(app.state.store.device_list)
         return {"account_id":await asyncio.to_thread(app.state.store.sms_account),"features":{"inbox":True,"search":True,"send":True,"send_note":True,"send_link":True,
-                "send_sms":any(device["can_sms"] for device in devices),"sms_history":True,"device_management":True,"devices":True,"e2e_decrypt":True,"ai":True,"ai_summary":True,"ai_draft_reply":True,"ai_saved_summaries":True,"media_images":True,"web_inbox":False,"client_lifecycle":True,"core_settings":True,"core_restart":True},
+                "send_sms":any(device["can_sms"] for device in devices),"sms_history":True,"device_management":True,"devices":True,"e2e_decrypt":True,"ai":True,"ai_summary":True,"ai_draft_reply":True,"ai_saved_summaries":True,"media_images":True,"web_inbox":False,"client_lifecycle":True,"core_settings":True,"core_restart":True,"configuration":True},
             "provider_state":provider_state,"push_sync":await asyncio.to_thread(app.state.store.get_setting,"push_sync",{"state":"idle","last_success_at":None,"error":None}),"encryption_state":app.state.encryption.state,
             "encrypted_pending":await app.state.encryption.pending_count(),"send_ready":send_ready,
             "send_unavailable_reason":None if send_ready else "Provider is not connected; sending is unavailable"}
@@ -415,6 +425,9 @@ def create_app(settings=None, fixture_path=None, notifier=None, demo=False, noti
                         app.state.provider_state="locked"
                         await app.state.encryption.clear("locked")
         return await capabilities()
+
+    from pbdesk.api.configuration import install_configuration_routes
+    install_configuration_routes(app, authorization, settings, guard_mutation, provider_reload, demo or bool(fixture_path))
 
     def action_result(value):
         if value is None:

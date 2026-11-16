@@ -10,7 +10,7 @@ from pbdesk.credentials import service_token, health_headers, verify_health
 from pbdesk.media_errors import IMAGE_ERRORS
 from pbdesk.services.client_lifecycle import ClientLease
 
-CORE_COMMANDS = {"core_settings", "core_settings_update", "core_restart"}
+CORE_COMMANDS = {"core_settings", "core_settings_update", "core_restart", "configuration_get", "configure_provider", "preferences_update"}
 MUTATIONS = {"core_settings_update", "core_restart", "web", "shutdown", "refresh_devices", "reload_provider", "create_action", "edit_action", "approve_action", "cancel_action", "refresh_sms", "add_device", "rename_device", "remove_device", "encryption", "test_encryption", "resolve_registration"}
 
 
@@ -59,14 +59,19 @@ class CoreWorker(QThread):
         self.account_id = None
         self.account_known = False
         self.pending_restart = None
+        self._preference_lock = threading.Lock()
+        self._pending_preferences = {}
 
     def request(self, action, value=None):
+        if action == 'preferences_update':
+            with self._preference_lock:
+                self._pending_preferences.update(value['changes'])
         self.commands.put((action, value))
 
     def stop(self):
         self.stop_event.set()
         self.commands.put(("wake", None))
-        if self.lease:
+        if self.lease and self.instance_id is None:
             self.lease.stop_event.set()
 
     def _account(self, data):
@@ -101,6 +106,26 @@ class CoreWorker(QThread):
         return identity
 
     def _mutate(self, client, headers, command, value):
+        if command == 'configuration_get':
+            response = client.get('/api/v1/configuration', headers=headers)
+            response.raise_for_status()
+            return response.json()
+        if command in {'configure_provider', 'preferences_update'}:
+            path = '/api/v1/configuration/' + ('provider' if command == 'configure_provider' else 'preferences')
+            payload = {key: field for key, field in value.items() if key != 'request_id'} if command == 'configure_provider' else value['changes']
+            method = 'POST' if command == 'configure_provider' else 'PATCH'
+            response = client.request(method, path, json=payload, headers=headers,
+                timeout=httpx.Timeout(85 if command == 'configure_provider' else 4, connect=2))
+            response.raise_for_status()
+            data = response.json()
+            if command == 'preferences_update':
+                if not isinstance(data, dict) or not isinstance(data.get('preferences'), dict):
+                    raise ValueError('Invalid preference response')
+                with self._preference_lock:
+                    for name, field in payload.items():
+                        if self._pending_preferences.get(name) == field:
+                            self._pending_preferences.pop(name, None)
+            return data
         if command in {"create_action", "edit_action", "approve_action", "cancel_action"} and "account_id" in value:
             # Credentials may reload without changing the core instance identity.
             response = client.get("/api/v1/capabilities", headers=headers)
@@ -161,7 +186,7 @@ class CoreWorker(QThread):
     def _mutation_error(exc, command="create_action"):
         if isinstance(exc, AccountChangedError):
             return str(exc), False, 409
-        if command in {"core_settings", "core_settings_update", "core_restart"}:
+        if command in CORE_COMMANDS:
             status = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
             if status == 404:
                 return "Core settings require an updated core. Restart the existing core process once, then refresh settings.", False, status
@@ -204,8 +229,27 @@ class CoreWorker(QThread):
         try:
             self._run_client()
         finally:
-            if self.lease:
-                self.lease.close()
+            try:
+                self._flush_preferences()
+            finally:
+                if self.lease:
+                    self.lease.close()
+
+    def _flush_preferences(self):
+        """Save queued UI choices before releasing the last desktop lease."""
+        with self._preference_lock:
+            changes = dict(self._pending_preferences)
+        if not changes or self.instance_id is None or not self.features.get('configuration'):
+            return
+        try:
+            with httpx.Client(base_url=self.settings.core_url, timeout=1,
+                    trust_env=False, follow_redirects=False) as client:
+                self._identity(client)
+                response = client.patch('/api/v1/configuration/preferences', json=changes,
+                    headers={'Authorization': 'Bearer ' + service_token(self.settings, 'desktop')})
+                response.raise_for_status()
+        except Exception:
+            pass
 
     def _run_client(self):
         if self.stop_event.is_set():
@@ -268,7 +312,8 @@ class CoreWorker(QThread):
                     except (httpx.HTTPError, ValueError):
                         self.features = {}
                 if command in CORE_COMMANDS:
-                    required = 'core_restart' if command == 'core_restart' else 'core_settings'
+                    required = ('configuration' if command in {'configuration_get', 'configure_provider', 'preferences_update'}
+                        else 'core_restart' if command == 'core_restart' else 'core_settings')
                     if not self.features.get(required):
                         self.result.emit({'command': command, 'request_id': request_id, 'status': None, 'ambiguous': False,
                             'error': 'Core settings require an updated core. Restart the existing core process once, then refresh settings.'})
@@ -368,6 +413,7 @@ class CoreWorker(QThread):
                     items = get("/api/v1/items", params={"q": self.query})
                     web = get("/api/v1/web")
                     features = capabilities.get("features", {})
+                    configuration = get('/api/v1/configuration') if features.get('configuration') else None
                     self.features = features
                     devices = get("/api/v1/devices") if features.get("devices") else {"devices": [], "synced_at": None, "account_id": capabilities.get("account_id")}
                     actions = get("/api/v1/actions") if features.get("send") else {"actions": [], "account_id": capabilities.get("account_id")}
@@ -383,7 +429,7 @@ class CoreWorker(QThread):
                         continue
                     if sms is not None:
                         self.sms_cache[selected_device] = sms
-                    self.snapshot.emit({"sms": sms, "sms_device_id": selected_device, "sms_request_id": self.device_request_id, "items": items["items"], "web": web, "capabilities": capabilities, "devices": devices, "actions": actions["actions"], "instance_id": identity["instance_id"]})
+                    self.snapshot.emit({"configuration": configuration, "sms": sms, "sms_device_id": selected_device, "sms_request_id": self.device_request_id, "items": items["items"], "web": web, "capabilities": capabilities, "devices": devices, "actions": actions["actions"], "instance_id": identity["instance_id"]})
                     if self.pending_restart and identity['instance_id'] != self.pending_restart['instance_id']:
                         self.pending_restart = None
                     self.connection.emit("Restarting core · reconnecting…" if self.pending_restart else "Connected to private core")

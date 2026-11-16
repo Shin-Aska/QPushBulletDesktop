@@ -20,8 +20,8 @@ class KWalletUnavailable(RuntimeError):
     pass
 
 
-def _password(folder, entry, wallet=None, new_password=None):
-    deadline = time.monotonic() + 8
+def _password(folder, entry, wallet=None, new_password=None, provider=False, interactive=False):
+    deadline = time.monotonic() + (60 if interactive else 8)
 
     def call(bus, address, method, signature=None, body=(), timeout=2):
         remaining = deadline - time.monotonic()
@@ -49,17 +49,21 @@ def _password(folder, entry, wallet=None, new_password=None):
             selected = wallet or call(bus, address, "networkWallet")
             if not isinstance(selected, str) or selected not in call(bus, address, "wallets"):
                 raise KWalletUnavailable()
-            handle = call(bus, address, "open", "sxs", (selected, 0, "pbdesk"), timeout=5)
+            handle = call(bus, address, "open", "sxs", (selected, 0, "pbdesk"), timeout=45 if interactive else 5)
             if type(handle) is not int or handle < 0:
                 raise KWalletUnavailable()
             try:
                 if not call(bus, address, "hasFolder", "iss", (handle, folder, "pbdesk")):
-                    if new_password is not None:
+                    if provider and new_password is not None:
+                        if call(bus, address, 'createFolder', 'iss', (handle, folder, 'pbdesk')) is not True:
+                            raise KWalletUnavailable()
+                    elif new_password is not None:
                         raise KWalletUnavailable()
-                    return None
+                    else:
+                        return None
                 exists = call(bus, address, "hasEntry", "isss", (handle, folder, entry, "pbdesk"))
                 if new_password is not None:
-                    if exists or entry in {"api-key", "e2e-password"}:
+                    if exists or entry == 'e2e-password' or (entry == 'api-key' and not provider):
                         raise KWalletUnavailable()
                     result = call(bus, address, "writePassword", "issss", (handle, folder, entry, new_password, "pbdesk"))
                     if result != 0:
@@ -82,14 +86,25 @@ def _password(folder, entry, wallet=None, new_password=None):
         raise KWalletUnavailable("KWallet is unavailable or locked; unlock it and allow pbdesk access") from None
 
 
-def read_password(folder, entry, wallet=None):
-    return _password(folder, entry, wallet)
+def read_password(folder, entry, wallet=None, *, interactive=False):
+    return _password(folder, entry, wallet, interactive=interactive)
 
 
 def write_new_password(folder, entry, password, wallet=None):
     """Explicit user creation only; no overwriting shared or existing entries."""
     if not isinstance(password,str) or not password or entry in {'api-key','e2e-password'}:
         raise KWalletUnavailable('Choose a new device-specific entry')
+    _create_password(folder, entry, password, wallet)
+
+
+def write_provider_password(folder, entry, password, wallet=None):
+    """Explicit first-run token creation; never replace an existing entry."""
+    if not isinstance(password, str) or not password or entry in {'e2e-password', 'ai-openai-api-key'}:
+        raise KWalletUnavailable('Choose a dedicated provider entry')
+    _create_password(folder, entry, password, wallet, provider=True)
+
+
+def _create_password(folder, entry, password, wallet, provider=False):
     # Serialize the hasEntry/write/read-back sequence across local pbdesk cores
     # and concurrent API requests. Never overwrite another creator's new entry.
     path=os.path.join(tempfile.gettempdir(),f'pbdesk-kwallet-create-{os.getuid()}.lock')
@@ -99,6 +114,6 @@ def write_new_password(folder, entry, password, wallet=None):
         if info.st_uid!=os.getuid() or stat.S_IMODE(info.st_mode)!=0o600:
             raise KWalletUnavailable('KWallet entry creation lock is unavailable')
         fcntl.flock(fd,fcntl.LOCK_EX)
-        _password(folder,entry,wallet,new_password=password)
+        _password(folder,entry,wallet,new_password=password,provider=provider,interactive=provider)
     finally:
         os.close(fd)

@@ -49,7 +49,7 @@ def test_atomic_preference_merge_unknown_fields_and_parallel_writers(isolated, q
     preferences = read_preferences()
     assert all(preferences[f'writer_{index}'] == index for index in range(18))
     assert preferences['color_scheme'] == 'dark' and preferences['main_page'] == 'sms'
-    assert [path.name for path in isolated.parent.iterdir()] == ['ui-preferences.json']
+    assert not isolated.exists()  # The desktop session mirror never writes a second authority.
 
 
 @pytest.mark.parametrize('value', [None, 'broken json', '[]', '{"main_page":"devices"}',
@@ -60,7 +60,7 @@ def test_startup_defaults_for_absent_malformed_or_non_main_page(isolated, qtbot,
         isolated.write_text(value)
     window, worker = make_window(qtbot)
     assert window.tabs.currentIndex() == 0
-    assert read_preferences()['main_page'] == 'notifications'
+    assert read_preferences().get('main_page', 'notifications') == 'notifications'
     window.exit_desktop()
 
 

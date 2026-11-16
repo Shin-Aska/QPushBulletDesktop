@@ -55,7 +55,9 @@ def test_settings_and_prepare_never_open_wallet(local, monkeypatch):
     assert preview['text']
     assert preview['scope'] == 'Selected retained notifications'
     save_settings(settings, 'gpt-6-luna')
-    assert (settings.state_dir / 'ai-settings.json').stat().st_mode & 0o777 == 0o600
+    assert store.get_setting('configuration:ai')['model'] == 'gpt-6-luna'
+    assert not (settings.state_dir / 'ai-settings.json').exists()
+    assert store.path.stat().st_mode & 0o777 == 0o600
 
 
 def test_api_auth_and_capabilities(tmp_path, monkeypatch):

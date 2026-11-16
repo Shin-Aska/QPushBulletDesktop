@@ -4,7 +4,7 @@ A Linux-first Pushbullet desktop for Kubuntu 26.04, KDE Plasma 6 on Wayland, and
 
 The native application reads stored pushes, mirrored notifications, and synchronized phone SMS conversations; manages Pushbullet device registrations and local decryption references; and sends explicitly addressed notes, links, and SMS through a persistent approval pipeline. Encrypted incoming content is decrypted in the core using local KWallet credentials. Missing or incorrect keys preserve readable history and encrypted recovery records. Automatic recent-activity summaries and reviewed SMS reply drafts use OpenAI after local key setup; automatic sending rules and browser inbox access remain deferred. See [feature parity](docs/feature-parity.md) and the retained [specification](docs/specification.md).
 
-The sidebar is ordered **Summary → Notifications → SMS**, with **Settings** at the bottom. Settings is one reusable nonmodal dialog with **Appearance**, **Devices**, **AI**, **Local Web**, and **Core** tabs. Notifications retains Pushbullet messages and mirrored notifications, with source filtering and search. SMS has its own phone selector, a conversation list, incoming/outgoing chat bubbles and a composer beneath the timeline. Browsing notifications never changes the SMS sending phone. New message starts an inline SMS draft; Ctrl+N follows the Notifications/SMS page and Ctrl+F focuses its search. In Settings → Devices, F5 refreshes devices and Ctrl+F focuses the device filter; Ctrl+N does not compose behind Settings.
+The sidebar is ordered **Summary → Notifications → SMS**, with **Settings** at the bottom. Settings is one reusable nonmodal dialog with **Appearance**, **Account**, **Devices**, **AI**, **Local Web**, and **Core** tabs. Notifications retains Pushbullet messages and mirrored notifications, with source filtering and search. SMS has its own phone selector, a conversation list, incoming/outgoing chat bubbles and a composer beneath the timeline. Browsing notifications never changes the SMS sending phone. New message starts an inline SMS draft; Ctrl+N follows the Notifications/SMS page and Ctrl+F focuses its search. In Settings → Devices, F5 refreshes devices and Ctrl+F focuses the device filter; Ctrl+N does not compose behind Settings.
 
 **Message activity** in the header or Application menu lists every saved Note, Link and SMS action, including failed and uncertain outcomes. Notifications Compose creates Notes or Links. SMS **Review & send** saves a pending action and opens the existing exact review when its account and conversation are still current. Saving sends nothing: approval still requires the displayed destination, revision, fingerprint, expiry and unchecked plaintext consent. Editing a saved SMS action leaves the current conversation draft untouched. Unsaved SMS drafts are local to the running window and its account/phone/conversation; restart persistence is deferred.
 
@@ -12,7 +12,7 @@ SMS AI Draft offers a local checked context of up to the 20 most recent cached m
 
 Independent [saved summaries and SMS reply verification](docs/saved-summaries-sms-verification.md) passed **416 repository tests**, **304 focused tests**, **27 lifecycle checks** and **2 genuine production Qt/Core HTTP integration checks**, with zero final failures, errors or skips. The [current fictional gallery](design/ui-review/saved-summaries-sms/index.html) contains **89 inspected captures**: 81 current native component views, seven genuine connected HTTP views and one historical before image. These overlapping test scopes are not an aggregate total. Earlier [Core Settings](docs/core-settings-summary-verification.md), [automatic Summary/lifecycle](docs/auto-summary-lifecycle-verification.md), [media/AI/Settings](docs/media-ai-settings-verification.md) and [consistent UI](docs/consistent-ui-verification.md) results remain historical; their counts do not certify this revision.
 
-**The updated editor core is activated on schema `0007`; relaunch the desktop to load saved summaries and the redesigned SMS assistant.** A guarded Core restart migrated the existing root `pbdesk.sqlite3`, kept the signed web instance and Stop All generation, and preserved existing history/actions, launch profile, preferences and credential references. The [sanitized activation status](.runtime/saved-summaries-sms/live-activation.json) records the result; the desktop was not relaunched. Use the existing **pbdesk: Desktop** profile. No installation or further core restart is needed in this activated checkout.
+**Restart the core and desktop once to enable SQLite settings and first-run setup.** The core imports existing provider references, AI settings and appearance preferences into the existing `pbdesk.sqlite3` settings table. Original JSON files remain intact, and established configurations skip the first-run prompt. Schema head remains `0007`; history and saved summaries are retained. See [configuration and first-run setup](docs/configuration.md).
 
 The existing desktop-notification preference remains **on/ready**. AI metadata reports a configured dedicated key and `gpt-6-luna`; activation validation made **zero OpenAI requests and zero provider sends**. Ordinary authorized background automatic-summary behavior is unchanged and may incur usage. Keep the established database/profile/state/KWallet paths. Other older installations need guarded `0006`→`0007` activation before desktop relaunch.
 
@@ -82,7 +82,7 @@ Message activity distinguishes pending approval, approved/queued, submitting, ac
 
 ## Automatic Summary and reviewed reply drafts
 
-In **Settings → AI**, the editable model dropdown defaults to `gpt-6-luna`. With a configured key, showing AI settings or saving/selecting a key loads available text-model IDs from OpenAI's `/v1/models`; an unavailable catalog never discards the saved custom ID. A listed model is not a guarantee of Responses API support. Choose **Save new API key** to create `kdewallet → Pushbullet → ai-openai-api-key`, or **Use existing saved key** to select that dedicated entry. Creation refuses to overwrite an existing entry. This key is separate from Pushbullet `api-key` and incoming `e2e-password`; no secret is saved in a file or database. Nonsecret model/configuration settings remain in private `PBDESK_STATE_DIR/ai-settings.json`.
+In **Settings → AI**, the editable model dropdown defaults to `gpt-6-luna`. With a configured key, showing AI settings or saving/selecting a key loads available text-model IDs from OpenAI's `/v1/models`; an unavailable catalog never discards the saved custom ID. A listed model is not a guarantee of Responses API support. Choose **Save new API key** to create `kdewallet → Pushbullet → ai-openai-api-key`, or **Use existing saved key** to select that dedicated entry. Creation refuses to overwrite an existing entry. This key is separate from Pushbullet `api-key` and incoming `e2e-password`; no secret is saved in a file or database. Nonsecret model/configuration settings are authoritative in SQLite; the legacy `ai-settings.json` is imported once and retained.
 
 **Summary → Latest** automatically summarizes the account's **active saved preset**. Defaults are **All activity** and **Notifications only**, both covering the past 24 hours. Create/edit presets for notification/SMS sources, cached devices, exact device-and-conversation pairs, a **1/6/24/72/168-hour** window, and an inherited AI Settings model or explicit override. The selected-conversations template requires at least one explicit device/thread pair; an empty selection never silently expands to all SMS. Choices come from local retained data, without provider refresh or cloud calls.
 
@@ -149,29 +149,16 @@ Run a standalone core for development or headless use:
 
 The second command enables the optional core-owned KDE notification adapter. The desktop launcher also requests that adapter. The core is the only notification emitter. Persisted at-most-once claims prevent restart duplicates; notification submission does not guarantee a visible popup, particularly with Do Not Disturb enabled.
 
-Configure a real Pushbullet access token locally using the existing verified Secret Service or KWallet backend:
+Open **Settings → Account** to select an existing KWallet entry or save a new Pushbullet access token. The core verifies the token with the official read-only account endpoint before saving the connection reference. New-token setup can create the selected folder in an existing wallet, but never overwrites an existing entry. The token stays in KWallet. A new installation opens this setup page automatically; cancelling keeps it available in Settings without prompting on every poll. A locked established wallet does not become a new installation.
+
+Local CLI setup uses the same authenticated core API:
 
 ```bash
 .venv/bin/pbdesk-admin provider-token
+.venv/bin/pbdesk-admin use-kwallet --wallet kdewallet --folder Pushbullet --entry api-key
 ```
 
-The command prompts for the secret and verifies read-back from the secure backend. It refuses plaintext fallback. Reload provider credentials from the Application menu or restart the core afterward. A locked credential store is a visible provider state; retained local history remains usable. Live-account verification requires an account credential and is separate from sanitized tests.
-
-To reuse an existing KWallet password, select its folder and entry instead. For
-the regular editor desktop profile, which uses `.runtime/editor`:
-
-```bash
-PBDESK_STATE_DIR="$PWD/.runtime/editor" .venv/bin/pbdesk-admin use-kwallet \
-  --wallet kdewallet --folder Pushbullet --entry api-key
-```
-
-`Pushbullet` is the KWallet folder; `api-key` is its password entry. Omitting
-`--wallet` selects the current network wallet. Setup verifies that the existing
-entry can be read, then saves only its location in the selected state directory's
-private `provider-credential.json`. It does not move, duplicate, or alter the
-KWallet password. Reload provider credentials in that desktop or restart its core, then run **pbdesk: Desktop**. Each state
-directory has its own selection; omit the environment override when configuring
-the normal command-line application's default state directory.
+Use the same application/state directories and ports as the desktop. The commands verify and connect immediately; they do not write a competing JSON configuration. CLI `provider-token` retains the verified system-keyring backend, while the native Account page offers KWallet entry selection/creation. Device encryption and AI setup remain optional, in their existing Settings tabs.
 
 The core reads the selected entry directly using KWallet's session D-Bus interface
 and the already installed pure-Python Jeepney dependency. It needs neither Qt nor

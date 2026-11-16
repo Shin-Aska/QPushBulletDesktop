@@ -34,6 +34,7 @@ PUBLIC = ("id", "source_id", "type", "title", "body", "url", "device_id", "creat
 
 class Store(WorkflowStore, SmsStore):
     def __init__(self, settings):
+        self.settings = settings
         legacy = private_dir(settings) / "pbdesk.sqlite3"
         root = settings.application_dir
         root.mkdir(parents=True, exist_ok=True)
@@ -60,6 +61,8 @@ class Store(WorkflowStore, SmsStore):
             self.path.chmod(0o600)
             self._open_database()
         except BaseException:
+            from pbdesk.configuration import unregister
+            unregister(settings, self)
             if hasattr(self, "engine"):
                 self.engine.dispose()
             os.close(self._database_lock)
@@ -122,6 +125,9 @@ class Store(WorkflowStore, SmsStore):
             command.upgrade(config, "head")
         self.path.chmod(0o600)
         self.summaries = SummaryRepository(self)
+        from pbdesk.configuration import import_legacy, register
+        import_legacy(self.settings, self)
+        register(self.settings, self)
         self.instance_id = str(uuid.uuid4())
         current=self.sms_account()
         if current:
@@ -133,6 +139,8 @@ class Store(WorkflowStore, SmsStore):
             self.set_setting("push_sync",{**push_state,"state":"idle","error":None})
 
     def close(self):
+        from pbdesk.configuration import unregister
+        unregister(self.settings, self)
         self.engine.dispose()
         if self._database_lock is not None:
             os.close(self._database_lock)

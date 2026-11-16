@@ -95,46 +95,19 @@ def secure_backend():
 
 
 def provider_credential_source(settings=None):
-    """Return a non-secret reference; absence preserves the original keyring setup."""
+    """Return the established SQLite reference without opening a wallet."""
     from pbdesk.config import Settings
+    from pbdesk.configuration import get, provider_reference
     settings = settings or Settings.from_env()
-    path = settings.state_dir / "provider-credential.json"
     try:
-        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
-        with os.fdopen(fd) as stream:
-            info = os.fstat(stream.fileno())
-            if info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o600:
-                raise ValueError("Credential reference must be private")
-            reference = json.loads(stream.read(4097))
-        if not isinstance(reference, dict) or reference.get("backend") not in {"keyring", "kwallet"}:
-            raise ValueError("Invalid credential reference")
-        if reference["backend"] == "kwallet":
-            for key in ("folder", "entry"):
-                if not isinstance(reference.get(key), str) or not reference[key] or len(reference[key]) > 1024:
-                    raise ValueError("Invalid KWallet reference")
-            wallet = reference.get("wallet")
-            if wallet is not None and (not isinstance(wallet, str) or not wallet or len(wallet) > 1024):
-                raise ValueError("Invalid KWallet reference")
-            return {"backend": "kwallet", "wallet": wallet, "folder": reference["folder"], "entry": reference["entry"]}
-        return {"backend": "keyring"}
-    except FileNotFoundError:
-        return {"backend": "keyring"}
+        return provider_reference(get(settings, 'provider', {'backend': 'keyring'}))
     except Exception:
         raise CredentialLocked("Provider credential reference is invalid or inaccessible") from None
 
 
 def _save_provider_source(settings, reference):
-    root = private_dir(settings)
-    fd, temporary = tempfile.mkstemp(dir=root, prefix=".provider-reference-")
-    try:
-        with os.fdopen(fd, "w") as stream:
-            json.dump(reference, stream)
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.replace(temporary, root / "provider-credential.json")
-    finally:
-        if os.path.exists(temporary):
-            os.unlink(temporary)
+    from pbdesk.configuration import save_provider
+    save_provider(settings, reference)
 
 
 def use_kwallet(settings, folder="Pushbullet", entry="api-key", wallet=None):
