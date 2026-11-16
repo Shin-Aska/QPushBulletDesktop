@@ -1,16 +1,16 @@
-# Private AppImage candidates
+# AppImage candidates
 
 The current package version remains **0.1.0**. Packaging preparation does not create a 1.0 tag, publish a release, or change repository visibility. Candidate builds run on temporary GitHub Actions runners; no local build-tool installation is required or authorized by this workflow.
 
 ## Build and retrieve a candidate
 
-The [AppImage workflow](../.github/workflows/appimage.yml) runs when `main` or a `build/**` branch is pushed. It can also be run with **Actions → Private AppImage candidate → Run workflow**, selecting the reviewed revision. Candidates require the repository to remain private. There are no PR/fork triggers, and the candidate job has only `contents: read`.
+The [AppImage workflow](../.github/workflows/appimage.yml) runs when `main` or a `build/**` branch is pushed. It can also be run with **Actions → AppImage candidate → Run workflow**, selecting the reviewed revision. Candidates support public and private repositories. The canonical repository is [Shin-Aska/QPushBulletDesktop](https://github.com/Shin-Aska/QPushBulletDesktop), which the owner has made public. There are no PR/fork triggers, and the candidate job has only `contents: read`.
 
 The workflow installs OS dependencies only on its temporary Ubuntu 24.04 runner. It verifies the SHA256 of an exact official CPython 3.14.4 archive, seeds its temporary tool cache, and selects it through a commit-pinned `setup-python`. Separate environments run the full repository regression suite and freeze only the production desktop/web/MCP dependencies. Python distributions use exact version and SHA256 pins with `--require-hashes --only-binary=:all:`. SQLCipher must come from the pinned binary wheel; the workflow does not substitute Ubuntu's SQLCipher development package or build a different encryption engine.
 
 PyInstaller 6.22.3 builds a standalone directory. The AppDir contains that executable/runtime, application resources and metadata, Qt plugins/libraries, migrations, SQLCipher and its native dependencies. The builder verifies an exact official AppImage type-2 runtime and appends a SquashFS filesystem using the runner's recorded `squashfs-tools` version. Tool URLs and hashes live in [toolchain.json](../packaging/toolchain.json); resolved Python and OS package versions are recorded in each build. The pinned release inputs and captured runner inventory improve auditability; the mutable Ubuntu apt repositories and hosted runner image mean this is not a claim of bit-for-bit reproducible builds.
 
-A successful run uploads one private artifact named `pbdesk-appimage-<commit>`, retained for **two days**. Failure evidence is retained for one day. Download the artifact before it expires; repeated large candidates count toward the account's Actions storage quota. This workflow creates no cache and enables no paid usage. The bundle contains:
+A successful run uploads one candidate artifact named `pbdesk-appimage-<commit>`, retained for **two days**. Failure evidence is retained for one day. Download the artifact before it expires; repeated large candidates count toward the account's Actions storage quota. This workflow creates no cache and enables no paid usage. The bundle contains:
 
 - `pbdesk-0.1.0-x86_64.AppImage`
 - `pbdesk-0.1.0-source.tar.gz`, containing the actual selected working-tree source/build inputs, with private profiles excluded
@@ -18,7 +18,7 @@ A successful run uploads one private artifact named `pbdesk-appimage-<commit>`, 
 - `pbdesk-0.1.0-licenses.tar.gz`, containing actual available wheel/CPython/project license texts and source accounting
 - `smoke-evidence.json` and `pbdesk-0.1.0-SHA256SUMS`
 
-Verify the downloaded files with `sha256sum --check pbdesk-0.1.0-SHA256SUMS`. The source archive uses the bytes actually frozen, including tracked modifications and nonignored new inputs; it does not blindly archive an older commit. The workflow's clean checkout ordinarily binds those inputs to the recorded commit. A private candidate artifact and the license inventory are not claims that all final-distribution legal obligations are already satisfied.
+Verify the downloaded files with `sha256sum --check pbdesk-0.1.0-SHA256SUMS`. The source archive uses the bytes actually frozen, including tracked modifications and nonignored new inputs; it does not blindly archive an older commit. The workflow's clean checkout ordinarily binds those inputs to the recorded commit. A candidate artifact and the license inventory are not claims that all final-distribution legal obligations are already satisfied.
 
 ## Launch and persistent processes
 
@@ -38,4 +38,4 @@ Ubuntu/Xvfb evidence does not certify native KDE Plasma 6 Wayland, real KWallet 
 
 Final distribution is **blocked** by [release-readiness.json](../packaging/release-readiness.json) and candidate build accounting. Existing wheel license texts and URLs do not replace applicable GPL/LGPL/native corresponding-source obligations. Review and complete matching third-party source/build material, native-library provenance and notices, and supported-desktop/upgrade evidence before changing these guards.
 
-The final path requires a deliberate stable `v1.0.0` or later tag exactly matching the package version, a deliberately public repository, cleared readiness checks, and an artifact explicitly approved for final distribution. Only that separate job receives `contents: write`, and it creates an owner-reviewed **draft** release. Current 0.1.0 candidates cannot pass those guards. There is no automatic public release, visibility change or shadow-drop trigger.
+The final path requires a deliberate stable `v1.0.0` or later tag exactly matching the package version, a public repository, cleared readiness checks, and an artifact explicitly approved for final distribution. Only that separate job receives `contents: write`, and it creates an owner-reviewed **draft** release. Current 0.1.0 candidates cannot pass those guards. There is no automatic public release, visibility change or shadow-drop trigger.

@@ -1,6 +1,6 @@
 # First public release
 
-Target: a stable **1.0.0** shadow drop. Candidate builds and validation happen privately before publishing the first final release. The private candidate workflow and build instructions are in [Private AppImage candidates](appimage.md). A successful CI build and packaged smoke record are required before claiming artifact validation; source tests alone are insufficient.
+Target: a stable **1.0.0** first final release. The owner has made [Shin-Aska/QPushBulletDesktop](https://github.com/Shin-Aska/QPushBulletDesktop) public; candidate builds and validation continue before a deliberate final release. The candidate workflow and build instructions are in [AppImage candidates](appimage.md). A successful CI build and packaged smoke record are required before claiming artifact validation; source tests alone are insufficient.
 
 ## Agreed delivery
 
@@ -28,7 +28,7 @@ This launcher is for the configured source checkout. It is separate from the pla
 
 ## GitHub Actions and Releases
 
-The implemented candidate path runs on `main` and `build/**` branch pushes or manual dispatch in the private repository, with two-day artifact retention and read-only repository permissions. It builds the actual AppImage, runs packaged smoke checks, then requires the full source regression suite and checksum verification before uploading a successful candidate. All build-tool and OS dependency installation happens on temporary GitHub runners. The package stays at 0.1.0. Final drafting is fail-closed while `packaging/release-readiness.json` and the artifact source accounting identify incomplete corresponding-source, native-license and supported-desktop acceptance work. It requires an exact deliberate stable version tag, a separately public repository and a final-ready artifact; only its separate draft-release job receives write permission. Nothing in candidate CI changes visibility or publishes a public release.
+The implemented candidate path runs on `main` and `build/**` branch pushes or manual dispatch in public or private repositories, with two-day artifact retention and read-only repository permissions. It builds the actual AppImage, runs packaged smoke checks, then requires the full source regression suite and checksum verification before uploading a successful candidate. All build-tool and OS dependency installation happens on temporary GitHub runners. The package stays at 0.1.0. Final drafting is fail-closed while `packaging/release-readiness.json` and the artifact source accounting identify incomplete corresponding-source, native-license and supported-desktop acceptance work. It requires an exact deliberate stable version tag, a public repository and a final-ready artifact; only its separate draft-release job receives write permission. Nothing in candidate CI changes visibility or publishes a public release.
 
 The pipeline should produce candidate artifacts for explicit validation and final artifacts from a deliberate version tag. It must run the relevant regression suite, build from the selected source revision, and smoke-test the actual AppImage independently of the source checkout. Use pinned tooling and preserve the runtime/dependency versions in the build record.
 
