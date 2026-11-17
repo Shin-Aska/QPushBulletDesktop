@@ -531,3 +531,42 @@ def test_authenticated_metadata_never_prints_or_returns_token_headers(monkeypatc
     assert result == {'tree': []}
     output = capsys.readouterr()
     assert 'fictional-token-never-log-this' not in output.out + output.err
+
+
+def test_spdx_license_directory_texts_copied_but_siblings_traversal_and_links_rejected(tmp_path):
+    archive = tmp_path / 'source.tar'
+    texts = {'source/LICENSES/BSD-3-Clause.txt': b'BSD license text',
+             'source/LICENSES/GPL-3.0-only.txt': b'GPL license text',
+             'source/LICENSES/Qt-GPL-exception-1.0.txt': b'Qt exception text'}
+    members = {**texts, 'source/src/BSD-3-Clause.txt': b'unrelated sibling',
+               'source/LICENSES-not-really/GPL-3.0-only.txt': b'unrelated directory',
+               'source/LICENSES/helper.py': b'non-text helper',
+               'source/LICENSES/../../escaped/GPL-3.0-only.txt': b'path traversal',
+               '/absolute/LICENSES/GPL-3.0-only.txt': b'absolute path'}
+    # Neither link type may be dereferenced into delivered notices.
+    with tarfile.open(archive, 'w') as source:
+        for name, raw in members.items():
+            info = tarfile.TarInfo(name)
+            info.size = len(raw)
+            source.addfile(info, io.BytesIO(raw))
+        for name, kind in [('MIT.txt', tarfile.SYMTYPE), ('Apache-2.0.txt', tarfile.LNKTYPE)]:
+            info = tarfile.TarInfo('source/LICENSES/' + name)
+            info.type, info.linkname = kind, '../../outside'
+            source.addfile(info)
+    destination = tmp_path / 'notices'
+    copied = accounting.archive_notices(archive, destination)
+    expected = {name.removeprefix('source/'): raw for name, raw in texts.items()}
+    assert set(copied) == set(expected)
+    assert {name: (destination / name).read_bytes() for name in copied} == expected
+    assert not (tmp_path / 'escaped').exists()
+    assert not (destination / 'LICENSES/MIT.txt').exists()
+    assert not (destination / 'LICENSES/Apache-2.0.txt').exists()
+
+
+def test_finalizer_step_has_scoped_read_only_token_for_published_baseline_checks():
+    workflow = (ROOT / '.github/workflows/appimage.yml').read_text()
+    step = workflow.split('      - name: Finalize external readiness without changing tested image\n', 1)[1].split('      - name:', 1)[0]
+    assert '          GH_TOKEN: ${{ github.token }}\n' in step
+    build = workflow.split('  build:\n', 1)[1].split('    steps:', 1)[0]
+    assert 'contents: read' in build and 'actions: read' in build and 'write' not in build
+    assert 'GH_TOKEN:' not in build  # Token remains step-scoped, not global.

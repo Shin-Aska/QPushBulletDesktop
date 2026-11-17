@@ -135,6 +135,7 @@ jobs:
             --smoke-evidence "$PWD/dist/smoke-evidence.json" --output "$PWD/dist/release-acceptance.json"
       - name: Finalize external readiness without changing tested image
         env:
+          GH_TOKEN: ${{ github.token }}
           CLASSIFICATION: ${{ steps.baseline.outputs.classification }}
         run: |
           .test-venv/bin/python packaging/finalize_release.py --assets "$PWD/dist" --classification "$CLASSIFICATION"

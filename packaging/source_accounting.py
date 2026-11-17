@@ -104,8 +104,10 @@ def download(url, target, expected=None, *, expected_size=None):
 
 
 def notice_name(name):
-    base = Path(name).name.lower()
-    return (any(word in base for word in ('license', 'copying', 'copyright', 'notice', 'attribution'))
+    path = Path(name)
+    base = path.name.lower()
+    spdx_text = base.endswith('.txt') and any(part.lower() == 'licenses' for part in path.parts[:-1])
+    return (spdx_text or any(word in base for word in ('license', 'copying', 'copyright', 'notice', 'attribution'))
             or base in ('authors', 'authors.txt', 'ftl.txt', 'lgpl2.txt', 'lgpl3.txt', 'gpl.txt'))
 
 
