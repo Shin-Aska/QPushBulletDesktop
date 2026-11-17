@@ -1,6 +1,6 @@
 # pbdesk privacy policy
 
-Last updated: 16 November 2026.
+Last updated: 17 November 2026.
 
 pbdesk is an independent Linux desktop client for Pushbullet. This policy describes the current application, its local storage, and the external services it contacts. It does not replace the policies of Pushbullet, OpenAI, your mobile carrier, or your operating system.
 
@@ -17,7 +17,7 @@ pbdesk stores its working history and settings in a local SQLCipher-encrypted SQ
 
 The database belongs to the configured application directory. The current development launcher uses the checkout's `pbdesk.sqlite3`. Private runtime state normally uses `$XDG_STATE_HOME/pbdesk`, or `~/.local/state/pbdesk` when that variable is unset; development profiles can select a different directory. `PBDESK_APPLICATION_DIR` and `PBDESK_STATE_DIR` explicitly override these locations. Settings → Core shows the active storage locations.
 
-**Local-history encryption is mandatory in this source revision, but existing plaintext installations are protected only after explicit successful migration.** The currently running older core and its profile were not migrated by this implementation work. The updated desktop requires protection or unlock before showing account setup, history, settings, or AI features. A missing SQLCipher driver, unavailable key, or conflicting database stops access; there is no plaintext runtime fallback.
+**Local-history encryption is mandatory, but existing plaintext installations are protected only after explicit successful migration.** The desktop requires protection or unlock before showing account setup, history, settings, or AI features. A missing SQLCipher driver, unavailable key, or conflicting database stops access; there is no plaintext runtime fallback.
 
 The dedicated database key is generated randomly after you authorize an existing KWallet. It is separate from the Pushbullet token, incoming end-to-end password, and OpenAI API key. Only opaque database/key-entry identifiers and setup/migration state are kept in the history bootstrap records outside the encrypted database. Service authentication and process-coordination files remain separate private runtime files. Database pages and SQLCipher WAL content are encrypted; SQL temporary storage is kept in memory.
 
@@ -77,4 +77,4 @@ Removing the application executable does not erase its database, state directory
 
 ## Questions and changes
 
-Privacy questions can be raised in the [project's issue tracker](https://github.com/Shin-Aska/pushbullet/issues) without including private message content or credentials. This policy is maintained with the source code and will be updated when the application's data handling changes.
+Privacy questions can be raised in the [project's issue tracker](https://github.com/Shin-Aska/QPushBulletDesktop/issues) without including private message content or credentials. This policy is maintained with the source code and will be updated when the application's data handling changes.

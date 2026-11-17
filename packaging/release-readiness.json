@@ -1,11 +1,29 @@
 {
-  "final_release_ready": false,
-  "corresponding_source_complete": false,
-  "supported_desktop_acceptance_complete": false,
-  "encrypted_profile_upgrade_verified": false,
-  "blockers": [
-    "Complete and review matching GPL/LGPL/native corresponding-source and license material",
-    "Verify the actual AppImage on supported Kubuntu 26.04 KDE Plasma 6 Wayland",
-    "Record packaged upgrade, recovery, tray, notification and process-lifetime acceptance"
+  "schema_version": 2,
+  "target_version": "1.0.0",
+  "repository": "Shin-Aska/QPushBulletDesktop",
+  "release_authorized": true,
+  "owner_acceptance": {
+    "approved": true,
+    "recorded_date": "2026-11-17",
+    "statements": ["It works!", "Looks good", "publish this as the first version"],
+    "scope": ["Native desktop launch", "Owner product acceptance", "Stable first-release publication"],
+    "limitations": ["No separate claim of exhaustive real-wallet, tray, notification, suspend/resume or every native Wayland integration test"]
+  },
+  "initial_baseline": {
+    "kind": "initial-candidate",
+    "target_version": "1.0.0",
+    "version": "0.1.0",
+    "source_revision": "15c65759ce73b9dd59448b2a46a6a1fa0ab702ca",
+    "sha256": "673c2b2d9dc08db2a4e720cba8d43be62b35dbd2e954e931dda6e0c37e112643",
+    "workflow_run_id": 43913951825,
+    "artifact_id": 14249652332
+  },
+  "required_evidence": [
+    "Complete applicable source/notices/relink material bound to the sealed runtime",
+    "Actual-artifact smoke checks",
+    "Successful mandatory regression suite",
+    "Measured old-to-new encrypted upgrade, recovery and interrupted migration acceptance",
+    "Exact expected baseline, source revision, version, inner runtime and outer AppImage runtime bindings"
   ]
 }

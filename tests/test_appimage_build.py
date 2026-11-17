@@ -75,9 +75,8 @@ def test_matching_source_archive_captures_working_tree_bytes_and_excludes_profil
 def readiness_root(tmp_path, version='1.0.0', **overrides):
     (tmp_path / 'packaging').mkdir()
     (tmp_path / 'pyproject.toml').write_text('[project]\nversion = "' + version + '"\n')
-    value = dict(final_release_ready=True, corresponding_source_complete=True,
-                 supported_desktop_acceptance_complete=True, encrypted_profile_upgrade_verified=True,
-                 blockers=[])
+    value = dict(schema_version=2, target_version=version, release_authorized=True,
+                 owner_acceptance={'approved': True}, required_evidence=['actual bound source, acceptance and tests'])
     value.update(overrides)
     (tmp_path / 'packaging/release-readiness.json').write_text(json.dumps(value))
     return tmp_path
@@ -94,8 +93,8 @@ def test_final_tag_requires_exact_stable_public_version(tmp_path, version, tag):
         guard.validate(readiness_root(tmp_path, version), tag, private=False)
 
 
-def test_final_release_fails_closed_on_source_accounting_or_acceptance_gap(tmp_path):
-    root = readiness_root(tmp_path, corresponding_source_complete=False)
+def test_final_release_fails_closed_without_explicit_owner_policy(tmp_path):
+    root = readiness_root(tmp_path, release_authorized=False)
     with pytest.raises(ValueError, match='blocked'):
         guard.validate(root, 'v1.0.0', private=False)
 

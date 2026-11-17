@@ -1,6 +1,6 @@
 # First public release
 
-Target: a stable **1.0.0** first final release. The owner has made [Shin-Aska/QPushBulletDesktop](https://github.com/Shin-Aska/QPushBulletDesktop) public; candidate builds and validation continue before a deliberate final release. The candidate workflow and build instructions are in [AppImage candidates](appimage.md). A successful CI build and packaged smoke record are required before claiming artifact validation; source tests alone are insufficient.
+Target: stable **1.0.0**, explicitly authorized as the first final release. The owner has made [Shin-Aska/QPushBulletDesktop](https://github.com/Shin-Aska/QPushBulletDesktop) public; candidate builds and validation continue before a deliberate final release. The candidate workflow and build instructions are in [AppImage candidates](appimage.md). A successful CI build and packaged smoke record are required before claiming artifact validation; source tests alone are insufficient.
 
 ## Agreed delivery
 
@@ -15,7 +15,7 @@ Target: a stable **1.0.0** first final release. The owner has made [Shin-Aska/QP
 
 `./launch-pbdesk` uses the existing `.venv`, source tree, `.runtime/editor` state, project-root database, and ports 18765/18766. It matches the configured editor tasks without opening the editor. Explicit `PBDESK_*` environment values remain supported. It installs nothing and does not move, copy, or migrate the existing profile.
 
-This launcher is for the configured source checkout. It is separate from the planned self-contained AppImage.
+This launcher is for the configured source checkout. The self-contained AppImage uses its own bundled runtime and explicit profile paths.
 
 ## AppImage build and process requirements
 
@@ -28,13 +28,13 @@ This launcher is for the configured source checkout. It is separate from the pla
 
 ## GitHub Actions and Releases
 
-The implemented candidate path runs on `main` and `build/**` branch pushes or manual dispatch in public or private repositories, with two-day artifact retention and read-only repository permissions. It builds the actual AppImage, runs packaged smoke checks, then requires the full source regression suite and checksum verification before uploading a successful candidate. All build-tool and OS dependency installation happens on temporary GitHub runners. The package stays at 0.1.0. Final drafting is fail-closed while `packaging/release-readiness.json` and the artifact source accounting identify incomplete corresponding-source, native-license and supported-desktop acceptance work. It requires an exact deliberate stable version tag, a public repository and a final-ready artifact; only its separate draft-release job receives write permission. Nothing in candidate CI changes visibility or publishes a public release.
+The implemented candidate path runs on `main` and `build/**` branch pushes or manual dispatch in public or private repositories, with two-day artifact retention and read-only repository permissions. It builds the actual AppImage, runs packaged smoke checks, then requires the full source regression suite and checksum verification before uploading a successful candidate. All build-tool and OS dependency installation happens on temporary GitHub runners. The package is prepared as 1.0.0. Publication policy records the owner’s explicit stable-release authorization and basic native launch/product acceptance, with its limits. A source ledger maps every actual bundled ELF, and applicable source/notices/relink material must be complete. Measured lower-version upgrade, recovery and interrupted migration/resume evidence binds the exact immutable image and source materials; only then may external metadata become final-ready. An exact deliberate stable version tag, public repository and independently validated bundle are required; only the separate draft-release job receives write permission. Nothing in candidate CI changes visibility or publishes a public release.
 
 The pipeline should produce candidate artifacts for explicit validation and final artifacts from a deliberate version tag. It must run the relevant regression suite, build from the selected source revision, and smoke-test the actual AppImage independently of the source checkout. Use pinned tooling and preserve the runtime/dependency versions in the build record.
 
 Final release assets should include the AppImage, checksums, matching source/build information, privacy policy, changelog/release notes, and the chosen project and third-party license material. Build permissions should remain read-only where possible; publishing permissions belong to the release job. Final publication is a separate deliberate release operation.
 
-## Acceptance before publishing
+## Verification scope
 
 - Launch the packaged application directly on a clean supported desktop, without an IDE or a separately installed Python environment.
 - Verify that a new profile completes **Protect your local history**, existing-KWallet authorization, and an explicit recovery backup/decline before account connection. Open an established profile only through the explicit verified migration/unlock flow, preserving the chosen database directory and credential store. See [encrypted history](encrypted-history.md).
@@ -45,4 +45,4 @@ Final release assets should include the AppImage, checksums, matching source/bui
 - Record the full regression result and distinguish real-provider, mocked-provider, skipped, and untested behavior. Any additional test sends or paid AI validation require the usual explicit content/destination or usage authorization.
 - Include the selected GPL-3.0-only license and applicable third-party notices/corresponding-source material, then review the privacy policy and changelog against the final artifact before publishing 1.0.0.
 
-The encryption implementation and its isolated-fixture checks do not mean the owner’s live profile is already encrypted. Its older running core must be deliberately closed/restarted before the first protection dialog can activate this revision; no such live activation was performed by this work.
+The owner’s “It works!” and “Looks good” feedback supplies basic native launch/product acceptance; the explicit request to publish authorizes the stable first release. The shipped evidence separately records isolated actual-artifact checks and the source/relink scope. It does not assert exhaustive real-wallet, tray/notification, suspend/resume or every native Wayland integration test. Existing plaintext profiles still require explicit successful migration, and historical external plaintext backups remain outside that cleanup. No live-profile migration or provider send is implied by the release fixture tests.
