@@ -3,8 +3,10 @@
 Downloads are data only. No downloaded build recipe or source file is executed.
 The ledger distinguishes source obligations from permissive provenance limits.
 """
+from concurrent.futures import ThreadPoolExecutor
 import email.parser
 import hashlib
+import http.client
 import importlib.metadata
 import json
 import os
@@ -14,7 +16,10 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import tempfile
+import time
 import tomllib
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -28,21 +33,61 @@ def write_json(path, value):
     Path(path).write_text(json.dumps(value, sort_keys=True, separators=(',', ':')) + '\n')
 
 
+def transient_failure(error):
+    if isinstance(error, urllib.error.HTTPError):
+        return error.code == 429 or 500 <= error.code <= 599
+    return isinstance(error, (urllib.error.URLError, TimeoutError, ConnectionError,
+                              http.client.IncompleteRead, http.client.RemoteDisconnected))
+
+
+def retry_source_operation(label, operation):
+    for attempt in range(1, 4):
+        print(f'Source {label}: attempt {attempt}/3', flush=True)
+        try:
+            return operation()
+        except Exception as error:
+            if attempt == 3 or not transient_failure(error):
+                raise
+            time.sleep(0.5 * attempt)
+
+
 def request_json(url):
-    with urllib.request.urlopen(urllib.request.Request(url, headers={'User-Agent': 'pbdesk-source-accounting/1.0'}), timeout=90) as stream:
-        return json.load(stream)
+    parsed = urllib.parse.urlparse(url)
+    query = urllib.parse.parse_qs(parsed.query)
+    label = ('metadata ' + query['source_name'][0] + ' ' + query.get('version', [''])[0]
+             if 'source_name' in query else 'metadata ' + parsed.path.rsplit('/', 1)[-1])
+    def read():
+        with urllib.request.urlopen(urllib.request.Request(url, headers={'User-Agent': 'pbdesk-source-accounting/1.0'}), timeout=30) as stream:
+            return json.load(stream)
+    return retry_source_operation(label, read)
 
 
-def download(url, target, expected=None):
+def download(url, target, expected=None, *, expected_size=None):
     target = Path(target)
     target.parent.mkdir(parents=True, exist_ok=True)
-    with urllib.request.urlopen(urllib.request.Request(url, headers={'User-Agent': 'pbdesk-source-accounting/1.0'}), timeout=90) as stream, target.open('wb') as output:
-        shutil.copyfileobj(stream, output)
-    actual = digest(target)
-    if expected and actual != expected:
-        target.unlink()
-        raise ValueError('Source/notice SHA256 mismatch: ' + url)
-    return {'file': target.name, 'sha256': actual, 'size_bytes': target.stat().st_size, 'url': url}
+    def read():
+        fd, temporary = tempfile.mkstemp(prefix='.' + target.name + '-', dir=target.parent)
+        staged = Path(temporary)
+        try:
+            with os.fdopen(fd, 'wb') as output:
+                with urllib.request.urlopen(urllib.request.Request(url, headers={'User-Agent': 'pbdesk-source-accounting/1.0'}), timeout=90) as stream:
+                    length = stream.headers.get('Content-Length')
+                    shutil.copyfileobj(stream, output)
+            actual = digest(staged)
+            size = staged.stat().st_size
+            # A short transport body is transient even when an expected digest
+            # exists. A complete body with the wrong digest/descriptor is not.
+            if length is not None and size != int(length):
+                raise http.client.IncompleteRead(b'', int(length) - size)
+            if expected and actual != expected:
+                raise ValueError('Source/notice SHA256 mismatch: ' + target.name)
+            if expected_size is not None and size != expected_size:
+                raise ValueError('Source descriptor size mismatch: ' + target.name)
+            os.replace(staged, target)
+            return {'file': target.name, 'sha256': actual, 'size_bytes': size, 'url': url}
+        finally:
+            staged.unlink(missing_ok=True)
+    return retry_source_operation(target.name, read)
 
 
 def notice_name(name):
@@ -202,12 +247,45 @@ def ubuntu_source(origin, destination):
     for name, checksum in checksums.items():
         if name not in by_name:
             raise ValueError('Ubuntu publisher omits source descriptor member: ' + name)
-        file = download(by_name[name], destination / name, checksum['sha256'])
-        if file['size_bytes'] != checksum['size_bytes']:
-            raise ValueError('Ubuntu source descriptor size mismatch')
+        file = download(by_name[name], destination / name, checksum['sha256'],
+                        expected_size=checksum['size_bytes'])
         files.append(file)
     return {'publisher': entries[0]['self_link'], 'files': files,
             'patches_and_build_recipe': dsc_name, 'source_version': origin['source_version']}
+
+
+def collect_ubuntu_sources(packages, source_root):
+    """Fetch each exact required source once, with at most four distinct writers."""
+    groups = {}
+    for package, entry in sorted(packages.items()):
+        if entry['source_required']:
+            key = (entry['source_package'], entry['source_version'])
+            groups.setdefault(key, {'source_package': key[0], 'source_version': key[1]})
+    if not groups:
+        return {}
+
+    def fetch(key):
+        origin = groups[key]
+        # The two-level path keeps different names/versions in disjoint trees.
+        destination = source_root / 'ubuntu' / key[0] / key[1]
+        destination.mkdir(parents=True, exist_ok=True)
+        print(f'Ubuntu source {key[0]} {key[1]}: collecting exact source and patches', flush=True)
+        result = ubuntu_source(origin, destination)
+        print(f'Ubuntu source {key[0]} {key[1]}: verified', flush=True)
+        return result
+
+    # Do not expose partial success to the caller: one failed source still aborts
+    # collection before any complete ledger/source anchor can be emitted.
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        futures = {key: executor.submit(fetch, key) for key in sorted(groups)}
+        try:
+            resolved = {key: futures[key].result() for key in sorted(futures)}
+        except BaseException:
+            for future in futures.values():
+                future.cancel()
+            raise
+    return {package: resolved[(entry['source_package'], entry['source_version'])]
+            for package, entry in sorted(packages.items()) if entry['source_required']}
 
 
 def pypi_source(name, version):
@@ -458,11 +536,17 @@ def collect(root, runtime, inputs_path, work, output, version, toolchain):
         needs_source = bool(re.search(r'\b(?:GPL|LGPL|MPL)[- \n:]|General Public License|Mozilla Public License', text)) and not exception
         entry['source_required'] = needs_source
         entry['source_exception'] = exception
-        if needs_source:
-            destination = source_root / 'ubuntu' / (origin['source_package'] + '-' + origin['source_version'])
-            destination.mkdir(parents=True, exist_ok=True)
-            entry['corresponding_source'] = ubuntu_source(origin, destination)
         ubuntu[package] = entry
+    write_json(output / (prefix + '-source-progress.json'), {
+        'schema_version': 1, 'status': 'collecting', 'native_elf_files': native,
+        'ubuntu_packages': list(ubuntu.values()),
+        'required_ubuntu_source_pairs': [list(pair) for pair in sorted({
+            (entry['source_package'], entry['source_version']) for entry in ubuntu.values()
+            if entry['source_required']})],
+        'scope': 'Sanitized build provenance and actual source-license decisions; no profile/cache or wallet data'})
+    ubuntu_sources = collect_ubuntu_sources(ubuntu, source_root)
+    for package, source in ubuntu_sources.items():
+        ubuntu[package]['corresponding_source'] = source
     for entry in policy['archives']:
         filename = entry.get('file') or urllib.parse.urlparse(entry['url']).path.rsplit('/', 1)[-1]
         if entry.get('git_commit'):
