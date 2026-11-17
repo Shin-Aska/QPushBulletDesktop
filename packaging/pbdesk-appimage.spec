@@ -1,5 +1,6 @@
 # Exact build dependencies live in requirements-build.lock.
 import importlib.metadata
+import json
 from pathlib import Path
 from PyInstaller.utils.hooks import collect_all, collect_submodules, copy_metadata
 
@@ -35,6 +36,13 @@ a = Analysis([str(root / 'packaging/entrypoint.py')], pathex=[],
              excludes=['pytest', 'selenium', 'build', 'pip', 'PyInstaller', 'tkinter',
                        'mcp.cli', 'mcp.__main__'],
              noarchive=False, optimize=0)
+# Preserve actual Analysis source paths before COLLECT rewrites RPATHs. The
+# source-accounting stage maps every final ELF back to these exact inputs.
+(root / 'build/appimage/analysis-inputs.json').write_text(json.dumps({
+    kind: [{'destination': dest, 'source': source, 'type': category}
+           for dest, source, category in toc]
+    for kind, toc in [('binaries', a.binaries), ('datas', a.datas), ('pure', a.pure)]
+}, sort_keys=True))
 pyz = PYZ(a.pure)
 exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name='pbdesk',
           debug=False, bootloader_ignore_signals=False, strip=False, upx=False,

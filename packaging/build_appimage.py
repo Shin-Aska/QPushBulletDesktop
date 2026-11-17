@@ -63,7 +63,7 @@ def source_archive(root, destination, *, epoch):
     entries = {}
     with tarfile.open(destination, 'w:gz', format=tarfile.PAX_FORMAT) as archive:
         for name in names:
-            if not safe_source_path(name):
+            if not safe_source_path(name) or name.startswith('design/'):
                 continue
             path = root / name
             if not path.exists() and not path.is_symlink():
@@ -145,46 +145,6 @@ def verified_download(record, destination):
         raise ValueError('Official build input SHA256 mismatch: ' + record['url'])
 
 
-def collect_notices(destination, runtime_names):
-    """Copy actual wheel/CPython license texts; explicitly account for source gaps."""
-    destination.mkdir(parents=True)
-    gaps, distributions = [], []
-    for name in runtime_names + ['pyinstaller', 'pyinstaller-hooks-contrib', 'altgraph']:
-        distribution = importlib.metadata.distribution(name)
-        licenses = []
-        for file in distribution.files or []:
-            label = str(file).lower()
-            if ('.dist-info/licenses/' in label or '.dist-info/license' in label
-                    or '.dist-info/copying' in label or '.dist-info/notice' in label):
-                source = Path(distribution.locate_file(file))
-                if source.is_file():
-                    target = destination / 'python-distributions' / distribution.metadata['Name'] / str(file)
-                    target.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copyfile(source, target)
-                    licenses.append(target.relative_to(destination).as_posix())
-        if not licenses:
-            gaps.append('Missing wheel license text: ' + name)
-        distributions.append({'name': distribution.metadata['Name'], 'version': distribution.version,
-                              'license_texts': licenses})
-    python_licenses = [Path(sys.base_prefix) / 'LICENSE.txt',
-                       Path(sys.base_prefix) / 'lib/python3.14/LICENSE.txt']
-    found = next((p for p in python_licenses if p.is_file()), None)
-    if found:
-        shutil.copyfile(found, destination / 'CPython-LICENSE.txt')
-    else:
-        gaps.append('CPython license text location requires review')
-    for name in ('LICENSE', 'PRIVACY.md', 'CHANGELOG.md'):
-        shutil.copyfile(ROOT / name, destination / name)
-    # URLs/inventories are not substitutes for corresponding-source obligations.
-    gaps += ['Complete corresponding-source bundle and build scripts for bundled GPL/LGPL/native components',
-             'Native-library provenance and license review (Qt, SQLCipher/OpenSSL, CPython, AppImage runtime and runner libraries)',
-             'Supported KDE/Wayland desktop acceptance and encrypted-profile upgrade evidence']
-    accounting = {'status': 'candidate-only', 'final_release_ready': False,
-                  'blockers': gaps, 'python_distributions': distributions}
-    (destination / 'SOURCE-COMPLIANCE.json').write_bytes(canonical(accounting))
-    return accounting
-
-
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, default=ROOT / 'dist')
@@ -216,7 +176,8 @@ def main(argv=None):
     runtime_names = [line.split('==', 1)[0] for line in (ROOT / 'packaging/requirements-runtime.lock').read_text().splitlines()
                      if line and not line.startswith(('#', ' ', '\t'))]
     notices = runtime / '_internal/licenses/distribution'
-    compliance = collect_notices(notices, runtime_names)
+    from source_accounting import collect as collect_sources
+    compliance = collect_sources(ROOT, runtime, work / 'analysis-inputs.json', work, output, version, toolchain)
     runtime_id = runtime_manifest(runtime)
     # Validate builder/bootstrap contract before making an image.
     from pbdesk.packaged import verify_runtime
@@ -257,10 +218,14 @@ def main(argv=None):
             'runner_packages': run(['dpkg-query', '-W', '-f=${Package}\t${Version}\n'], stdout=subprocess.PIPE, text=True).stdout.splitlines(),
             'squashfs_tools': run(['mksquashfs', '-version'], stdout=subprocess.PIPE, text=True).stdout.splitlines(),
             'source_compliance': compliance,
+            'appimage_runtime_sha256': sha256(runtime_binary),
+            'source_materials': {'corresponding_source_manifest_sha256': compliance['manifest_sha256'],
+                                 'corresponding_source_archives': compliance['source_archives']},
             'lockfiles': {p: sha256(ROOT / p) for p in ['requirements-build.lock', 'packaging/requirements-runtime.lock', 'packaging/requirements-test.lock']}}
     record = output / (prefix + '-build-info.json')
     record.write_bytes(canonical(info))
-    assets = [image, source, license_archive, record]
+    assets = [image, source, license_archive, record, output / compliance['manifest']]
+    assets += [output / name for name in compliance['source_archives']]
     (output / (prefix + '-SHA256SUMS')).write_text(''.join(sha256(p) + '  ' + p.name + '\n' for p in assets))
     print(json.dumps({'appimage': str(image), 'runtime_id': runtime_id, 'final_release_ready': False}))
 

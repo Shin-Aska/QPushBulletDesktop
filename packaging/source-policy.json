@@ -1,0 +1,155 @@
+{
+  "schema_version": 1,
+  "qt_version": "6.12.0",
+  "archives": [
+    {
+      "id": "qtbase",
+      "version": "6.12.0",
+      "url": "https://download.qt.io/official_releases/qt/6.12/6.12.0/submodules/qtbase-everywhere-src-6.12.0.tar.xz",
+      "sha256": "a951bd163c7b80fc6b8c88d7668fb56abf91c152373e13c10666763238131307",
+      "required_source": true
+    },
+    {
+      "id": "qtsvg",
+      "version": "6.12.0",
+      "url": "https://download.qt.io/official_releases/qt/6.12/6.12.0/submodules/qtsvg-everywhere-src-6.12.0.tar.xz",
+      "sha256": "e4ab39534ec97987b1b9b60ef7f4d3253d5912a69f8c713a01753174a4029331",
+      "required_source": true
+    },
+    {
+      "id": "qtwayland",
+      "version": "6.12.0",
+      "url": "https://download.qt.io/official_releases/qt/6.12/6.12.0/submodules/qtwayland-everywhere-src-6.12.0.tar.xz",
+      "sha256": "ae14d9bcf1bb3c300a3ab2e6a53f50284e5c6c966a4ac4cc5aedcb1bc74e4d02",
+      "required_source": true
+    },
+    {
+      "id": "qtimageformats",
+      "version": "6.12.0",
+      "url": "https://download.qt.io/official_releases/qt/6.12/6.12.0/submodules/qtimageformats-everywhere-src-6.12.0.tar.xz",
+      "sha256": "0943132b5db8de6b6a7f1d162682173e8763c7ed94e80fd39113292845f67762",
+      "required_source": true
+    },
+    {
+      "id": "libfuse",
+      "version": "3.15.0",
+      "url": "https://github.com/libfuse/libfuse/releases/download/fuse-3.15.0/fuse-3.15.0.tar.xz",
+      "sha256": "70589cfd5e1cff7ccd6ac91c86c01be340b227285c5e200baa284e401eea2ca0",
+      "required_source": true
+    },
+    {
+      "id": "type2-runtime",
+      "version": "20251108",
+      "url": "https://api.github.com/repos/AppImage/type2-runtime/tarball/dd6cebedcbddde9c82f89b011e8e1d40b6e43868",
+      "git_repository": "AppImage/type2-runtime",
+      "git_commit": "dd6cebedcbddde9c82f89b011e8e1d40b6e43868",
+      "required_source": true
+    },
+    {
+      "id": "squashfuse",
+      "version": "0.5.2",
+      "url": "https://github.com/vasi/squashfuse/archive/0.5.2.tar.gz",
+      "sha256": "db0238c5981dabbd80ee09ae15387f390091668ca060a7bc38047912491443d3",
+      "required_source": false
+    },
+    {
+      "id": "qttranslations",
+      "version": "6.12.0",
+      "url": "https://download.qt.io/official_releases/qt/6.12/6.12.0/submodules/qttranslations-everywhere-src-6.12.0.tar.xz",
+      "sha256": "85929c0c30d6f273f23bd879bb69803ea17b010ab73cab2f8abf95357f6f6bbb",
+      "required_source": true
+    }
+  ],
+  "notices": [
+    {
+      "id": "squashfuse",
+      "url": "https://raw.githubusercontent.com/vasi/squashfuse/0.5.2/LICENSE",
+      "sha256": "9e909cc8a8ba27b1a649c964cf9eda37de911f3138c2b64e6d2f01703904ac13"
+    },
+    {
+      "id": "musl",
+      "url": "https://git.musl-libc.org/cgit/musl/plain/COPYRIGHT?h=v1.2.5",
+      "sha256": "f9bc4423732350eb0b3f7ed7e91d530298476f8fec0c6c427a1c04ade22655af"
+    },
+    {
+      "id": "zstd",
+      "url": "https://raw.githubusercontent.com/facebook/zstd/v1.5.6/LICENSE",
+      "sha256": "7055266497633c9025b777c78eb7235af13922117480ed5c674677adc381c9d8"
+    },
+    {
+      "id": "zlib",
+      "url": "https://raw.githubusercontent.com/madler/zlib/v1.3.1/LICENSE",
+      "sha256": "845efc77857d485d91fb3e0b884aaa929368c717ae8186b66fe1ed2495753243"
+    },
+    {
+      "id": "mimalloc",
+      "url": "https://raw.githubusercontent.com/microsoft/mimalloc/v2.1.7/LICENSE",
+      "sha256": "19c99805e7a44a34b297a75d1edea9985e300066dfc024d5c99d4236d4573b5d"
+    },
+    {
+      "id": "icu",
+      "url": "https://raw.githubusercontent.com/unicode-org/icu/release-73-2/icu4c/LICENSE",
+      "sha256": "f3005e195ff74d8812cc1f182a1c446fab678d70a10e3dada497585befee5416"
+    },
+    {
+      "id": "openssl-sqlcipher",
+      "url": "https://raw.githubusercontent.com/openssl/openssl/openssl-3.6.0/LICENSE.txt",
+      "sha256": "7d5450cb2d142651b8afa315b5f238efc805dad827d91ba367d8516bc9d49e7a"
+    },
+    {
+      "id": "openssl-cryptography",
+      "url": "https://raw.githubusercontent.com/openssl/openssl/openssl-4.0.3/LICENSE.txt",
+      "sha256": "7d5450cb2d142651b8afa315b5f238efc805dad827d91ba367d8516bc9d49e7a"
+    }
+  ],
+  "required_wheel_sources": [
+    "PyQt6",
+    "PyQt6-sip",
+    "pyinstaller",
+    "sqlcipher3",
+    "certifi",
+    "pyinstaller-hooks-contrib"
+  ],
+  "system_source_exceptions": {
+    "gcc-13": "GCC Runtime Library Exception permits eligible runtime-library redistribution; actual copyright/exception text is supplied.",
+    "gcc-14": "GCC Runtime Library Exception permits eligible runtime-library redistribution; actual copyright/exception text is supplied."
+  },
+  "runtime_permissive_provenance_limitation": "The official runtime recipe pins libfuse3.15.0 and squashfuse0.5.2, but its Alpine3.21 apk installs do not record exact musl/zlib/zstd/mimalloc package revisions. These permissive components are named with their actual license notices; their exact static build revisions are not asserted. This does not claim bit-for-bit reproducibility.",
+  "source_license_rules": {
+    "certifi": {
+      "metadata_license": "MPL-2.0",
+      "kind": "sdist"
+    },
+    "pyqt6": {
+      "metadata_license": "GPL-3.0-only",
+      "kind": "sdist"
+    },
+    "pyqt6-qt6": {
+      "metadata_license": "LGPL v3",
+      "kind": "module-archives",
+      "version": "6.12.0",
+      "components": [
+        "qtbase",
+        "qtsvg",
+        "qtwayland",
+        "qtimageformats",
+        "qttranslations"
+      ]
+    },
+    "pyinstaller": {
+      "metadata_license": "GPLv2-or-later with a special exception which allows to use PyInstaller to build and distribute non-free programs (including commercial ones)",
+      "kind": "sdist"
+    },
+    "pyinstaller-hooks-contrib": {
+      "metadata_license": "License :: OSI Approved :: Apache Software License\nLicense :: OSI Approved :: GNU General Public License v2 (GPLv2)",
+      "kind": "sdist"
+    }
+  },
+  "license_metadata_overrides": {
+    "sqlcipher3": {
+      "metadata_license": "",
+      "classification": "Zlib wrapper notice; SQLCipher/OpenSSL vendored source and notices supplied",
+      "kind": "sdist"
+    }
+  }
+}

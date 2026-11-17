@@ -123,6 +123,7 @@ jobs:
             dist/smoke-evidence.json
             dist/pbdesk-*-x86_64.AppImage
             dist/pbdesk-*-build-info.json
+            dist/pbdesk-*-source-progress.json
             dist/pbdesk-*-SHA256SUMS
             dist/pbdesk-*-source.tar.gz
             dist/pbdesk-*-licenses.tar.gz
