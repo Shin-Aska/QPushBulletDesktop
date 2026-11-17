@@ -401,3 +401,133 @@ def test_permanent_http_failure_keeps_existing_verified_target_without_retry(tmp
         accounting.download('https://official.invalid/source.tar.xz', target, 'a'*64)
     assert target.read_bytes() == b'previous verified source'
     assert len(calls) == 1 and list(tmp_path.iterdir()) == [target]
+
+
+@pytest.mark.parametrize('url,authorized', [
+    ('https://api.github.com/repos/owner/repo/git/trees/' + 'a'*40, True),
+    ('https://api.github.com:443/repos/owner/repo/git/trees/' + 'a'*40, True),
+    ('http://api.github.com/repos/owner/repo/git/trees/' + 'a'*40, False),
+    ('https://api.github.com:444/repos/owner/repo/git/trees/' + 'a'*40, False),
+    ('https://api.github.com.example.org/tree', False),
+    ('https://example.org@api.github.com/tree', False),
+    ('https://pypi.org/pypi/example/json', False),
+    ('https://api.launchpad.net/1.0/ubuntu/+archive/primary', False),
+    ('https://raw.githubusercontent.com/owner/repo/commit/LICENSE', False),
+    ('https://codeload.github.com/owner/repo/tar.gz/' + 'a'*40, False),
+])
+def test_scoped_token_is_only_on_original_https_github_api_metadata(monkeypatch, url, authorized):
+    monkeypatch.setenv('GITHUB_TOKEN', 'fictional-ephemeral-token')
+    request = accounting.source_request(url, github_metadata=True)
+    assert request.get_header('Authorization') == ('Bearer fictional-ephemeral-token' if authorized else None)
+    assert 'Authorization' not in request.headers
+    # Archive/license downloads never receive auth, even for an API URL.
+    assert accounting.source_request(url).get_header('Authorization') is None
+
+
+@pytest.mark.parametrize('redirect', [
+    'https://codeload.github.com/owner/repo/tar.gz/' + 'a'*40,
+    'https://raw.githubusercontent.com/owner/repo/commit/LICENSE',
+    'https://pypi.org/files/source.tar.gz',
+    'https://api.launchpad.net/source',
+    'https://api.github.com/repos/another/repo/tree',
+])
+def test_real_urllib_redirect_handler_never_forwards_ephemeral_token(monkeypatch, redirect):
+    monkeypatch.setenv('GITHUB_TOKEN', 'fictional-ephemeral-token')
+    original = accounting.source_request('https://api.github.com/repos/owner/repo/tree', github_metadata=True)
+    assert original.get_header('Authorization') is not None
+    redirected = accounting.urllib.request.HTTPRedirectHandler().redirect_request(
+        original, None, 302, 'Found', {}, redirect)
+    assert redirected.get_header('Authorization') is None
+    assert 'Authorization' not in redirected.headers and 'Authorization' not in redirected.unredirected_hdrs
+
+
+def git_policy():
+    return {'archives': [{'git_repository': 'official/component', 'git_commit': 'd'*40}]}
+
+
+def test_git_preflight_fails_before_bulk_download_inventory_or_output(tmp_path, monkeypatch):
+    import json
+    import urllib.error
+    root = tmp_path / 'checkout'
+    (root / 'packaging').mkdir(parents=True)
+    (root / 'packaging/source-policy.json').write_text(json.dumps(git_policy()))
+    monkeypatch.setenv('GITHUB_ACTIONS', 'true')
+    monkeypatch.setenv('GITHUB_TOKEN', 'fictional-ephemeral-token')
+    monkeypatch.setattr(accounting, '_GIT_TREES', {})
+    def denied(url):
+        raise urllib.error.HTTPError(url, 403, 'metadata access denied', {}, None)
+    monkeypatch.setattr(accounting, 'request_json', denied)
+    monkeypatch.setattr(accounting, 'native_inventory', lambda *args: pytest.fail('Inventory ran before source preflight'))
+    monkeypatch.setattr(accounting, 'download', lambda *args, **kwargs: pytest.fail('Bulk source download ran before preflight'))
+    with pytest.raises(urllib.error.HTTPError):
+        accounting.collect(root, tmp_path / 'runtime', tmp_path / 'inputs.json',
+                           tmp_path / 'work', tmp_path / 'output', '1.0.0', {})
+    assert not (tmp_path / 'work').exists() and not (tmp_path / 'output').exists()
+
+
+def test_ci_preflight_requires_scoped_token_before_any_metadata_request(monkeypatch):
+    monkeypatch.setenv('GITHUB_ACTIONS', 'true')
+    monkeypatch.delenv('GITHUB_TOKEN', raising=False)
+    monkeypatch.setenv('GH_TOKEN', 'unrelated-token-must-not-be-used')
+    monkeypatch.setattr(accounting, 'request_json', lambda *args: pytest.fail('Metadata requested without scoped CI token'))
+    with pytest.raises(ValueError, match='Scoped GitHub metadata token is missing'):
+        accounting.preflight_git_sources(git_policy())
+
+
+def test_preflight_reuses_only_pinned_tree_in_memory_and_keeps_blob_verification(tmp_path, monkeypatch):
+    raw = b'pinned upstream C source\n'
+    sha = hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
+    calls = []
+    monkeypatch.setattr(accounting, '_GIT_TREES', {})
+    monkeypatch.setenv('GITHUB_TOKEN', 'fictional-ephemeral-token')
+    def metadata(url):
+        calls.append(url)
+        return {'truncated': False, 'tree': [{'path': 'runtime.c', 'type': 'blob', 'sha': sha}]}
+    monkeypatch.setattr(accounting, 'request_json', metadata)
+    assert accounting.preflight_git_sources(git_policy())[0]['blobs'] == 1
+    archive = tmp_path / 'source.tar.gz'
+    make_tar(archive, {'upstream/runtime.c': raw})
+    accounting.verify_git_archive(archive, 'official/component', 'd'*40)
+    assert len(calls) == 1
+    make_tar(archive, {'upstream/runtime.c': b'tampered source'})
+    with pytest.raises(ValueError, match='blob mismatch'):
+        accounting.verify_git_archive(archive, 'official/component', 'd'*40)
+    make_tar(archive, {})
+    with pytest.raises(ValueError, match='incomplete'):
+        accounting.verify_git_archive(archive, 'official/component', 'd'*40)
+
+
+def test_workflow_preflight_precedes_installations_and_builder_has_only_scoped_token():
+    workflow = (ROOT / '.github/workflows/appimage.yml').read_text()
+    assert workflow.index('Preflight authenticated pinned source metadata') < workflow.index('Install build and test OS libraries')
+    step = workflow.split('      - name: Build self-contained candidate\n', 1)[1].split('      - name:', 1)[0]
+    assert 'GITHUB_TOKEN: ${{ github.token }}' in step
+    assert 'actions: read' in workflow and 'contents: read' in workflow
+    import json
+    runtime_source = next(item for item in json.loads((ROOT / 'packaging/source-policy.json').read_text())['archives'] if item['id'] == 'type2-runtime')
+    assert runtime_source['url'] == 'https://codeload.github.com/AppImage/type2-runtime/tar.gz/' + runtime_source['git_commit']
+
+
+@pytest.mark.parametrize('tree,message', [
+    ({'truncated': True, 'tree': []}, 'truncated'),
+    ({'tree': [{'path': 'runtime.c', 'type': 'blob', 'sha': 'a'*40},
+               {'path': 'module', 'type': 'commit'}]}, 'submodule'),
+])
+def test_preflight_rejects_incomplete_tree_before_bulk_source_work(monkeypatch, tree, message):
+    monkeypatch.setenv('GITHUB_TOKEN', 'fictional-ephemeral-token')
+    monkeypatch.setattr(accounting, '_GIT_TREES', {})
+    monkeypatch.setattr(accounting, 'request_json', lambda url: tree)
+    with pytest.raises(ValueError, match=message):
+        accounting.preflight_git_sources(git_policy())
+
+
+def test_authenticated_metadata_never_prints_or_returns_token_headers(monkeypatch, capsys):
+    monkeypatch.setenv('GITHUB_TOKEN', 'fictional-token-never-log-this')
+    def open_url(request, timeout):
+        assert request.get_header('Authorization') == 'Bearer fictional-token-never-log-this'
+        return response_bytes(b'{"tree":[]}')
+    monkeypatch.setattr(accounting.urllib.request, 'urlopen', open_url)
+    result = accounting.request_json('https://api.github.com/repos/owner/repo/git/trees/' + 'a'*40)
+    assert result == {'tree': []}
+    output = capsys.readouterr()
+    assert 'fictional-token-never-log-this' not in output.out + output.err

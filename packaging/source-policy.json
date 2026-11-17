@@ -40,7 +40,7 @@
     {
       "id": "type2-runtime",
       "version": "20251108",
-      "url": "https://api.github.com/repos/AppImage/type2-runtime/tarball/dd6cebedcbddde9c82f89b011e8e1d40b6e43868",
+      "url": "https://codeload.github.com/AppImage/type2-runtime/tar.gz/dd6cebedcbddde9c82f89b011e8e1d40b6e43868",
       "git_repository": "AppImage/type2-runtime",
       "git_commit": "dd6cebedcbddde9c82f89b011e8e1d40b6e43868",
       "required_source": true

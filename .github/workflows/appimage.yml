@@ -38,6 +38,10 @@ jobs:
             visibility=$(gh api "repos/$GITHUB_REPOSITORY" --jq .visibility)
             python3 packaging/release_guard.py --tag "${REF#refs/tags/}" --visibility "$visibility"
           fi
+      - name: Preflight authenticated pinned source metadata before bulk work
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 packaging/source_accounting.py --preflight
       - name: Install build and test OS libraries on temporary runner
         run: |
           sudo apt-get update
@@ -92,6 +96,8 @@ jobs:
           .build-venv/bin/python -m pip install --no-build-isolation --no-deps .
           .build-venv/bin/python -m pip check
       - name: Build self-contained candidate
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: .build-venv/bin/python packaging/build_appimage.py
       - name: Smoke actual AppImage outside checkout on isolated session bus and display
         env:

@@ -4,6 +4,7 @@ Downloads are data only. No downloaded build recipe or source file is executed.
 The ledger distinguishes source obligations from permissive provenance limits.
 """
 from concurrent.futures import ThreadPoolExecutor
+import argparse
 import email.parser
 import hashlib
 import http.client
@@ -51,13 +52,25 @@ def retry_source_operation(label, operation):
             time.sleep(0.5 * attempt)
 
 
+def source_request(url, *, github_metadata=False):
+    request = urllib.request.Request(url, headers={'User-Agent': 'pbdesk-source-accounting/1.0'})
+    parsed = urllib.parse.urlparse(url)
+    token = os.environ.get('GITHUB_TOKEN')
+    if (github_metadata and token and parsed.scheme == 'https' and parsed.hostname == 'api.github.com'
+            and parsed.port in (None, 443) and parsed.username is None and parsed.password is None):
+        # urllib deliberately omits unredirected headers when constructing ANY
+        # redirect request. In particular, credentials never reach source hosts.
+        request.add_unredirected_header('Authorization', 'Bearer ' + token)
+    return request
+
+
 def request_json(url):
     parsed = urllib.parse.urlparse(url)
     query = urllib.parse.parse_qs(parsed.query)
     label = ('metadata ' + query['source_name'][0] + ' ' + query.get('version', [''])[0]
              if 'source_name' in query else 'metadata ' + parsed.path.rsplit('/', 1)[-1])
     def read():
-        with urllib.request.urlopen(urllib.request.Request(url, headers={'User-Agent': 'pbdesk-source-accounting/1.0'}), timeout=30) as stream:
+        with urllib.request.urlopen(source_request(url, github_metadata=True), timeout=30) as stream:
             return json.load(stream)
     return retry_source_operation(label, read)
 
@@ -70,7 +83,7 @@ def download(url, target, expected=None, *, expected_size=None):
         staged = Path(temporary)
         try:
             with os.fdopen(fd, 'wb') as output:
-                with urllib.request.urlopen(urllib.request.Request(url, headers={'User-Agent': 'pbdesk-source-accounting/1.0'}), timeout=90) as stream:
+                with urllib.request.urlopen(source_request(url), timeout=90) as stream:
                     length = stream.headers.get('Content-Length')
                     shutil.copyfileobj(stream, output)
             actual = digest(staged)
@@ -115,14 +128,41 @@ def archive_notices(archive, destination):
     return copied
 
 
-def verify_git_archive(path, repository, commit):
-    """Check every archived blob against the pinned upstream Git tree, not a tag."""
+_GIT_TREES = {}
+
+
+def pinned_git_tree(repository, commit):
+    key = (repository, commit)
+    if key in _GIT_TREES:
+        return _GIT_TREES[key]
+    if not re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', repository) or not re.fullmatch('[a-f0-9]{40}', commit):
+        raise ValueError('An exact upstream repository/commit pin is required')
     tree = request_json(f'https://api.github.com/repos/{repository}/git/trees/{commit}?recursive=1')
     if tree.get('truncated'):
         raise ValueError('Upstream source tree was truncated')
     expected = {item['path']: item for item in tree['tree'] if item['type'] == 'blob'}
+    if not expected:
+        raise ValueError('Pinned upstream source tree has no blobs')
     if any(item['type'] == 'commit' for item in tree['tree']):
         raise ValueError('Git submodule source requires explicit separate accounting')
+    _GIT_TREES[key] = expected
+    return expected
+
+
+def preflight_git_sources(policy):
+    if os.environ.get('GITHUB_ACTIONS') == 'true' and not os.environ.get('GITHUB_TOKEN'):
+        raise ValueError('Scoped GitHub metadata token is missing from the CI source preflight')
+    verified = []
+    for record in policy['archives']:
+        if record.get('git_commit'):
+            tree = pinned_git_tree(record['git_repository'], record['git_commit'])
+            verified.append({'repository': record['git_repository'], 'commit': record['git_commit'], 'blobs': len(tree)})
+    return verified
+
+
+def verify_git_archive(path, repository, commit):
+    """Check every archived blob against the pinned upstream Git tree, not a tag."""
+    expected = pinned_git_tree(repository, commit)
     seen = set()
     with tarfile.open(path, 'r:*') as archive:
         for member in archive:
@@ -461,6 +501,7 @@ def source_parts(source_root, output, prefix, *, limit=90 * 1024 * 1024):
 def collect(root, runtime, inputs_path, work, output, version, toolchain):
     """Emit source evidence; any unmapped ELF or required-source gap fails the build."""
     policy = json.loads((root / 'packaging/source-policy.json').read_text())
+    preflight_git_sources(policy)  # Fail before any bulk source download or notice collection.
     prefix = 'pbdesk-' + version
     source_root = work / 'corresponding-source'
     source_root.mkdir()
@@ -599,3 +640,15 @@ def collect(root, runtime, inputs_path, work, output, version, toolchain):
     (output / (prefix + '-source-progress.json')).unlink()
     return {'complete': True, 'blockers': [], 'manifest': path.name, 'manifest_sha256': digest(path),
             'source_archives': parts, 'scope': ledger['scope'], 'provenance_limitations': ledger['provenance_limitations']}
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--preflight', action='store_true', required=True)
+    parser.parse_args()
+    policy = json.loads(Path(__file__).with_name('source-policy.json').read_text())
+    print(json.dumps({'pinned_git_sources': preflight_git_sources(policy)}))
+
+
+if __name__ == '__main__':
+    main()
