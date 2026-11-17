@@ -129,3 +129,21 @@ def test_unreviewed_future_copyleft_dependency_fails_closed(license):
     metadata['License-Expression'] = license
     with pytest.raises(ValueError, match='Unclassified source-license obligation'):
         accounting.wheel_source_rule(SimpleNamespace(metadata=metadata, version='1.0.0'), {})
+
+
+def test_r_efi_style_authors_file_preserves_actual_license_and_copyright(tmp_path):
+    archive = tmp_path / 'r-efi.crate'
+    actual_notice = (b'LICENSE: MIT OR Apache-2.0 OR LGPL-2.1-or-later\n'
+                     b'AUTHORS-MIT: Permission is hereby granted ...\n'
+                     b'COPYRIGHT: Copyright (C) 2017-2023 Red Hat, Inc.\n')
+    make_tar(archive, {'r-efi-5.2.0/AUTHORS': actual_notice,
+                       'r-efi-5.2.0/src/lib.rs': b'not executed'})
+    destination = tmp_path / 'notices'
+    assert accounting.archive_notices(archive, destination) == ['AUTHORS']
+    assert (destination / 'AUTHORS').read_bytes() == actual_notice
+    assert accounting.license_text_present(destination, ['AUTHORS'])
+
+
+def test_plain_authors_list_cannot_satisfy_missing_license_text(tmp_path):
+    (tmp_path / 'AUTHORS').write_text('Alice Example\nBob Example\n')
+    assert not accounting.license_text_present(tmp_path, ['AUTHORS'])

@@ -47,7 +47,7 @@ def download(url, target, expected=None):
 def notice_name(name):
     base = Path(name).name.lower()
     return (any(word in base for word in ('license', 'copying', 'copyright', 'notice', 'attribution'))
-            or base in ('ftl.txt', 'lgpl2.txt', 'lgpl3.txt', 'gpl.txt'))
+            or base in ('authors', 'authors.txt', 'ftl.txt', 'lgpl2.txt', 'lgpl3.txt', 'gpl.txt'))
 
 
 def archive_notices(archive, destination):
@@ -258,6 +258,20 @@ def copy_wheel_notices(distribution, destination):
     return copied
 
 
+def license_text_present(directory, documents):
+    """An author list alone is not the component's actual license text."""
+    markers = ('permission is hereby granted', 'redistribution and use',
+               'terms and conditions for use, reproduction, and distribution',
+               'gnu general public license', 'gnu lesser general public license',
+               'mozilla public license', 'this is free and unencumbered software',
+               "this software is provided 'as-is'")
+    for name in documents:
+        text = ' '.join((directory / name).read_text(errors='replace').lower().split())
+        if any(marker in text for marker in markers):
+            return True
+    return False
+
+
 def cargo_notices(distribution, source_dir, notice_dir):
     components = []
     for file in distribution.files or []:
@@ -278,7 +292,7 @@ def cargo_notices(distribution, source_dir, notice_dir):
             elif digest(archive) != expected:
                 raise ValueError('Inconsistent compiled Rust source identity: ' + purl)
             notices = archive_notices(archive, notice_dir / name / version)
-            if not notices:
+            if not notices or not license_text_present(notice_dir / name / version, notices):
                 raise ValueError('Compiled Rust component has no license/copyright notice: ' + purl)
             components.append({'name': name, 'version': version, 'sha256': expected,
                                'source_url': f'https://static.crates.io/crates/{name}/{name}-{version}.crate',
