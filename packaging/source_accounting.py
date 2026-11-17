@@ -14,6 +14,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import tomllib
 import urllib.parse
 import urllib.request
 
@@ -272,7 +273,43 @@ def license_text_present(directory, documents):
     return False
 
 
-def cargo_notices(distribution, source_dir, notice_dir):
+def workspace_notice_fallback(archive, purl, policy, destination):
+    """Recover only reviewed exact crate omissions via their Cargo VCS identity."""
+    rule = policy.get('crate_notice_overrides', {}).get(purl)
+    if not rule or digest(archive) != rule['crate_sha256']:
+        raise ValueError('Unclassified missing crate notice: ' + purl)
+    with tarfile.open(archive, 'r:*') as source:
+        members = {Path(member.name).name: member for member in source if member.isfile()}
+        vcs = json.loads(source.extractfile(members['.cargo_vcs_info.json']).read())
+        original = source.extractfile(members['Cargo.toml.orig']).read()
+        normalized = tomllib.loads(source.extractfile(members['Cargo.toml']).read().decode())['package']
+    if (vcs.get('git', {}).get('sha1') != rule['git_commit'] or vcs.get('path_in_vcs') != rule['path_in_vcs']
+            or hashlib.sha256(original).hexdigest() != rule['original_manifest_sha256']
+            or normalized.get('repository') != rule['repository']):
+        raise ValueError('Crate workspace identity does not match reviewed notice provenance')
+    destination.mkdir(parents=True, exist_ok=True)
+    manifest = rule['workspace_manifest']
+    workspace_path = destination / 'UPSTREAM-WORKSPACE-Cargo.toml'
+    download(manifest['url'], workspace_path, manifest['sha256'])
+    workspace = tomllib.loads(workspace_path.read_text())['workspace']['package']
+    if workspace['license'] != normalized['license'] or workspace['version'] != normalized['version']:
+        raise ValueError('Inherited workspace license/version differs from published crate')
+    notices = []
+    for record in rule['notices']:
+        if Path(record['path']).name != record['path']:
+            raise ValueError('Unsafe workspace license filename')
+        download(record['url'], destination / record['path'], record['sha256'])
+        notices.append(record['path'])
+    if not license_text_present(destination, notices):
+        raise ValueError('Exact upstream workspace still lacks actual license text')
+    return notices, {'repository': rule['repository'], 'git_commit': rule['git_commit'],
+                     'path_in_vcs': rule['path_in_vcs'], 'workspace_manifest_sha256': manifest['sha256'],
+                     'original_manifest_sha256': rule['original_manifest_sha256'],
+                     'notices': {record['path']: record['sha256'] for record in rule['notices']}}
+
+
+def cargo_notices(distribution, source_dir, notice_dir, policy=None):
+    policy = policy or json.loads(Path(__file__).with_name('source-policy.json').read_text())
     components = []
     for file in distribution.files or []:
         if '.dist-info/sboms/' not in str(file) or not str(file).endswith('.json'):
@@ -292,11 +329,14 @@ def cargo_notices(distribution, source_dir, notice_dir):
             elif digest(archive) != expected:
                 raise ValueError('Inconsistent compiled Rust source identity: ' + purl)
             notices = archive_notices(archive, notice_dir / name / version)
+            workspace = None
             if not notices or not license_text_present(notice_dir / name / version, notices):
-                raise ValueError('Compiled Rust component has no license/copyright notice: ' + purl)
+                notices, workspace = workspace_notice_fallback(archive, purl, policy, notice_dir / name / version)
             components.append({'name': name, 'version': version, 'sha256': expected,
+                               'scope': 'Upstream wheel SBOM dependency graph; platform-only entries retained conservatively',
                                'source_url': f'https://static.crates.io/crates/{name}/{name}-{version}.crate',
-                               'licenses': component.get('licenses', []), 'notices': notices})
+                               'licenses': component.get('licenses', []), 'notices': notices,
+                               'workspace_notice_provenance': workspace})
     return components
 
 

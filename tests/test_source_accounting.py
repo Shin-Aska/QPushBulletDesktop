@@ -147,3 +147,56 @@ def test_r_efi_style_authors_file_preserves_actual_license_and_copyright(tmp_pat
 def test_plain_authors_list_cannot_satisfy_missing_license_text(tmp_path):
     (tmp_path / 'AUTHORS').write_text('Alice Example\nBob Example\n')
     assert not accounting.license_text_present(tmp_path, ['AUTHORS'])
+
+
+def workspace_fixture(tmp_path, monkeypatch):
+    import json
+    original = b'[package]\nversion = { workspace = true }\n'
+    normalized = b'[package]\nname="example"\nversion="1.0.0"\nrepository="https://github.com/owner/workspace"\nlicense="MIT"\n'
+    workspace = b'[workspace.package]\nversion="1.0.0"\nlicense="MIT"\n'
+    notice = b'Copyright Example\nPermission is hereby granted to use this software.\n'
+    archive = tmp_path / 'example.crate'
+    def write(vcs='a'*40):
+        make_tar(archive, {'example-1.0.0/.cargo_vcs_info.json': json.dumps({'git': {'sha1': vcs}, 'path_in_vcs': 'crates/example'}).encode(),
+                           'example-1.0.0/Cargo.toml.orig': original, 'example-1.0.0/Cargo.toml': normalized})
+    write()
+    purl = 'pkg:cargo/example@1.0.0'
+    rule = {'crate_sha256': accounting.digest(archive), 'git_commit': 'a'*40, 'path_in_vcs': 'crates/example',
+            'repository': 'https://github.com/owner/workspace',
+            'original_manifest_sha256': hashlib.sha256(original).hexdigest(),
+            'workspace_manifest': {'url': 'memory:workspace', 'sha256': hashlib.sha256(workspace).hexdigest()},
+            'notices': [{'url': 'memory:license', 'path': 'LICENSE-MIT', 'sha256': hashlib.sha256(notice).hexdigest()}]}
+    data = {'memory:workspace': workspace, 'memory:license': notice}
+    def download(url, target, expected):
+        assert hashlib.sha256(data[url]).hexdigest() == expected
+        target.write_bytes(data[url])
+    monkeypatch.setattr(accounting, 'download', download)
+    return archive, purl, rule, data, write
+
+
+def test_exact_workspace_notice_recovery_preserves_actual_license(tmp_path, monkeypatch):
+    archive, purl, rule, _, _ = workspace_fixture(tmp_path, monkeypatch)
+    destination = tmp_path / 'notices'
+    notices, evidence = accounting.workspace_notice_fallback(archive, purl, {'crate_notice_overrides': {purl: rule}}, destination)
+    assert notices == ['LICENSE-MIT']
+    assert accounting.license_text_present(destination, notices)
+    assert evidence['git_commit'] == 'a'*40
+    assert evidence['notices']['LICENSE-MIT'] == accounting.digest(destination / 'LICENSE-MIT')
+
+
+@pytest.mark.parametrize('change', ['unknown-crate', 'hash', 'vcs', 'workspace-license'])
+def test_workspace_fallback_cannot_waive_unreviewed_or_mismatched_provenance(tmp_path, monkeypatch, change):
+    archive, purl, rule, data, write = workspace_fixture(tmp_path, monkeypatch)
+    policy = {'crate_notice_overrides': {purl: rule}}
+    if change == 'unknown-crate':
+        purl = 'pkg:cargo/unreviewed@1.0.0'
+    elif change == 'hash':
+        rule['crate_sha256'] = 'f'*64
+    elif change == 'vcs':
+        write('b'*40)
+        rule['crate_sha256'] = accounting.digest(archive)
+    else:
+        data['memory:workspace'] = b'[workspace.package]\nversion="1.0.0"\nlicense="BSD-3-Clause"\n'
+        rule['workspace_manifest']['sha256'] = hashlib.sha256(data['memory:workspace']).hexdigest()
+    with pytest.raises(ValueError):
+        accounting.workspace_notice_fallback(archive, purl, policy, tmp_path / 'notices')

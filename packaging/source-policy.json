@@ -151,5 +151,48 @@
       "classification": "Zlib wrapper notice; SQLCipher/OpenSSL vendored source and notices supplied",
       "kind": "sdist"
     }
+  },
+  "crate_notice_overrides": {
+    "pkg:cargo/wit-bindgen-rt@0.39.0": {
+      "crate_sha256": "6f42320e61fe2cfd34354ecb597f86f413484a798ba44a8ca1165c58d42da6c1",
+      "repository": "https://github.com/bytecodealliance/wit-bindgen",
+      "git_commit": "f2393e6e98fa5f9236cac580db8a3fc9de6a4b70",
+      "path_in_vcs": "crates/guest-rust/rt",
+      "original_manifest_sha256": "459bfb2c3cfd34ea099ac910e9e2ed316feca9c87ff24fb4e6354e30044f07fc",
+      "workspace_manifest": {
+        "path": "Cargo.toml",
+        "url": "https://raw.githubusercontent.com/bytecodealliance/wit-bindgen/f2393e6e98fa5f9236cac580db8a3fc9de6a4b70/Cargo.toml",
+        "sha256": "ced920fb508f951d63554910fac38f538d0e45d47e06ba5fbf77d6c511869d40",
+        "git_blob_sha1": "7caf0cb588f05add1a60ba4c2f2b6fadec49ad07",
+        "git_tree_blob_verified": true,
+        "size_bytes": 3183
+      },
+      "notices": [
+        {
+          "path": "LICENSE-APACHE",
+          "url": "https://raw.githubusercontent.com/bytecodealliance/wit-bindgen/f2393e6e98fa5f9236cac580db8a3fc9de6a4b70/LICENSE-APACHE",
+          "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+          "git_blob_sha1": "16fe87b06e802f094b3fbb0894b137bca2b16ef1",
+          "git_tree_blob_verified": true,
+          "size_bytes": 10847
+        },
+        {
+          "path": "LICENSE-Apache-2.0_WITH_LLVM-exception",
+          "url": "https://raw.githubusercontent.com/bytecodealliance/wit-bindgen/f2393e6e98fa5f9236cac580db8a3fc9de6a4b70/LICENSE-Apache-2.0_WITH_LLVM-exception",
+          "sha256": "268872b9816f90fd8e85db5a28d33f8150ebb8dd016653fb39ef1f94f2686bc5",
+          "git_blob_sha1": "f9d81955f4bcb8f96a025e2ecc46f39ec536d465",
+          "git_tree_blob_verified": true,
+          "size_bytes": 12243
+        },
+        {
+          "path": "LICENSE-MIT",
+          "url": "https://raw.githubusercontent.com/bytecodealliance/wit-bindgen/f2393e6e98fa5f9236cac580db8a3fc9de6a4b70/LICENSE-MIT",
+          "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+          "git_blob_sha1": "31aa79387f27e730e33d871925e152e35e428031",
+          "git_tree_blob_verified": true,
+          "size_bytes": 1023
+        }
+      ]
+    }
   }
 }
