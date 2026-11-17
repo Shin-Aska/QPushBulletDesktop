@@ -200,3 +200,15 @@ def test_workspace_fallback_cannot_waive_unreviewed_or_mismatched_provenance(tmp
         rule['workspace_manifest']['sha256'] = hashlib.sha256(data['memory:workspace']).hexdigest()
     with pytest.raises(ValueError):
         accounting.workspace_notice_fallback(archive, purl, policy, tmp_path / 'notices')
+
+
+def test_rust_copyleft_alternative_requires_explicit_reviewed_selection():
+    component = {'purl': 'pkg:cargo/self_cell@1.3.0',
+                 'licenses': [{'expression': 'Apache-2.0 OR GPL-2.0-only'}]}
+    with pytest.raises(ValueError, match='Unclassified Rust source-license'):
+        accounting.rust_license_choice(component, {})
+    policy = {'rust_license_choices': {component['purl']: {'expression': 'Apache-2.0 OR GPL-2.0-only', 'selected': 'Apache-2.0'}}}
+    assert accounting.rust_license_choice(component, policy) == 'Apache-2.0'
+    component['licenses'][0]['expression'] = 'Apache-2.0 AND GPL-2.0-only'
+    with pytest.raises(ValueError, match='alternative changed'):
+        accounting.rust_license_choice(component, policy)

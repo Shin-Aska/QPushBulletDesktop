@@ -308,6 +308,22 @@ def workspace_notice_fallback(archive, purl, policy, destination):
                      'notices': {record['path']: record['sha256'] for record in rule['notices']}}
 
 
+def rust_license_choice(component, policy):
+    purl = component['purl']
+    expressions = [item['expression'] for item in component.get('licenses', []) if 'expression' in item]
+    expression = ' AND '.join(expressions)
+    choice = policy.get('rust_license_choices', {}).get(purl)
+    if choice:
+        if expression != choice['expression'] or choice['selected'] not in expression.split(' OR '):
+            raise ValueError('Reviewed Rust license alternative changed: ' + purl)
+        return choice['selected']
+    if re.search(r'GPL|MPL', expression):
+        raise ValueError('Unclassified Rust source-license obligation: ' + purl)
+    if not expression:
+        raise ValueError('Compiled Rust SBOM component lacks license classification: ' + purl)
+    return expression
+
+
 def cargo_notices(distribution, source_dir, notice_dir, policy=None):
     policy = policy or json.loads(Path(__file__).with_name('source-policy.json').read_text())
     components = []
@@ -335,7 +351,8 @@ def cargo_notices(distribution, source_dir, notice_dir, policy=None):
             components.append({'name': name, 'version': version, 'sha256': expected,
                                'scope': 'Upstream wheel SBOM dependency graph; platform-only entries retained conservatively',
                                'source_url': f'https://static.crates.io/crates/{name}/{name}-{version}.crate',
-                               'licenses': component.get('licenses', []), 'notices': notices,
+                               'licenses': component.get('licenses', []),
+                               'selected_license': rust_license_choice(component, policy), 'notices': notices,
                                'workspace_notice_provenance': workspace})
     return components
 
@@ -411,7 +428,7 @@ def collect(root, runtime, inputs_path, work, output, version, toolchain):
             path = source_root / 'python' / source['file']
             records.append({'component': name, **download(source['url'], path, source['sha256'])})
             archive_notices(path, notice_root / 'source-notices' / name)
-        wheel['compiled_rust_components'] = cargo_notices(distribution, work / 'notice-sources', notice_root / 'rust')
+        wheel['rust_sbom_components'] = cargo_notices(distribution, work / 'notice-sources', notice_root / 'rust')
         wheels.append(wheel)
     for item in native:
         origin = item['origin']

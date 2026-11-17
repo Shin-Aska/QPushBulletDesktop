@@ -2,9 +2,9 @@
 
 User-visible changes for pbdesk are recorded here. Dates are assigned when releases are published.
 
-## Unreleased
+## 1.0.0
 
-Target: the first public stable release, **1.0.0**. No release has been tagged or published by this entry.
+First stable release. Tag-built artifacts require matching source, packaged acceptance and regression evidence before the separate draft/review/publication step.
 
 ### Added
 
@@ -46,11 +46,11 @@ Target: the first public stable release, **1.0.0**. No release has been tagged o
 - Contact-image loading supports the verified additional Pushbullet image host, with corrected avatar retry state and memory caching for small contact images.
 - Native themes, selection states, text wrapping, status reporting, and narrow-window layouts have received consistency improvements.
 
-### Release preparation
+### Distribution and verification
 
-- Unified SMS source tests use isolated fake-core fixtures. This entry does not certify a rebuilt AppImage or a new live-profile validation.
-- Encryption has been developed against isolated fixtures. The existing live profile and running older core have not been migrated or restarted by this change; activation requires the explicit protection flow. See [encrypted history](docs/encrypted-history.md).
-
-- The selected public distribution target is an **AppImage built through GitHub Actions and distributed through GitHub Releases**. The candidate pipeline and standalone packaged runtime are implemented. In public or private repositories, `main`/build-branch pushes and manual runs build the AppImage and require packaged smoke checks, full regression tests and verified checksums before successful candidate upload. No 1.0 release has been published. Native supported-desktop acceptance and complete third-party license/corresponding-source material remain release gates. See [AppImage candidates](docs/appimage.md).
-- The project uses `GPL-3.0-only`. Bundled components retain their applicable licenses, notices, and corresponding-source requirements.
-- See [the release plan](docs/release-plan.md) for the agreed packaging target and remaining acceptance checks, and [feature parity](docs/feature-parity.md) for current feature boundaries.
+- Self-contained AppImages are built on temporary GitHub Actions runners with hash-pinned Python dependencies, encrypted-history support, Qt plugins and persistent bundled runtimes for surviving services.
+- Candidate builds require actual-artifact smoke checks, the full regression suite, and measured replacement, recovery and interrupted-migration checks. Final releases require a strictly lower-version baseline; ordinary builds of an already-published version use same-version trial evidence and remain candidates. Evidence binds the exact image, source revision, runtime identities, expected baseline and source/license materials; final metadata is updated without changing the tested image.
+- Release assets include the application's source/build inputs, applicable corresponding-source tar parts, Ubuntu downstream patches, Qt module/translation sources, actual notices and practical library-replacement/relink instructions. See [AppImage builds](docs/appimage.md) and [rebuilding](packaging/REBUILDING.md).
+- Existing plaintext profiles require explicit successful migration before history access; missing keys have no plaintext fallback. Historical backups outside the selected migration can remain plaintext. See [encrypted history](docs/encrypted-history.md).
+- Owner feedback supplies basic native launch/product acceptance. Isolated automated fixtures do not claim exhaustive real-wallet, tray, notification, suspend/resume or every native Wayland integration test. Exact artifact evidence and limitations accompany the release.
+- pbdesk uses `GPL-3.0-only`; bundled components retain their applicable licenses. Stable publication remains a deliberate action after the tag-built bundle is checked. See the [release plan](docs/release-plan.md) and [release notes](docs/release-notes-1.0.0.md).

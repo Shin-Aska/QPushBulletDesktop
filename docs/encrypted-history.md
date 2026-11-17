@@ -1,6 +1,6 @@
 # Encrypted local history
 
-Local-history encryption is mandatory in this source revision. The currently running older core, project-root database and `.runtime/editor` profile were not migrated or restarted by this implementation work. An older running core must be deliberately closed/restarted to activate the new desktop protection flow. This guide describes that flow, not completed encryption of the owner's current data.
+Local-history encryption is mandatory. New profiles require protection setup; existing plaintext profiles require explicit successful migration before history access. If an older core is still running, close/restart it deliberately before using the current protection flow. Installing or replacing the executable does not silently migrate a profile.
 
 ## First start and ordinary unlock
 
@@ -31,7 +31,7 @@ The recovery key is a secret bundle beginning `pbdesk-history-v1:`. It contains 
 
 If KWallet is unavailable or its entry is lost, choose **Use a recovery key**, then paste the key into the masked field or choose **Import recovery key file…**. pbdesk verifies the bundle against the existing encrypted database and its stable identity before writing any wallet entry or protection metadata. After authorizing an existing wallet, recovery creates a fresh dedicated entry. It does not overwrite the previous entry. The database identity and key remain stable, so the matching earlier recovery bundle remains valid. The recovery backup offer appears again.
 
-A copied encrypted database is not sufficient for access by itself. Preserve its opaque `.pbdesk-history.json` bootstrap record and the matching wallet access or recovery bundle. Stop all services before making a filesystem copy so database/WAL state is consistent. Keep encrypted migration archives if you need their rollback/legacy material, and keep recovery secrets separately. Moving an AppImage or database does not move KWallet credentials automatically. The self-contained AppImage and GitHub release pipeline remain planned, not delivered.
+A copied encrypted database is not sufficient for access by itself. Preserve its opaque `.pbdesk-history.json` bootstrap record and the matching wallet access or recovery bundle. Stop all services before making a filesystem copy so database/WAL state is consistent. Keep encrypted migration archives if you need their rollback/legacy material, and keep recovery secrets separately. Moving an AppImage or database does not move KWallet credentials automatically. The self-contained AppImage keeps its default database beside the actual executable and private runtime state in the configured XDG state directory. To upgrade an existing profile, replace the AppImage in the same writable application folder and retain the bootstrap/state files and wallet entries. See [AppImage build and launch details](appimage.md).
 
 Without either a usable wallet key or its matching recovery bundle, pbdesk cannot recover encrypted history. A Pushbullet token, incoming-content password or OpenAI key cannot replace the database key.
 

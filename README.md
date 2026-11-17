@@ -2,7 +2,7 @@
 
 QPushBulletDesktop is a Qt desktop app for Pushbullet, with optional AI features. Linux is the only supported platform at the moment. The application and command-line executable are named `pbdesk`.
 
-[AppImage candidates](https://github.com/Shin-Aska/QPushBulletDesktop/actions/workflows/appimage.yml) · [Build and installation guide](docs/appimage.md) · [Privacy](PRIVACY.md) · [Changelog](CHANGELOG.md) · [Release plan](docs/release-plan.md)
+[Stable releases](https://github.com/Shin-Aska/QPushBulletDesktop/releases) · [AppImage builds](https://github.com/Shin-Aska/QPushBulletDesktop/actions/workflows/appimage.yml) · [Build and installation guide](docs/appimage.md) · [Privacy](PRIVACY.md) · [Changelog](CHANGELOG.md) · [Release plan](docs/release-plan.md)
 
 ## What it does
 
@@ -18,9 +18,9 @@ The optional local web and MCP interfaces are intended for advanced users; see [
 
 ## Install on Linux
 
-The repository is public, but it has no tagged 1.0 release yet. AppImages are built by GitHub Actions; open the [AppImage workflow](https://github.com/Shin-Aska/QPushBulletDesktop/actions/workflows/appimage.yml), choose a successful run, and download its candidate artifact. Candidate availability depends on a successful workflow run. Build and launch details are in the [AppImage guide](docs/appimage.md).
+Stable **1.0.0** is the first release target. Download the AppImage and matching source/license/checksum assets from [GitHub Releases](https://github.com/Shin-Aska/QPushBulletDesktop/releases). During release preparation, successful [AppImage workflow](https://github.com/Shin-Aska/QPushBulletDesktop/actions/workflows/appimage.yml) runs provide short-lived candidate artifacts. Build and launch details are in the [AppImage guide](docs/appimage.md). For an AppImage-only download, run `sha256sum --check --ignore-missing pbdesk-1.0.0-SHA256SUMS` and require the AppImage line to report **OK**.
 
-The AppImage bundles Python, Qt, and SQLCipher, so end users do not need Python or an IDE. Put it in a writable folder and launch it there. Keep the database and settings beside the AppImage; when upgrading, replace the AppImage in the same folder to keep using that local profile. On first launch, follow **Protect your local history**: authorize KWallet and save the offered recovery key somewhere safe, or explicitly continue without a backup. The recovery key and database together can expose your local history.
+The AppImage bundles Python, Qt, and SQLCipher, so end users do not need Python or an IDE. Put it in a writable folder and launch it there. When upgrading, replace the AppImage in the same folder to keep using the database and encrypted settings there; retain the private XDG state directory and KWallet entries. On first launch, follow **Protect your local history**: authorize KWallet and save the offered recovery key somewhere safe, or explicitly continue without a backup. The recovery key and database together can expose your local history.
 
 The current tested desktop setup is Kubuntu 26.04 with KDE Plasma 6 on Wayland and KWallet. Other Linux desktop and distribution combinations have not been certified. Windows and macOS are not currently supported.
 
@@ -37,4 +37,6 @@ Set up optional AI in **Settings → AI** with your own OpenAI API key. When an 
 - [Capabilities and feature boundaries](docs/capabilities.md)
 - [Changelog](CHANGELOG.md) and [release plan](docs/release-plan.md)
 
-QPushBulletDesktop is an independent Pushbullet client, licensed under [GPL-3.0-only](LICENSE).
+## Licenses and corresponding source
+
+QPushBulletDesktop is an independent Pushbullet client, licensed under [GPL-3.0-only](LICENSE). PyQt6 uses GPLv3, and the bundled Qt libraries use LGPLv3. Release assets include actual third-party notices, matching applicable source archives and a component ledger. You may rebuild or replace these libraries; the editable runtime manifest requires no secret or upstream signature. See the [source and library-replacement instructions](packaging/REBUILDING.md) and [1.0.0 release notes](docs/release-notes-1.0.0.md). Other components retain their respective licenses.

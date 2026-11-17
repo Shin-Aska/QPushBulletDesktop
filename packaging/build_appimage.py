@@ -219,6 +219,7 @@ def main(argv=None):
             'squashfs_tools': run(['mksquashfs', '-version'], stdout=subprocess.PIPE, text=True).stdout.splitlines(),
             'source_compliance': compliance,
             'appimage_runtime_sha256': sha256(runtime_binary),
+            'appimage_runtime_size_bytes': runtime_binary.stat().st_size,
             'source_materials': {'corresponding_source_manifest_sha256': compliance['manifest_sha256'],
                                  'corresponding_source_archives': compliance['source_archives']},
             'lockfiles': {p: sha256(ROOT / p) for p in ['requirements-build.lock', 'packaging/requirements-runtime.lock', 'packaging/requirements-test.lock']}}
