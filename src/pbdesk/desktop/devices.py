@@ -8,15 +8,34 @@ from .theme import primary
 
 
 def request(worker, command, **values):
+    """Send a worker command with a generated request_id and return that ID.
+
+    :param worker: Core worker executing the command asynchronously.
+    :type worker: pbdesk.desktop.worker.CoreWorker
+    :param command: Core worker command name.
+    :type command: str
+    :param values: Keyword payload fields merged into the request dictionary.
+    :type values: object
+    :return: Generated UUID request identifier string.
+    :rtype: str
+    """
     request_id = str(uuid.uuid4())
     worker.request(command, dict(values, request_id=request_id))
     return request_id
 
 
 class AddDeviceDialog(QDialog):
+    """Dialog for registering this Linux computer or guiding mobile/browser setup."""
     registered = pyqtSignal(str)
 
     def __init__(self, worker, parent=None):
+        """Initialize tabs for computer registration and companion client instructions.
+
+        :param worker: Core worker handling device registration and refresh requests.
+        :type worker: pbdesk.desktop.worker.CoreWorker
+        :param parent: Optional parent widget owning this dialog.
+        :type parent: QWidget | None
+        """
         super().__init__(parent)
         self.worker = worker
         self.request_id = None
@@ -62,12 +81,18 @@ class AddDeviceDialog(QDialog):
         self.finished.connect(lambda: worker.result.disconnect(self.result))
 
     def submit(self):
+        """Request registration of this Linux device under the entered nickname."""
         self.register.setEnabled(False)
         self.nickname.setEnabled(False)
         self.request_id = request(self.worker, 'add_device', nickname=self.nickname.text().strip())
         self.feedback.setText('Registering this Linux client…')
 
     def result(self, result):
+        """Handle the add_device worker response and emit registered on success.
+
+        :param result: Worker result dictionary for the device registration command.
+        :type result: dict
+        """
         if result.get('request_id') != self.request_id:
             return
         if result.get('error'):
@@ -82,7 +107,18 @@ class AddDeviceDialog(QDialog):
 
 
 class EncryptionDialog(QDialog):
+    """Dialog for choosing and testing a device's local KWallet decryption entry."""
+
     def __init__(self, worker, device, parent=None):
+        """Initialize local KWallet entry selection and verification controls.
+
+        :param worker: Core worker managing encryption preferences and tests.
+        :type worker: pbdesk.desktop.worker.CoreWorker
+        :param device: Cached device record dictionary being configured.
+        :type device: dict
+        :param parent: Optional parent widget owning this dialog.
+        :type parent: QWidget | None
+        """
         super().__init__(parent)
         self.worker, self.device = worker, device
         self.request_id = None
@@ -109,6 +145,7 @@ class EncryptionDialog(QDialog):
         layout.addLayout(row)
         self.password = None
         def create_entry():
+            """Prompt for a device-specific encryption password without persisting it here."""
             # Password is masked and passed directly to core; never persisted in UI snapshots.
             password, ok = QInputDialog.getText(self, 'Create local KWallet entry', 'Password configured in the source client', QLineEdit.EchoMode.Password)
             if ok and password:
@@ -135,10 +172,16 @@ class EncryptionDialog(QDialog):
         self.finished.connect(self.cleanup)
 
     def cleanup(self):
+        """Clear any staged password and disconnect the worker result signal."""
         self.password = None
         self.worker.result.disconnect(self.result)
 
     def submit(self, command):
+        """Submit encryption preference updates or decryption test requests to core.
+
+        :param command: Worker command name (``encryption`` or ``test_encryption``).
+        :type command: str
+        """
         values = {'device_id': self.device['id']}
         if command == 'encryption':
             values.update(mode='shared' if self.shared.isChecked() else 'device')
@@ -157,6 +200,11 @@ class EncryptionDialog(QDialog):
         self.feedback.setText('Testing saved local decryption…' if command == 'test_encryption' else 'Saving local KWallet reference…')
 
     def result(self, result):
+        """Display results of saving KWallet references or testing local decryption.
+
+        :param result: Worker result dictionary for encryption save or test commands.
+        :type result: dict
+        """
         if result.get('request_id') != self.request_id:
             return
         self.save.setEnabled(True)
@@ -171,7 +219,18 @@ class EncryptionDialog(QDialog):
 
 
 class RemoveDeviceDialog(QDialog):
+    """Confirmation dialog for removing a device registration from Pushbullet."""
+
     def __init__(self, worker, device, parent=None):
+        """Initialize the device removal confirmation dialog and controls.
+
+        :param worker: Core worker handling device registration removal.
+        :type worker: pbdesk.desktop.worker.CoreWorker
+        :param device: Cached device record dictionary to remove.
+        :type device: dict
+        :param parent: Optional parent widget owning this dialog.
+        :type parent: QWidget | None
+        """
         super().__init__(parent)
         self.worker, self.device = worker, device
         self.request_id = None
@@ -197,11 +256,17 @@ class RemoveDeviceDialog(QDialog):
         self.finished.connect(lambda: worker.result.disconnect(self.result))
 
     def submit(self):
+        """Request removal of the device's Pushbullet registration via the worker."""
         self.remove.setEnabled(False)
         self.request_id = request(self.worker, 'remove_device', device_id=self.device['id'])
         self.feedback.setText('Removing this registration…')
 
     def result(self, result):
+        """Close the dialog on successful removal or display the error message.
+
+        :param result: Worker result dictionary for the remove_device command.
+        :type result: dict
+        """
         if result.get('request_id') == self.request_id:
             if result.get('error'):
                 self.feedback.setText(result['error'])

@@ -24,11 +24,24 @@ ANCESTOR_TABLE = '_pbdesk_migration_ancestor_v1'
 
 
 def selected_roots(settings):
+    """Return sorted resolved application and state root paths.
+
+    :param settings: Application settings defining application and state directories.
+    :type settings: pbdesk.config.Settings
+    :return: Sorted list of distinct resolved root paths.
+    :rtype: list[pathlib.Path]
+    """
     return sorted({settings.application_dir.resolve(), settings.state_dir.resolve()}, key=str)
 
 
 def inventory(settings):
-    """Known selected application/state paths only; never recursively scan backups."""
+    """Known selected application/state paths only; never recursively scan backups.
+
+    :param settings: Application settings defining application and state directories.
+    :type settings: pbdesk.config.Settings
+    :return: Existing database, sidecar, and legacy artifact paths within selected roots.
+    :rtype: list[pathlib.Path]
+    """
     paths = []
     roots = selected_roots(settings)
     for root in roots:
@@ -40,13 +53,29 @@ def inventory(settings):
 
 
 def migration_paths(root, identity):
+    """Return staging and archive paths for a migration identity.
+
+    :param root: Application directory containing migration staging and archive files.
+    :type root: pathlib.Path
+    :param identity: Opaque migration UUID string.
+    :type identity: str
+    :return: Staging, archive, ancestor archive, and sidecar paths for the identity.
+    :rtype: list[pathlib.Path]
+    """
     return [root / ('.pbdesk-history-' + identity + ending + suffix)
         for ending in ('.stage', '.archive', '.ancestor.archive')
         for suffix in ('', *SIDECARS)]
 
 
 def validate_named_paths(settings, *, identities=()):
-    """Validate only the selected source/control and opaque migration entries."""
+    """Validate only the selected source/control and opaque migration entries.
+
+    :param settings: Application settings defining application and state directories.
+    :type settings: pbdesk.config.Settings
+    :param identities: Opaque migration identity UUIDs whose staging and archive files should be validated.
+    :type identities: collections.abc.Iterable[str]
+    :raises ValueError: If orphan database sidecar files exist without a primary database file.
+    """
     from pbdesk.services.history_security import BOOTSTRAP, JOURNAL
     for path in inventory(settings):
         validate_file(path, required=True)
@@ -62,6 +91,14 @@ def validate_named_paths(settings, *, identities=()):
 
 
 def _read_private(path):
+    """Validate and read a bounded private file without following symlinks.
+
+    :param path: Path to the private legacy file to validate and read.
+    :type path: pathlib.Path
+    :return: Raw bytes read from the private regular file.
+    :rtype: bytes
+    :raises ValueError: If the file is not owned by the current user, not regular, or exceeds 16 MiB.
+    """
     validate_file(path, required=True)
     fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     with os.fdopen(fd, 'rb') as stream:
@@ -75,19 +112,48 @@ def _read_private(path):
 
 
 def _quote(name):
+    """Quote an SQLite identifier safely.
+
+    :param name: SQLite identifier string to quote.
+    :type name: str
+    :return: Double-quoted SQLite identifier.
+    :rtype: str
+    """
     return '"' + name.replace('"', '""') + '"'
 
 
 def logical_digest(connection, *, exclude_tables=(), skip_security=False):
-    """Deterministic schema/rows including FTS, sequence and user_version."""
+    """Deterministic schema/rows including FTS, sequence and user_version.
+
+    :param connection: Open SQLite or SQLCipher DB-API connection.
+    :type connection: object
+    :param exclude_tables: Table names to omit from the schema and row digest.
+    :type exclude_tables: collections.abc.Iterable[str]
+    :param skip_security: Whether to exclude the ``history_security_v1`` row in ``settings``.
+    :type skip_security: bool
+    :return: SHA-256 hex digest representing the deterministic logical database state.
+    :rtype: str
+    """
     digest = hashlib.sha256()
     schema = connection.execute("SELECT type,name,tbl_name,sql FROM sqlite_master ORDER BY type,name").fetchall()
     schema = [row for row in schema if row[1] not in exclude_tables and row[2] not in exclude_tables]
     def encode(value):
+        """Encode byte values as base64 objects for deterministic JSON hashing.
+
+        :param value: Database value or schema entry to encode for JSON serialization.
+        :type value: object
+        :return: Base64-wrapped dictionary for ``bytes`` values, or the original value.
+        :rtype: object
+        """
         if isinstance(value, bytes):
             return {'bytes': base64.b64encode(value).decode()}
         return value
     def feed(value):
+        """Update the digest with a canonical JSON-serialized line.
+
+        :param value: JSON-serializable structure to hash into the digest.
+        :type value: object
+        """
         digest.update(json.dumps(value, ensure_ascii=True, separators=(',', ':'), default=encode).encode())
         digest.update(b'\n')
     feed(schema)
@@ -107,6 +173,12 @@ def logical_digest(connection, *, exclude_tables=(), skip_security=False):
 
 
 def _integrity(connection):
+    """Verify SQLite and SQLCipher integrity pragmas on a connection.
+
+    :param connection: Open SQLCipher DB-API connection to verify.
+    :type connection: object
+    :raises ValueError: If SQLite or SQLCipher integrity checks report any errors.
+    """
     if connection.execute('PRAGMA integrity_check').fetchall() != [('ok',)]:
         raise ValueError()
     cipher = connection.execute('PRAGMA cipher_integrity_check').fetchall()
@@ -116,6 +188,15 @@ def _integrity(connection):
 
 @contextmanager
 def ownership(settings):
+    """Acquire exclusive non-blocking file locks across selected storage roots.
+
+    :param settings: Application settings defining storage root directories to lock.
+    :type settings: pbdesk.config.Settings
+    :return: Generator yielding the list of open lock file descriptors.
+    :rtype: collections.abc.Iterator[list[int]]
+    :raises ValueError: If a storage root or lock file is unsafe or not owned by the user.
+    :raises HistorySecurityError: If another ``pbdesk`` core already holds an exclusive lock.
+    """
     descriptors = []
     try:
         # The legacy core may have used state_dir as its application directory.
@@ -140,11 +221,26 @@ def ownership(settings):
 
 
 def _journal(settings, identity, phase):
+    """Persist the current migration identity and phase to the journal.
+
+    :param settings: Application settings locating the migration journal file.
+    :type settings: pbdesk.config.Settings
+    :param identity: Opaque migration UUID string.
+    :type identity: str
+    :param phase: Migration phase name (``'exporting'``, ``'verified'``, or ``'switched'``).
+    :type phase: str
+    """
     from pbdesk.services.history_security import JOURNAL, _write_record
     _write_record(settings.application_dir / JOURNAL, {'version': 1, 'uuid': identity, 'phase': phase})
 
 
 def _checkpoint(connection):
+    """Commit, truncate the WAL, and switch to DELETE journal mode.
+
+    :param connection: Open SQLite or SQLCipher DB-API connection to checkpoint.
+    :type connection: object
+    :raises ValueError: If ``PRAGMA wal_checkpoint(TRUNCATE)`` reports busy or uncheckpointed frames.
+    """
     connection.commit()
     row = connection.execute('PRAGMA wal_checkpoint(TRUNCATE)').fetchone()
     if row and row[0] != 0:
@@ -153,14 +249,40 @@ def _checkpoint(connection):
 
 
 def _staging(root, identity):
+    """Return the staging database path for a migration identity.
+
+    :param root: Application directory holding staging files.
+    :type root: pathlib.Path
+    :param identity: Opaque migration UUID string.
+    :type identity: str
+    :return: Path to the staging SQLCipher database file.
+    :rtype: pathlib.Path
+    """
     return root / ('.pbdesk-history-' + identity + '.stage')
 
 
 def _archive(root, identity):
+    """Return the rollback archive path for a migration identity.
+
+    :param root: Application directory holding archive files.
+    :type root: pathlib.Path
+    :param identity: Opaque migration UUID string.
+    :type identity: str
+    :return: Path to the encrypted rollback archive database file.
+    :rtype: pathlib.Path
+    """
     return root / ('.pbdesk-history-' + identity + '.archive')
 
 
 def _select_source(settings):
+    """Select and verify plaintext source and legacy ancestor databases.
+
+    :param settings: Application settings defining application and state directories.
+    :type settings: pbdesk.config.Settings
+    :return: Tuple of ``(source_path, ancestor_path, ancestor_logical_digest)`` with ``None`` for absent entries.
+    :rtype: tuple[pathlib.Path | None, pathlib.Path | None, str | None]
+    :raises ValueError: If a candidate database is already encrypted or legacy ancestor verification fails.
+    """
     from pbdesk.services.history_security import _plaintext
     target = settings.application_dir / 'pbdesk.sqlite3'
     validate_named_paths(settings)
@@ -191,6 +313,19 @@ def _select_source(settings):
 
 
 def _export(source, stage, key):
+    """Export a plaintext SQLite database into a verified SQLCipher database.
+
+    :param source: Path to the plaintext SQLite source database.
+    :type source: pathlib.Path
+    :param stage: Destination path for the encrypted SQLCipher staging database.
+    :type stage: pathlib.Path
+    :param key: 32-byte SQLCipher encryption key.
+    :type key: bytes
+    :return: Tuple of ``(logical_digest, locked_source_connection)`` after verification.
+    :rtype: tuple[str, object]
+    :raises ValueError: If pre-export or post-export logical digests fail to match.
+    :raises BaseException: Re-raised after closing the source connection on failure.
+    """
     dbapi = driver()
     validate_file(source, required=True)
     for suffix in SIDECARS:
@@ -226,7 +361,14 @@ def _export(source, stage, key):
 
 
 def _copy_encrypted(stage, archive):
-    """Copy verified ciphertext through no-follow FDs into a new private entry."""
+    """Copy verified ciphertext through no-follow FDs into a new private entry.
+
+    :param stage: Verified encrypted staging database path to copy.
+    :type stage: pathlib.Path
+    :param archive: New private destination path for the rollback archive.
+    :type archive: pathlib.Path
+    :raises ValueError: If the staging file is not a regular file owned by the current user.
+    """
     validate_file(stage, required=True)
     source_fd = os.open(stage, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     try:
@@ -243,6 +385,26 @@ def _copy_encrypted(stage, archive):
 
 
 def _archive_snapshot(stage, archive, key, source, digest, settings, ancestor=None, ancestor_digest=None):
+    """Create an encrypted rollback archive with legacy artifacts and digests.
+
+    :param stage: Verified encrypted staging database path.
+    :type stage: pathlib.Path
+    :param archive: Destination path for the encrypted rollback archive database.
+    :type archive: pathlib.Path
+    :param key: 32-byte SQLCipher encryption key.
+    :type key: bytes
+    :param source: Source plaintext database path, or ``None`` for a fresh database.
+    :type source: pathlib.Path | None
+    :param digest: Expected logical digest of the exported database.
+    :type digest: str
+    :param settings: Application settings used to locate legacy JSON artifacts.
+    :type settings: pbdesk.config.Settings
+    :param ancestor: Optional verified legacy ancestor database path.
+    :type ancestor: pathlib.Path | None
+    :param ancestor_digest: Expected logical digest of the legacy ancestor database.
+    :type ancestor_digest: str | None
+    :raises ValueError: If the copied archive's logical digest does not match ``digest``.
+    """
     # stage has been checkpointed and verified, so its byte copy stays encrypted.
     _copy_encrypted(stage, archive)
     conn = connect(archive, key)
@@ -270,6 +432,16 @@ def _archive_snapshot(stage, archive, key, source, digest, settings, ancestor=No
 
 
 def _archive_manifest(archive, key):
+    """Verify and read source, artifact, and ancestor records from an archive.
+
+    :param archive: Path to the encrypted rollback archive database.
+    :type archive: pathlib.Path
+    :param key: 32-byte SQLCipher encryption key.
+    :type key: bytes
+    :return: Tuple of ``(source_record, artifact_records, ancestor_record)`` from the archive.
+    :rtype: tuple[tuple[str, str, None], list[tuple[str, str, bytes]], tuple[str, str] | None]
+    :raises ValueError: If the archive manifest has an invalid source count, logical digest, or artifact hash.
+    """
     conn = connect(archive, key, readonly=True)
     try:
         _integrity(conn)
@@ -290,6 +462,15 @@ def _archive_manifest(archive, key):
 
 
 def _set_marker(path, key, identity):
+    """Write the migration security marker into the encrypted database settings.
+
+    :param path: Path to the encrypted database whose security marker will be written.
+    :type path: pathlib.Path
+    :param key: 32-byte SQLCipher encryption key.
+    :type key: bytes
+    :param identity: Opaque migration UUID string.
+    :type identity: str
+    """
     from pbdesk.services.history_security import MARKER
     conn = connect(path, key)
     try:
@@ -304,6 +485,12 @@ def _set_marker(path, key, identity):
 
 
 def _cleanup_artifacts(artifacts):
+    """Verify digests and remove migrated legacy plaintext artifact files.
+
+    :param artifacts: Archived artifact tuples of ``(path_str, sha256_hex, content)``.
+    :type artifacts: collections.abc.Iterable[tuple[str, str, bytes]]
+    :raises ValueError: If an existing legacy file's SHA-256 digest differs from its archived digest.
+    """
     for name, digest, content in artifacts:
         path = Path(name)
         if not present(path):
@@ -315,6 +502,14 @@ def _cleanup_artifacts(artifacts):
 
 
 def _runtime_payloads(artifacts):
+    """Parse and validate AI runtime JSON payloads from archived artifacts.
+
+    :param artifacts: Sequence of ``(filename, raw_bytes)`` pairs for selected legacy artifacts.
+    :type artifacts: collections.abc.Iterable[tuple[str, bytes]]
+    :return: Mapping of AI runtime cache filenames to parsed JSON dictionaries.
+    :rtype: dict[str, dict[str, object]]
+    :raises ValueError: If duplicate AI cache filenames contain conflicting payloads.
+    """
     values = {}
     for filename, content in artifacts:
         if filename not in {'ai-digest-cache.json', 'ai-runtime-state.json'}:
@@ -332,6 +527,17 @@ def _runtime_payloads(artifacts):
 
 
 def migrate(security, *, wallet=None):
+    """Execute crash-safe plaintext-to-SQLCipher history and settings migration.
+
+    :param security: History security coordinator managing enrollment and store registration.
+    :type security: pbdesk.services.history_security.HistorySecurity
+    :param wallet: Optional KWallet wallet name used when enrolling a new key.
+    :type wallet: str | None
+    :return: Opened and verified encrypted ``Store`` instance registered on ``security``.
+    :rtype: pbdesk.storage.database.Store
+    :raises HistorySecurityError: If a core lock is busy or any migration verification or step fails.
+    :raises BaseException: Re-raised if interrupted by a non-``Exception`` base exception while opening the store.
+    """
     from pbdesk.services.history_security import (BOOTSTRAP, JOURNAL, MARKER, HistorySecurityError,
         _read_record, _write_record, _plaintext, _marker)
     from pbdesk.services.kwallet import read_database_key

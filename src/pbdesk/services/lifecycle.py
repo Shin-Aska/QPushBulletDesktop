@@ -13,10 +13,25 @@ from pbdesk.credentials import private_dir, service_token, health_headers, verif
 from pbdesk.runtime import command as runtime_command, child_environment, system_environment
 
 class CoreStartupError(RuntimeError):
+    """Error raised when discovering or launching the core service fails."""
     pass
 
 
 def _probe(settings, token, client, role="desktop"):
+    """Query the core health endpoint and verify its authenticated identity.
+
+    :param settings: Application settings specifying the core loopback address and credentials.
+    :type settings: pbdesk.config.Settings
+    :param token: Unused legacy token slot kept for probe call compatibility, or ``None``.
+    :type token: str | None
+    :param client: Synchronous HTTP client used to issue the health check request.
+    :type client: httpx.Client
+    :param role: Client service role used to authenticate the health handshake.
+    :type role: str
+    :return: Verified core health payload dictionary, or ``None`` on connection refusal.
+    :rtype: dict[str, Any] | None
+    :raises CoreStartupError: If the core port is inaccessible, occupied, or fails verification.
+    """
     headers = health_headers(settings, role)
     try:
         response = client.get(settings.core_url + "/api/v1/health", headers=headers)
@@ -44,7 +59,25 @@ def _probe(settings, token, client, role="desktop"):
 
 
 def ensure_core(settings, timeout=12.0, demo=False, *, role="desktop", generation=None, cancel=None):
-    """Call from a worker thread. Prefer a transient systemd user service."""
+    """Call from a worker thread. Prefer a transient systemd user service.
+
+    :param settings: Application settings used to locate state, ports, and credentials.
+    :type settings: pbdesk.config.Settings
+    :param timeout: Maximum seconds to wait for lock acquisition and core readiness.
+    :type timeout: float
+    :param demo: Whether to pass ``--demo`` when launching a fresh core process.
+    :type demo: bool
+    :param role: Client service role authenticating against the core API.
+    :type role: str
+    :param generation: Expected Stop All generation token, or ``None`` to skip generation check.
+    :type generation: str | None
+    :param cancel: Optional cancellation event checked throughout startup polling.
+    :type cancel: threading.Event | None
+    :return: Verified health payload dictionary of the running core instance.
+    :rtype: dict[str, Any]
+    :raises CoreStartupError: If startup is cancelled, timed out, or fails verification.
+    :raises BaseException: Re-raised after terminating any newly spawned child on interruption.
+    """
     import fcntl
     token = service_token(settings, role)
     root = private_dir(settings)
@@ -53,6 +86,10 @@ def ensure_core(settings, timeout=12.0, demo=False, *, role="desktop", generatio
     try:
         deadline = time.monotonic() + timeout
         def check_cancel():
+            """Raise CoreStartupError if the caller signaled startup cancellation.
+
+            :raises CoreStartupError: If ``cancel`` is set.
+            """
             if cancel is not None and cancel.is_set():
                 raise CoreStartupError("Client closed during core startup")
         while True:
@@ -74,6 +111,14 @@ def ensure_core(settings, timeout=12.0, demo=False, *, role="desktop", generatio
         except RuntimeError as exc:
             raise CoreStartupError(str(exc)) from None
         def probe(client):
+            """Probe core health and enforce required lifecycle and encryption capabilities.
+
+            :param client: Synchronous HTTP client used to probe the core service.
+            :type client: httpx.Client
+            :return: Verified core health payload dictionary, or ``None`` if not listening.
+            :rtype: dict[str, Any] | None
+            :raises CoreStartupError: If a running core lacks required lifecycle or encryption support.
+            """
             health = _probe(settings, token, client) if role == "desktop" else _probe(settings, token, client, role)
             if health and health.get("client_lifecycle") != 1:
                 raise CoreStartupError("Core update ready: restart the shared core to enable coupled client lifecycle")

@@ -5,10 +5,22 @@ import html
 from pbdesk.runtime import system_environment
 
 class Notifier:
+    """Desktop notification dispatcher backed by the notify-send command."""
+
     def __init__(self, enabled=False):
+        """Initialize the notifier with the requested enabled state.
+
+        :param enabled: Whether desktop notifications should initially be enabled.
+        :type enabled: bool
+        """
         self.configure(enabled)
 
     def configure(self, enabled):
+        """Update the requested state and refresh notify-send command availability.
+
+        :param enabled: Whether desktop notifications are requested.
+        :type enabled: bool
+        """
         self.requested = bool(enabled)
         self.command = shutil.which("notify-send")
         self.available = self.command is not None
@@ -16,6 +28,13 @@ class Notifier:
         self.outcome = "disabled" if not self.requested else "unavailable" if not self.available else "ready"
 
     async def notify(self, item):
+        """Send an escaped desktop notification for the given item if enabled.
+
+        :param item: Notification item mapping containing ``title`` and ``body`` fields.
+        :type item: collections.abc.Mapping[str, Any]
+        :return: ``True`` if ``notify-send`` exited with status 0, otherwise ``False``.
+        :rtype: bool
+        """
         if not self.enabled or not self.command:
             return False
         try:

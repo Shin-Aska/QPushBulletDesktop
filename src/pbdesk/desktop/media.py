@@ -20,7 +20,19 @@ RASTER_FORMATS = {b'jpeg', b'jpg', b'png', b'webp', b'gif', b'bmp'}
 
 
 def decode_image(data, extent=1024, max_dimension=8192, max_pixels=MAX_PIXELS):
-    """Inspect dimensions and format before allocating a scaled native raster."""
+    """Inspect dimensions and format before allocating a scaled native raster.
+
+    :param data: Raw encoded raster image bytes.
+    :type data: bytes
+    :param extent: Maximum width or height in pixels after proportional scaling.
+    :type extent: int
+    :param max_dimension: Maximum allowed source image width or height in pixels.
+    :type max_dimension: int
+    :param max_pixels: Maximum allowed source image pixel count.
+    :type max_pixels: int
+    :return: Decoded and bounded QImage, or None if invalid or disallowed.
+    :rtype: QImage | None
+    """
     if not isinstance(data, bytes) or not 0 < len(data) <= MAX_IMAGE_BYTES:
         return None
     buffer = QBuffer()
@@ -42,6 +54,15 @@ def decode_image(data, extent=1024, max_dimension=8192, max_pixels=MAX_PIXELS):
 
 
 def inline_image(value, extent=64):
+    """Decode a bounded base64 string or raster data URI into a QImage.
+
+    :param value: Base64-encoded image string or ``data:image/...;base64,...`` URI.
+    :type value: object
+    :param extent: Maximum width or height in pixels for the decoded thumbnail.
+    :type extent: int
+    :return: Decoded QImage, or None if the input is invalid or exceeds limits.
+    :rtype: QImage | None
+    """
     if not isinstance(value, str) or not 0 < len(value) <= MAX_INLINE_CHARS:
         return None
     # Historical contact thumbnails may include a raster data URI prefix.
@@ -56,16 +77,42 @@ def inline_image(value, extent=64):
 
 
 def attachment_revision(url):
-    """Invalidate an in-memory preview when its retained reference changes."""
+    """Invalidate an in-memory preview when its retained reference changes.
+
+    :param url: Attachment URL or reference value to digest.
+    :type url: object
+    :return: Truncated 20-character SHA-256 hex digest of the URL string.
+    :rtype: str
+    """
     return hashlib.sha256(str(url).encode()).hexdigest()[:20]
 
 
 def media_icon(item, size=32):
+    """Return a QIcon from an item's inline icon or the default notifications icon.
+
+    :param item: Notification record dictionary optionally containing an ``icon`` string.
+    :type item: dict
+    :param size: Desired square icon dimension in pixels.
+    :type size: int
+    :return: Decoded inline icon or fallback notifications icon.
+    :rtype: QIcon
+    """
     image = inline_image(item.get('icon'), size)
     return QIcon(QPixmap.fromImage(image)) if image is not None else make_icon('notifications', size=size)
 
 
 def contact_icon(recipients, title='', size=36):
+    """Return a contact QIcon from a single thumbnail or a painted initials badge.
+
+    :param recipients: Recipient metadata list for the SMS conversation.
+    :type recipients: list[dict] | object
+    :param title: Conversation title used to derive fallback initials.
+    :type title: str
+    :param size: Desired square avatar dimension in pixels.
+    :type size: int
+    :return: Contact thumbnail icon or painted initials badge icon.
+    :rtype: QIcon
+    """
     recipients = recipients if isinstance(recipients, list) else []
     if len(recipients) == 1 and isinstance(recipients[0], dict):
         image = inline_image(recipients[0].get('thumbnail'), size)
@@ -97,6 +144,17 @@ class RemoteImage(QWidget):
     geometry_changed = pyqtSignal()
 
     def __init__(self, worker, reference, parent=None, valid=None):
+        """Initialize the lazy remote image preview widget and account-scoped cache.
+
+        :param worker: Core worker handling ``media_image`` requests and snapshots.
+        :type worker: pbdesk.desktop.worker.CoreWorker
+        :param reference: Attachment metadata dictionary identifying the remote image.
+        :type reference: collections.abc.Mapping[str, object]
+        :param parent: Optional parent widget owning this preview.
+        :type parent: QWidget | None
+        :param valid: Optional predicate returning False once this attachment is stale.
+        :type valid: collections.abc.Callable[[], bool] | None
+        """
         super().__init__(parent)
         self.worker = worker
         self.reference = dict(reference)
@@ -139,7 +197,11 @@ class RemoteImage(QWidget):
             self.hide()
 
     def set_reference(self, reference):
-        """Replace a notification attachment and invalidate any previous response."""
+        """Replace a notification attachment and invalidate any previous response.
+
+        :param reference: Updated attachment metadata dictionary, or None to hide.
+        :type reference: collections.abc.Mapping[str, object] | None
+        """
         updated = dict(reference or {})
         if updated == self.reference:
             self.setVisible(bool(updated))
@@ -165,14 +227,27 @@ class RemoteImage(QWidget):
                 self._show_image(cached)
 
     def set_preview_bounds(self, width, height):
+        """Clamp preview bounds and rescale any already loaded image.
+
+        :param width: Desired maximum preview width in pixels.
+        :type width: int
+        :param height: Desired maximum preview height in pixels.
+        :type height: int
+        """
         self.preview_bounds = QSize(max(48, min(1024, width)), max(48, min(720, height)))
         if self.image is not None:
             self._show_image(self.image)
 
     def _cache_key(self):
+        """Return a hashable cache key representing the current attachment reference.
+
+        :return: Sorted tuple of reference key-value pairs.
+        :rtype: tuple[tuple[str, object], ...]
+        """
         return tuple(sorted(self.reference.items()))
 
     def load(self):
+        """Request the remote image payload from the worker if not already pending."""
         if self.request_id or not self.valid():
             return
         self.request_id = str(uuid.uuid4())
@@ -181,6 +256,11 @@ class RemoteImage(QWidget):
         self.worker.request('media_image', {**self.reference, 'request_id': self.request_id})
 
     def _result(self, result):
+        """Decode and cache the fetched image or show a mapped error message.
+
+        :param result: Worker result dictionary for the ``media_image`` command.
+        :type result: dict
+        """
         if (result.get('command') != 'media_image' or result.get('request_id') != self.request_id or
                 result.get('account_id') != self.reference.get('account_id') or not self.valid()):
             return
@@ -212,6 +292,11 @@ class RemoteImage(QWidget):
         self._show_image(image)
 
     def _show_image(self, image):
+        """Display the scaled preview pixmap and emit layout and load notifications.
+
+        :param image: Decoded raster image to render inside the preview button.
+        :type image: QImage
+        """
         self.geometry_changing.emit()
         self.image = image
         pixmap = QPixmap.fromImage(image).scaled(max(80, min(self.preview_bounds.width(), self.width() - 12)), self.preview_bounds.height(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
@@ -226,6 +311,11 @@ class RemoteImage(QWidget):
         self.image_loaded.emit(image)
 
     def resizeEvent(self, event):
+        """Rescale the loaded preview pixmap to fit the updated widget width.
+
+        :param event: Qt resize event containing the new widget size.
+        :type event: PyQt6.QtGui.QResizeEvent
+        """
         super().resizeEvent(event)
         if self.image is not None:
             pixmap = QPixmap.fromImage(self.image).scaled(max(80, min(self.preview_bounds.width(), event.size().width() - 12)), self.preview_bounds.height(),
@@ -235,6 +325,7 @@ class RemoteImage(QWidget):
             self.preview.setFixedHeight(pixmap.height() + 12)
 
     def enlarge(self):
+        """Open a dialog showing a larger scaled view of the loaded image."""
         if self.image is None or not self.valid():
             return
         dialog = QDialog(self)
@@ -251,6 +342,13 @@ class RemoteImage(QWidget):
 
 
 def _cache_snapshot(worker, snapshot):
+    """Clear the worker memory image cache when the snapshot account changes.
+
+    :param worker: Core worker owning the ``_media_cache`` state.
+    :type worker: pbdesk.desktop.worker.CoreWorker
+    :param snapshot: Snapshot payload received from the core worker.
+    :type snapshot: dict
+    """
     capabilities = snapshot.get('capabilities')
     if isinstance(capabilities, dict) and 'account_id' in capabilities and capabilities['account_id'] != worker._media_cache_account:
         worker._media_cache.clear()

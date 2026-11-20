@@ -17,13 +17,55 @@ from jeepney.wrappers import unwrap_msg
 
 
 class KWalletUnavailable(RuntimeError):
+    """Error raised when KWallet is inaccessible, locked, or rejects an entry operation."""
     pass
 
 
 def _password(folder, entry, wallet=None, new_password=None, provider=False, interactive=False, database=False, authorize=False):
+    """Read, authorize, or atomically create a KWallet password entry via D-Bus.
+
+    :param folder: KWallet folder name containing the target entry.
+    :type folder: str
+    :param entry: KWallet entry key name within ``folder``.
+    :type entry: str
+    :param wallet: Explicit wallet name, or ``None`` to use KWallet's ``networkWallet``.
+    :type wallet: str | None
+    :param new_password: Password string to store when creating a new entry, or ``None`` to read.
+    :type new_password: str | None
+    :param provider: Whether creating a Pushbullet provider credential entry.
+    :type provider: bool
+    :param interactive: Whether interactive wallet unlocking prompts and longer timeouts are permitted.
+    :type interactive: bool
+    :param database: Whether operating on a dedicated encrypted history database key entry.
+    :type database: bool
+    :param authorize: Whether to open and return only the selected wallet name without reading entries.
+    :type authorize: bool
+    :return: Retrieved password string, selected wallet name when ``authorize`` is true, or ``None`` if absent.
+    :rtype: str | None
+    :raises KWalletUnavailable: If KWallet is unavailable, locked, rejects access, or violates creation rules.
+    """
     deadline = time.monotonic() + (60 if interactive else 8)
 
     def call(bus, address, method, signature=None, body=(), timeout=2):
+        """Send a bounded D-Bus method call and unwrap its single reply value.
+
+        :param bus: Active blocking D-Bus connection.
+        :type bus: jeepney.io.blocking.DBusConnection
+        :param address: Target D-Bus object address.
+        :type address: jeepney.DBusAddress
+        :param method: D-Bus method name to invoke.
+        :type method: str
+        :param signature: Optional D-Bus type signature string for ``body``.
+        :type signature: str | None
+        :param body: Tuple of arguments marshaled into the D-Bus call.
+        :type body: tuple[Any, ...]
+        :param timeout: Per-call timeout cap in seconds.
+        :type timeout: float
+        :return: Single unwrapped return value from the D-Bus reply.
+        :rtype: Any
+        :raises TimeoutError: If the overall KWallet deadline has already elapsed.
+        :raises ValueError: If the D-Bus reply does not contain exactly one value.
+        """
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             raise TimeoutError()
@@ -91,24 +133,75 @@ def _password(folder, entry, wallet=None, new_password=None, provider=False, int
 
 
 def read_password(folder, entry, wallet=None, *, interactive=False):
+    """Read an existing password entry from the specified KWallet folder.
+
+    :param folder: KWallet folder name to read from.
+    :type folder: str
+    :param entry: KWallet entry key name within ``folder``.
+    :type entry: str
+    :param wallet: Explicit wallet name, or ``None`` to use the default network wallet.
+    :type wallet: str | None
+    :param interactive: Whether interactive wallet unlocking prompts are allowed.
+    :type interactive: bool
+    :return: Stored password string, or ``None`` if the folder or entry does not exist.
+    :rtype: str | None
+    """
     return _password(folder, entry, wallet, interactive=interactive)
 
 
 def write_new_password(folder, entry, password, wallet=None):
-    """Explicit user creation only; no overwriting shared or existing entries."""
+    """Explicit user creation only; no overwriting shared or existing entries.
+
+    :param folder: KWallet folder name in which to create the entry.
+    :type folder: str
+    :param entry: New KWallet entry key name.
+    :type entry: str
+    :param password: Non-empty password secret to persist.
+    :type password: str
+    :param wallet: Explicit wallet name, or ``None`` to use the default network wallet.
+    :type wallet: str | None
+    :raises KWalletUnavailable: If ``password`` is empty/invalid, ``entry`` is reserved, or creation fails.
+    """
     if not isinstance(password,str) or not password or entry in {'api-key','e2e-password'}:
         raise KWalletUnavailable('Choose a new device-specific entry')
     _create_password(folder, entry, password, wallet)
 
 
 def write_provider_password(folder, entry, password, wallet=None):
-    """Explicit first-run token creation; never replace an existing entry."""
+    """Explicit first-run token creation; never replace an existing entry.
+
+    :param folder: KWallet folder name in which to store the provider token.
+    :type folder: str
+    :param entry: Dedicated provider entry key name.
+    :type entry: str
+    :param password: Non-empty Pushbullet access token to persist.
+    :type password: str
+    :param wallet: Explicit wallet name, or ``None`` to use the default network wallet.
+    :type wallet: str | None
+    :raises KWalletUnavailable: If ``password`` is empty/invalid, ``entry`` is reserved, or creation fails.
+    """
     if not isinstance(password, str) or not password or entry in {'e2e-password', 'ai-openai-api-key'}:
         raise KWalletUnavailable('Choose a dedicated provider entry')
     _create_password(folder, entry, password, wallet, provider=True)
 
 
 def _create_password(folder, entry, password, wallet, provider=False, database=False):
+    """Create and verify a new KWallet password entry under an exclusive lock.
+
+    :param folder: KWallet folder name in which to create the entry.
+    :type folder: str
+    :param entry: KWallet entry key name to create.
+    :type entry: str
+    :param password: Secret string to write and read back for verification.
+    :type password: str
+    :param wallet: Explicit wallet name, or ``None`` to use the default network wallet.
+    :type wallet: str | None
+    :param provider: Whether creating a Pushbullet provider credential entry.
+    :type provider: bool
+    :param database: Whether creating a dedicated encrypted history database key entry.
+    :type database: bool
+    :raises KWalletUnavailable: If the creation lock file is unsafe or KWallet rejects creation.
+    """
     # Serialize the hasEntry/write/read-back sequence across local pbdesk cores
     # and concurrent API requests. Never overwrite another creator's new entry.
     path=os.path.join(tempfile.gettempdir(),f'pbdesk-kwallet-create-{os.getuid()}.lock')
@@ -127,11 +220,25 @@ HISTORY_FOLDER = 'pbdesk-history'
 
 
 def authorize_database_wallet(wallet=None):
-    """Authorize an existing wallet before the caller generates a database key."""
+    """Authorize an existing wallet before the caller generates a database key.
+
+    :param wallet: Explicit wallet name, or ``None`` to authorize the default network wallet.
+    :type wallet: str | None
+    :return: Name of the authorized KWallet wallet.
+    :rtype: str
+    """
     return _password(HISTORY_FOLDER, '', wallet, interactive=True, database=True, authorize=True)
 
 
 def _history_entry(identity):
+    """Validate a UUID identity and return its KWallet history entry name.
+
+    :param identity: Canonical UUID string identifying the history database key.
+    :type identity: str
+    :return: KWallet entry name prefixed with ``history-``.
+    :rtype: str
+    :raises KWalletUnavailable: If ``identity`` does not match canonical UUID formatting.
+    """
     import uuid
     if str(uuid.UUID(identity)) != identity:
         raise KWalletUnavailable('Invalid history identity')
@@ -139,13 +246,28 @@ def _history_entry(identity):
 
 
 def write_database_key(identity, key, wallet):
-    """A fresh dedicated entry only; provider/AI/e2e entries cannot be selected."""
+    """A fresh dedicated entry only; provider/AI/e2e entries cannot be selected.
+
+    :param identity: Canonical UUID string identifying the new history key entry.
+    :type identity: str
+    :param key: 32-byte encryption key to store as lowercase hexadecimal.
+    :type key: bytes
+    :param wallet: Target existing KWallet wallet name.
+    :type wallet: str
+    :raises KWalletUnavailable: If ``key`` is not 32 bytes, ``wallet`` is empty, or creation fails.
+    """
     if not isinstance(key, bytes) or len(key) != 32 or not wallet:
         raise KWalletUnavailable('A dedicated history key and existing wallet are required')
     _create_password(HISTORY_FOLDER, _history_entry(identity), key.hex(), wallet, database=True)
 
 
 def _existing_wallets():
+    """Return the list of existing KWallet wallet names from the session D-Bus.
+
+    :return: List of available KWallet wallet names.
+    :rtype: list[str]
+    :raises KWalletUnavailable: If the KWallet D-Bus service is unreachable or returns invalid data.
+    """
     try:
         with open_dbus_connection(auth_timeout=1) as bus:
             names = unwrap_msg(bus.send_and_get_reply(new_method_call(message_bus, 'ListNames'), timeout=2))[0]
@@ -160,7 +282,16 @@ def _existing_wallets():
 
 
 def read_database_key(identity, *, interactive=False):
-    """Find the opaque dedicated entry in existing wallets; never creates one."""
+    """Find the opaque dedicated entry in existing wallets; never creates one.
+
+    :param identity: Canonical UUID string identifying the history key entry.
+    :type identity: str
+    :param interactive: Whether interactive wallet unlocking prompts are permitted.
+    :type interactive: bool
+    :return: 32-byte raw history encryption key.
+    :rtype: bytes
+    :raises KWalletUnavailable: If the key is missing, duplicated, malformed, or KWallet is locked.
+    """
     import re
     entry = _history_entry(identity)
     found = []

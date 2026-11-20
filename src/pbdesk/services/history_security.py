@@ -23,18 +23,43 @@ MARKER = 'history_security_v1'
 
 
 class HistorySecurityError(RuntimeError):
+    """Error raised with a machine-readable code for history protection failures."""
+
     def __init__(self, code, message):
+        """Initialize the error with a status code and user-facing message.
+
+        :param code: Machine-readable history security error code.
+        :type code: str
+        :param message: Human-readable explanation of the failure.
+        :type message: str
+        """
         super().__init__(message)
         self.code, self.message = code, message
 
 
 def _identity(value):
+    """Validate that the given value is a canonical UUID string.
+
+    :param value: Candidate identifier value to validate.
+    :type value: object
+    :return: Validated canonical UUID string.
+    :rtype: str
+    :raises ValueError: If ``value`` is not a canonical UUID string.
+    """
     if not isinstance(value, str) or str(uuid.UUID(value)) != value:
         raise ValueError()
     return value
 
 
 def _read_record(path):
+    """Safely read and validate a bootstrap or migration journal JSON record.
+
+    :param path: Filesystem path to the bootstrap or migration journal JSON file.
+    :type path: pathlib.Path
+    :return: Parsed and validated control record dictionary.
+    :rtype: dict[str, Any]
+    :raises ValueError: If the record fails ownership, size, schema, or phase validation.
+    """
     validate_file(path, required=True)
     fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     with os.fdopen(fd) as stream:
@@ -56,6 +81,13 @@ def _read_record(path):
 
 
 def _write_record(path, value):
+    """Atomically write and fsync a JSON control record to disk.
+
+    :param path: Destination path for the control record file.
+    :type path: pathlib.Path
+    :param value: JSON-serializable control record payload to persist.
+    :type value: dict[str, Any]
+    """
     validate_file(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, temporary = tempfile.mkstemp(dir=path.parent, prefix='.history-record-')
@@ -73,6 +105,14 @@ def _write_record(path, value):
 
 
 def _plaintext(path):
+    """Return whether the given path is a readable unencrypted SQLite database.
+
+    :param path: Path to inspect for an unencrypted SQLite header.
+    :type path: pathlib.Path
+    :return: ``True`` if ``path`` exists as a plaintext SQLite database, otherwise ``False``.
+    :rtype: bool
+    :raises ValueError: If ``path`` is not a regular file owned by the current user.
+    """
     if not present(path):
         return False
     validate_file(path, required=True)
@@ -85,6 +125,14 @@ def _plaintext(path):
 
 
 def _marker(connection):
+    """Read and validate the history security marker from an open database.
+
+    :param connection: Open SQLCipher database connection to query.
+    :type connection: sqlcipher3.dbapi2.Connection
+    :return: Validated history security marker dictionary.
+    :rtype: dict[str, Any]
+    :raises ValueError: If the marker setting is missing or malformed.
+    """
     row = connection.execute('SELECT value FROM settings WHERE key=?', (MARKER,)).fetchone()
     value = json.loads(row[0]) if row else None
     if not isinstance(value, dict) or type(value.get('version')) is not int or value.get('version') != 1:
@@ -96,7 +144,16 @@ def _marker(connection):
 
 
 def existing_key(settings, *, interactive=False):
-    """Resolve only an established identity and verify it before any migrations."""
+    """Resolve only an established identity and verify it before any migrations.
+
+    :param settings: Application settings locating the encrypted database and bootstrap metadata.
+    :type settings: pbdesk.config.Settings
+    :param interactive: Whether KWallet may prompt interactively to unlock.
+    :type interactive: bool
+    :return: Verified 32-byte history encryption key.
+    :rtype: bytes
+    :raises HistorySecurityError: If protection is incomplete, migration is required, KWallet is locked, or key verification fails.
+    """
     from pbdesk.services.kwallet import read_database_key
     try:
         from pbdesk.storage.history_migration import validate_named_paths
@@ -127,7 +184,14 @@ def existing_key(settings, *, interactive=False):
 
 
 class HistorySecurity:
+    """Coordinator for inspecting, protecting, migrating, unlocking, and recovering history."""
+
     def __init__(self, settings):
+        """Initialize history security management for the configured application directory.
+
+        :param settings: Application settings specifying application and state directories.
+        :type settings: pbdesk.config.Settings
+        """
         self.settings = settings
         self.path = settings.application_dir / 'pbdesk.sqlite3'
         self._store = None
@@ -136,6 +200,12 @@ class HistorySecurity:
 
     @contextmanager
     def _mutation(self):
+        """Acquire an exclusive non-blocking lock file for history protection mutations.
+
+        :return: Context manager yielding while the mutation lock is held.
+        :rtype: collections.abc.Iterator[None]
+        :raises HistorySecurityError: If the lock file is unsafe or another mutation holds the lock.
+        """
         root = self.settings.application_dir
         root.mkdir(parents=True, exist_ok=True)
         fd = os.open(root / '.pbdesk-history.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
@@ -151,6 +221,11 @@ class HistorySecurity:
             os.close(fd)
 
     def inspect(self):
+        """Inspect on-disk history files and return the current protection state.
+
+        :return: Status dictionary containing ``state``, ``recovery_offer_pending``, ``error``, and ``paths``.
+        :rtype: dict[str, Any]
+        """
         result = {'state': 'new', 'recovery_offer_pending': False, 'error': None, 'paths': []}
         try:
             driver()
@@ -214,11 +289,28 @@ class HistorySecurity:
         return result
 
     def _remember(self, store, key):
+        """Cache the open store, verified database key, and security marker.
+
+        :param store: Open encrypted database store instance.
+        :type store: pbdesk.storage.database.Store
+        :param key: Verified 32-byte history encryption key.
+        :type key: bytes
+        :return: The passed ``store`` instance.
+        :rtype: pbdesk.storage.database.Store
+        """
         self._store, self._key = store, key
         self._marker_cache = store.get_setting(MARKER)
         return store
 
     def open_existing(self, *, interactive=False):
+        """Open and return the existing encrypted history store using KWallet.
+
+        :param interactive: Whether KWallet may prompt interactively to unlock.
+        :type interactive: bool
+        :return: Open encrypted database store instance.
+        :rtype: pbdesk.storage.database.Store
+        :raises HistorySecurityError: If the database is not ready/locked, KWallet is locked, or opening fails.
+        """
         if self._store is not None and getattr(self._store, '_database_lock', None) is not None:
             return self._store
         state = self.inspect()['state']
@@ -233,6 +325,14 @@ class HistorySecurity:
 
     @staticmethod
     def _enroll(wallet=None):
+        """Authorize a KWallet wallet, generate a database key, and store it.
+
+        :param wallet: Optional explicit KWallet wallet name to authorize and write to.
+        :type wallet: str | None
+        :return: Tuple of the generated database UUID identity and 32-byte encryption key.
+        :rtype: tuple[str, bytes]
+        :raises HistorySecurityError: If KWallet authorization or key enrollment fails.
+        """
         from pbdesk.services.kwallet import authorize_database_wallet, write_database_key
         try:
             selected = authorize_database_wallet(wallet)
@@ -244,6 +344,16 @@ class HistorySecurity:
             raise HistorySecurityError('locked', 'Unlock your existing KWallet and allow pbdesk to create a dedicated history entry.') from None
 
     def protect(self, *, wallet=None):
+        """Initialize or resume encrypted protection for a new history database.
+
+        :param wallet: Optional explicit KWallet wallet name for enrolling a new key.
+        :type wallet: str | None
+        :return: Open and protected database store instance.
+        :rtype: pbdesk.storage.database.Store
+        :raises HistorySecurityError: If state is not ``new`` or interrupted initialization cannot be verified.
+        :raises ValueError: If the existing database marker UUID mismatches the bootstrap record.
+        :raises BaseException: Re-raised after closing the store if post-open setup fails.
+        """
         from pbdesk.storage.database import Store
         from pbdesk.storage.history_migration import ownership, selected_roots
         from pbdesk.services.kwallet import read_database_key
@@ -290,6 +400,14 @@ class HistorySecurity:
                 raise
 
     def migrate(self, *, wallet=None):
+        """Encrypt and migrate unambiguous plaintext history into a protected database.
+
+        :param wallet: Optional explicit KWallet wallet name for enrolling a new history key.
+        :type wallet: str | None
+        :return: Open encrypted database store containing the migrated history.
+        :rtype: pbdesk.storage.database.Store
+        :raises HistorySecurityError: If no unambiguous plaintext or incomplete migration state is present.
+        """
         from pbdesk.storage.history_migration import migrate
         with self._mutation():
             state = self.inspect()['state']
@@ -298,7 +416,11 @@ class HistorySecurity:
             return migrate(self, wallet=wallet)
 
     def recovery_key(self):
-        """Explicit backup action only; callers must keep the returned secret local."""
+        """Explicit backup action only; callers must keep the returned secret local.
+
+        :return: Checksummed ``pbdesk-history-v1:`` recovery key string.
+        :rtype: str
+        """
         store = self.open_existing()
         identity = store.get_setting(MARKER)['uuid']
         payload = uuid.UUID(identity).bytes + self._key
@@ -307,6 +429,14 @@ class HistorySecurity:
 
     @staticmethod
     def _parse_recovery(value):
+        """Decode and verify the checksum of an encoded history recovery key.
+
+        :param value: Candidate ``pbdesk-history-v1:`` recovery key string.
+        :type value: object
+        :return: Tuple of canonical database UUID string and 32-byte encryption key.
+        :rtype: tuple[str, bytes]
+        :raises HistorySecurityError: If the recovery key format, length, or checksum is invalid.
+        """
         try:
             if not isinstance(value, str) or len(value) > 200 or not value.startswith('pbdesk-history-v1:'):
                 raise ValueError()
@@ -319,6 +449,17 @@ class HistorySecurity:
             raise HistorySecurityError('invalid_recovery', 'The recovery key is invalid or incomplete.') from None
 
     def recover(self, recovery_key, *, wallet=None):
+        """Verify a recovery key against the database, re-enroll in KWallet, and open it.
+
+        :param recovery_key: Checksummed ``pbdesk-history-v1:`` recovery key string.
+        :type recovery_key: str
+        :param wallet: Optional explicit KWallet wallet name for storing the re-enrolled key entry.
+        :type wallet: str | None
+        :return: Open encrypted database store instance.
+        :rtype: pbdesk.storage.database.Store
+        :raises HistorySecurityError: If the recovery key is invalid, history is already open, or KWallet enrollment fails.
+        :raises BaseException: Re-raised after closing the store if metadata updates fail.
+        """
         from pbdesk.services.kwallet import authorize_database_wallet, write_database_key
         from pbdesk.storage.database import Store
         from pbdesk.storage.history_migration import ownership, selected_roots
@@ -358,6 +499,14 @@ class HistorySecurity:
                 raise
 
     def finish_recovery_offer(self, store, *, saved):
+        """Record whether the user saved the recovery key backup in store settings.
+
+        :param store: Open database store matching the currently unlocked history instance.
+        :type store: pbdesk.storage.database.Store
+        :param saved: Boolean indicating whether the user confirmed saving the recovery key.
+        :type saved: bool
+        :raises HistorySecurityError: If ``store`` does not match the active store or ``saved`` is not a ``bool``.
+        """
         if store is not self._store or type(saved) is not bool:
             raise HistorySecurityError('conflict', 'Unlock the current history before completing recovery setup.')
         marker = store.get_setting(MARKER)

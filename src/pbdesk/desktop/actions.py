@@ -19,6 +19,13 @@ STATE_LABELS = {
 
 
 def plain_label(text=""):
+    """Create a selectable, word-wrapped plain-text QLabel.
+
+    :param text: Initial plain text displayed by the label.
+    :type text: str
+    :return: Configured plain-text label widget.
+    :rtype: QLabel
+    """
     label = QLabel(text)
     label.setTextFormat(Qt.TextFormat.PlainText)
     label.setWordWrap(True)
@@ -27,11 +34,29 @@ def plain_label(text=""):
 
 
 def eligible_devices(devices, kind):
+    """Return active devices that support the given action kind.
+
+    :param devices: Cached Pushbullet device records.
+    :type devices: collections.abc.Sequence[dict]
+    :param kind: Outbound action kind (``'note'``, ``'link'``, or ``'sms'``).
+    :type kind: str
+    :return: Filtered list of active device dictionaries supporting ``kind``.
+    :rtype: list[dict]
+    """
     flag = "can_sms" if kind == "sms" else "can_push"
     return [device for device in devices if device.get("active") and device.get(flag)]
 
 
 def action_preview(action, devices):
+    """Format a plain-text preview and metadata summary for an action.
+
+    :param action: Saved outbox action dictionary.
+    :type action: dict
+    :param devices: Cached Pushbullet device records used to resolve device nicknames.
+    :type devices: collections.abc.Sequence[dict]
+    :return: Multiline plain-text summary of action content and audit metadata.
+    :rtype: str
+    """
     device = next((item for item in devices if item["id"] == action["device_id"]), {})
     lines = [STATE_LABELS.get(action["state"], action["state"]),
              f"Kind: {action['kind'].title()}",
@@ -60,6 +85,21 @@ class ComposeDialog(QDialog):
     saved = pyqtSignal(dict)
 
     def __init__(self, worker, devices, parent=None, action=None, account_id=None, kinds=None):
+        """Initialize the dialog for creating or editing a pending action.
+
+        :param worker: Core worker handling ``create_action`` and ``edit_action`` requests.
+        :type worker: pbdesk.desktop.worker.CoreWorker
+        :param devices: Cached Pushbullet device records available as destinations.
+        :type devices: collections.abc.Sequence[dict]
+        :param parent: Optional parent widget owning this dialog.
+        :type parent: PyQt6.QtWidgets.QWidget | None
+        :param action: Existing action record to edit, or None when composing a new one.
+        :type action: dict | None
+        :param account_id: Optional account scope enforced on worker responses.
+        :type account_id: str | int | None
+        :param kinds: Optional sequence of selectable message kinds (defaults to note, link, sms).
+        :type kinds: collections.abc.Sequence[str] | None
+        """
         super().__init__(parent)
         self.worker, self.devices = worker, list(devices)
         self.account_id = account_id
@@ -139,6 +179,7 @@ class ComposeDialog(QDialog):
         self.validate()
 
     def update_devices(self):
+        """Populate eligible devices and toggle fields for the selected kind."""
         selected = self.device.currentData()
         self.device.blockSignals(True)
         self.device.clear()
@@ -158,6 +199,11 @@ class ComposeDialog(QDialog):
         self.validate()
 
     def validation_message(self):
+        """Return a validation error message for current inputs, or empty string.
+
+        :return: Human-readable validation problem description, or ``""`` when valid.
+        :rtype: str
+        """
         kind = self.kind.currentData()
         if self.device.currentData() not in {device["id"] for device in eligible_devices(self.devices, kind)}:
             return "Select an active device supporting this message kind. Device registration does not imply it is online."
@@ -180,11 +226,17 @@ class ComposeDialog(QDialog):
         return ""
 
     def validate(self):
+        """Display current validation state and update the save button."""
         message = self.validation_message()
         self.validation.setText(message)
         self.save_button.setEnabled(not self.busy and (self.pending_payload is not None or not message))
 
     def payload(self):
+        """Build the action payload dictionary from the current form values.
+
+        :return: Action payload dictionary ready for ``create_action`` or ``edit_action``.
+        :rtype: dict
+        """
         kind = self.kind.currentData()
         return {"kind": kind, "transport": "provider_plaintext", "device_id": self.device.currentData(),
                 "recipient": self.recipient.text().strip() if kind == "sms" else None,
@@ -192,10 +244,16 @@ class ComposeDialog(QDialog):
                 "url": self.url.text().strip() if kind == "link" else None}
 
     def set_fields_enabled(self, enabled):
+        """Enable or disable all action composition form inputs.
+
+        :param enabled: Whether form input widgets should accept user interaction.
+        :type enabled: bool
+        """
         for widget in (self.kind, self.device, self.recipient, self.title, self.body, self.url):
             widget.setEnabled(enabled)
 
     def submit(self):
+        """Submit the create or edit action request through the worker."""
         if self.busy or (self.pending_payload is None and self.validation_message()):
             return
         if self.pending_payload is None:
@@ -217,6 +275,11 @@ class ComposeDialog(QDialog):
         self.worker.request(command, value)
 
     def handle_result(self, result):
+        """Handle worker save responses, revision conflicts, and ambiguous errors.
+
+        :param result: Worker result dictionary for ``create_action`` or ``edit_action``.
+        :type result: dict
+        """
         if result.get("request_id") != self.request_id:
             return
         self.busy = False
@@ -251,6 +314,19 @@ class ReviewDialog(QDialog):
     edit_requested = pyqtSignal(dict)
 
     def __init__(self, worker, action, devices, capabilities, parent=None):
+        """Initialize the dialog for reviewing and approving a saved action.
+
+        :param worker: Core worker handling approval, cancellation, and snapshot updates.
+        :type worker: pbdesk.desktop.worker.CoreWorker
+        :param action: Saved outbox action dictionary to review.
+        :type action: dict
+        :param devices: Cached Pushbullet device records for destination validation.
+        :type devices: collections.abc.Sequence[dict]
+        :param capabilities: Core capability dictionary indicating send readiness.
+        :type capabilities: dict
+        :param parent: Optional parent widget owning this dialog.
+        :type parent: PyQt6.QtWidgets.QWidget | None
+        """
         super().__init__(parent)
         self.worker, self.action, self.devices = worker, dict(action), list(devices)
         self.capabilities = capabilities
@@ -317,11 +393,13 @@ class ReviewDialog(QDialog):
         theme_signals(QApplication.instance()).changed.connect(self._render_preview)
 
     def disconnect_worker(self):
+        """Disconnect theme and worker signal handlers on dialog close."""
         theme_signals(QApplication.instance()).changed.disconnect(self._render_preview)
         self.worker.result.disconnect(self.handle_result)
         self.worker.snapshot.disconnect(self.handle_snapshot)
 
     def update_controls(self):
+        """Update button states, consent checkbox, and readiness text."""
         editable = self.action["state"] in {"pending_approval", "ready"} and not self.busy and not self.awaiting_refresh
         self.edit_button.setEnabled(editable)
         self.cancel_button.setEnabled(editable)
@@ -332,11 +410,13 @@ class ReviewDialog(QDialog):
         self.readiness.setText("The original destination is unavailable or no longer supports this action. Choose Edit to explicitly select a destination." if not destination_ready else "Ready to submit after approval." if self.capabilities.get("send_ready") else (self.capabilities.get("send_unavailable_reason") or "Sending is currently unavailable. Check provider connection and credentials."))
 
     def render(self):
+        """Refresh the preview HTML, advanced details text, and control states."""
         self._render_preview()
         self.advanced.setPlainText(action_preview(self.action, self.devices))
         self.update_controls()
 
     def _render_preview(self):
+        """Render formatted HTML preview while preserving selection and scroll position."""
         action = self.action
         c = colors(self.palette())
         device = next((item for item in self.devices if item['id'] == action['device_id']), {})
@@ -371,6 +451,11 @@ class ReviewDialog(QDialog):
         self.preview.verticalScrollBar().setValue(scroll)
 
     def handle_snapshot(self, data):
+        """Refresh action, device, and capability state from a worker snapshot.
+
+        :param data: Core snapshot payload containing capabilities, devices, and actions.
+        :type data: dict
+        """
         self.capabilities = data.get("capabilities", self.capabilities)
         self.devices = data.get("devices", {}).get("devices", self.devices)
         latest = next((action for action in data.get("actions", []) if action["id"] == self.action["id"]), None)
@@ -384,6 +469,7 @@ class ReviewDialog(QDialog):
         self._close_if_sent()
 
     def _close_if_sent(self):
+        """Accept the dialog when the revision approved here reaches upstream_accepted."""
         # Only a send approved in this dialog should close it. Opening an
         # already accepted action in Activity must still allow inspection.
         if (self.action["state"] == "upstream_accepted"
@@ -391,12 +477,18 @@ class ReviewDialog(QDialog):
             self.accept()
 
     def edit(self):
+        """Emit an edit request for the current action and close the dialog."""
         if not self.edit_button.isEnabled():
             return
         self.edit_requested.emit(dict(self.action))
         self.accept()
 
     def mutate(self, command):
+        """Send an approve or cancel command for the current action revision.
+
+        :param command: Worker mutation command (``'approve_action'`` or ``'cancel_action'``).
+        :type command: str
+        """
         button = self.approve_button if command == "approve_action" else self.cancel_button
         if not button.isEnabled():
             return
@@ -414,6 +506,11 @@ class ReviewDialog(QDialog):
         self.update_controls()
 
     def handle_result(self, result):
+        """Process worker approval or cancellation responses and refresh display.
+
+        :param result: Worker result dictionary for ``approve_action`` or ``cancel_action``.
+        :type result: dict
+        """
         if result.get("request_id") != self.request_id:
             return
         self.busy = False

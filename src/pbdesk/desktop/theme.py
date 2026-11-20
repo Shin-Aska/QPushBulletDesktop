@@ -13,13 +13,30 @@ SCHEMES = ('system', 'light', 'dark')
 
 
 def _mix(first, second, amount):
+    """Blend two Qt colors linearly toward second by amount and return a hex string.
+
+    :param first: Starting color value accepted by ``QColor``.
+    :type first: QColor | str
+    :param second: Target color value accepted by ``QColor``.
+    :type second: QColor | str
+    :param amount: Interpolation factor between 0.0 (first) and 1.0 (second).
+    :type amount: float
+    :return: Blended RGB hex color string.
+    :rtype: str
+    """
     a, b = QColor(first), QColor(second)
     return QColor(*(round(a.getRgb()[i] * (1 - amount) + b.getRgb()[i] * amount)
                     for i in range(3))).name()
 
 
 def colors(palette=None):
-    """Semantic paints from the effective palette, also usable by rich text."""
+    """Semantic paints from the effective palette, also usable by rich text.
+
+    :param palette: Optional palette to sample; defaults to the application palette.
+    :type palette: QPalette | None
+    :return: Mapping of semantic color token names to hex color strings.
+    :rtype: dict[str, str]
+    """
     palette = palette if palette is not None else QApplication.palette()
     role = QPalette.ColorRole
     value = lambda key: palette.color(key).name()
@@ -40,6 +57,13 @@ def colors(palette=None):
 
 
 def _palette(scheme):
+    """Build a light or dark QPalette with active and disabled color roles.
+
+    :param scheme: Explicit scheme name (``'light'`` or ``'dark'``).
+    :type scheme: str
+    :return: Configured Qt palette for the requested color scheme.
+    :rtype: QPalette
+    """
     palette = QPalette()
     role = QPalette.ColorRole
     dark = scheme == 'dark'
@@ -79,6 +103,13 @@ def _palette(scheme):
 
 
 def _stylesheet(c):
+    """Generate the semantic container stylesheet from resolved color tokens.
+
+    :param c: Mapping of semantic color role names to hex color strings.
+    :type c: collections.abc.Mapping[str, str]
+    :return: Qt stylesheet text targeting semantic container and pill object names.
+    :rtype: str
+    """
     # Avoid broad QWidget, input, checkbox, menu, scrollbar or table overrides:
     # these would replace native disabled, focus, selection and platform states.
     return f"""
@@ -114,9 +145,15 @@ QLabel#smsHeading {{ font-size: 15pt; font-weight: 700; }}
 
 
 class _Theme(QObject):
+    """Application event filter and signal emitter coordinating theme palette changes."""
     changed = pyqtSignal()
 
     def __init__(self, app):
+        """Initialize theme state and watch application palette changes.
+
+        :param app: Qt application instance whose palette and stylesheet are managed.
+        :type app: QApplication
+        """
         super().__init__(app)
         self.app = app
         self.scheme = 'system'
@@ -126,6 +163,15 @@ class _Theme(QObject):
         app.installEventFilter(self)
 
     def eventFilter(self, watched, event):
+        """Schedule a deferred stylesheet refresh on system application palette changes.
+
+        :param watched: Qt object receiving the intercepted event.
+        :type watched: QObject
+        :param event: Incoming Qt event being inspected.
+        :type event: QEvent
+        :return: Always False so the event continues normal Qt propagation.
+        :rtype: bool
+        """
         if (watched is self.app and event.type() == QEvent.Type.ApplicationPaletteChange
                 and not self._updating and not self._scheduled):
             self._scheduled = True
@@ -135,11 +181,13 @@ class _Theme(QObject):
         return False
 
     def _palette_changed(self):
+        """Refresh stylesheets when in system mode and effective palette colors changed."""
         self._scheduled = False
         if self.scheme == 'system' and colors(self.app.palette()) != self._last_colors:
             self._refresh()
 
     def _refresh(self):
+        """Reapply the stylesheet from current palette colors and notify listeners."""
         # Qt repolishes a raw widget-pointer snapshot. A Python StyleChange
         # callback can run cyclic GC and otherwise destroy a later widget in
         # that snapshot. Keep its wrappers alive until synchronous repolish
@@ -155,6 +203,11 @@ class _Theme(QObject):
         del retained_widgets
 
     def apply(self, scheme):
+        """Apply the given color scheme palette to the QApplication and refresh.
+
+        :param scheme: Target scheme name (``'system'``, ``'light'``, or ``'dark'``).
+        :type scheme: str
+        """
         previous = self.scheme
         self.scheme = scheme
         self._updating = True
@@ -171,19 +224,37 @@ class _Theme(QObject):
 
 
 def _load_scheme():
+    """Return the persisted color scheme preference or 'system' by default.
+
+    :return: Validated color scheme name from local UI preferences.
+    :rtype: str
+    """
     scheme = read_preferences().get('color_scheme')
     return scheme if scheme in SCHEMES else 'system'
 
 
 def theme_signals(app):
-    """Return the application-owned notifier; accessing it does not apply a theme."""
+    """Return the application-owned notifier; accessing it does not apply a theme.
+
+    :param app: Qt application instance owning the theme controller.
+    :type app: QApplication
+    :return: Theme manager instance attached to ``app``.
+    :rtype: _Theme
+    """
     if not hasattr(app, '_pbdesk_theme'):
         app._pbdesk_theme = _Theme(app)
     return app._pbdesk_theme
 
 
 def apply_theme(app, scheme=None):
-    """Initialize once from local preference, or apply an explicit scheme."""
+    """Initialize once from local preference, or apply an explicit scheme.
+
+    :param app: Qt application instance to style.
+    :type app: QApplication
+    :param scheme: Optional explicit scheme name; uses persisted preference when None.
+    :type scheme: str | None
+    :raises ValueError: If ``scheme`` is not one of the supported color schemes.
+    """
     manager = theme_signals(app)
     if scheme is None and manager._last_colors is not None:
         return
@@ -194,11 +265,25 @@ def apply_theme(app, scheme=None):
 
 
 def current_scheme(app):
+    """Return the currently active color scheme name for the application.
+
+    :param app: Qt application instance owning the theme controller.
+    :type app: QApplication
+    :return: Active scheme name (``'system'``, ``'light'``, or ``'dark'``).
+    :rtype: str
+    """
     return theme_signals(app).scheme
 
 
 def set_color_scheme(app, scheme):
-    """Apply and atomically persist this local UI preference only."""
+    """Apply and atomically persist this local UI preference only.
+
+    :param app: Qt application instance to update.
+    :type app: QApplication
+    :param scheme: Target scheme name to persist and apply.
+    :type scheme: str
+    :raises ValueError: If ``scheme`` is not one of the supported color schemes.
+    """
     if scheme not in SCHEMES:
         raise ValueError('Unknown color scheme: ' + str(scheme))
     update_preferences({'color_scheme': scheme})
@@ -206,5 +291,12 @@ def set_color_scheme(app, scheme):
 
 
 def primary(button):
+    """Mark a button as primary via Qt dynamic property and return it.
+
+    :param button: Push button widget to mark with ``primary=True``.
+    :type button: PyQt6.QtWidgets.QPushButton
+    :return: The same push button instance after applying the dynamic property.
+    :rtype: PyQt6.QtWidgets.QPushButton
+    """
     button.setProperty('primary', True)
     return button

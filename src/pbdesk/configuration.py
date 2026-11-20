@@ -10,19 +10,52 @@ _stores = weakref.WeakValueDictionary()
 
 
 def _key(settings):
+    """Return the store lookup key for a settings instance.
+
+    :param settings: Application settings containing application and state directories.
+    :type settings: Settings
+    :return: Tuple of application directory string and resolved state directory string.
+    :rtype: tuple[str, str]
+    """
     return (str(settings.application_dir), str(settings.state_dir.resolve()))
 
 
 def register(settings, store):
+    """Register an active configuration store for settings.
+
+    :param settings: Application settings used to compute the registry key.
+    :type settings: Settings
+    :param store: Active Store instance to associate with the settings key.
+    :type store: Store
+    """
     _stores[_key(settings)] = store
 
 
 def unregister(settings, store):
+    """Unregister the active configuration store if it matches.
+
+    :param settings: Application settings used to compute the registry key.
+    :type settings: Settings
+    :param store: Store instance expected to match the currently registered entry.
+    :type store: Store
+    """
     if _stores.get(_key(settings)) is store:
         _stores.pop(_key(settings), None)
 
 
 def get(settings, name, default=None):
+    """Return a configuration value from the registered store or encrypted database.
+
+    :param settings: Application settings locating the registered store or database file.
+    :type settings: Settings
+    :param name: Configuration setting name without the ``configuration:`` prefix.
+    :type name: str
+    :param default: Fallback value returned when the setting or database does not exist.
+    :type default: Any
+    :return: Stored configuration value, or ``default`` if absent.
+    :rtype: Any
+    :raises RuntimeError: If the database file is a symbolic link or not owned by the current user.
+    """
     store = _stores.get(_key(settings))
     if store is not None:
         return store.get_setting(PREFIX + name, default)
@@ -43,6 +76,15 @@ def get(settings, name, default=None):
 
 
 def put(settings, name, value):
+    """Persist a configuration value in the registered or offline store.
+
+    :param settings: Application settings locating the registered store or database file.
+    :type settings: Settings
+    :param name: Configuration setting name without the ``configuration:`` prefix.
+    :type name: str
+    :param value: JSON-serializable configuration value to store.
+    :type value: Any
+    """
     store = _stores.get(_key(settings))
     if store is not None:
         store.set_setting(PREFIX + name, value)
@@ -57,6 +99,14 @@ def put(settings, name, value):
 
 
 def provider_reference(value):
+    """Validate and normalize a provider credential reference dictionary.
+
+    :param value: Raw credential reference mapping to validate.
+    :type value: dict[str, Any]
+    :return: Normalized credential reference dictionary for keyring or KWallet.
+    :rtype: dict[str, Any]
+    :raises ValueError: If the backend, folder, entry, or wallet specification is invalid.
+    """
     if not isinstance(value, dict) or value.get('backend') not in {'keyring', 'kwallet'}:
         raise ValueError('Invalid credential reference')
     if value['backend'] == 'keyring':
@@ -71,7 +121,16 @@ def provider_reference(value):
 
 
 def save_provider(settings, reference, expected_revision=None):
-    """Commit the selected reference and completed setup in one transaction."""
+    """Commit the selected reference and completed setup in one transaction.
+
+    :param settings: Application settings locating the active or offline database store.
+    :type settings: Settings
+    :param reference: Provider credential reference dictionary to validate and save.
+    :type reference: dict[str, Any]
+    :param expected_revision: Optional optimistic concurrency revision expected in storage.
+    :type expected_revision: int | None
+    :raises ValueError: If the reference is invalid or ``expected_revision`` does not match the stored revision.
+    """
     from sqlalchemy import select
     from sqlalchemy.dialects.sqlite import insert
     from pbdesk.storage.database import Store, settings_table
@@ -97,6 +156,14 @@ def save_provider(settings, reference, expected_revision=None):
 
 
 def ai_settings(value):
+    """Validate and normalize an AI configuration dictionary.
+
+    :param value: Raw AI configuration mapping containing model, configured flag, and optional revision.
+    :type value: dict[str, Any]
+    :return: Validated and normalized AI settings dictionary.
+    :rtype: dict[str, Any]
+    :raises ValueError: If the AI model identifier or configured flag is invalid.
+    """
     if (not isinstance(value, dict) or not isinstance(value.get('model'), str)
             or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._:-]{0,99}', value['model'])
             or type(value.get('configured')) is not bool):
@@ -106,7 +173,14 @@ def ai_settings(value):
 
 
 def import_legacy(settings, store):
-    """Import once, atomically; existing SQL values win. Retain original files."""
+    """Import once, atomically; existing SQL values win. Retain original files.
+
+    :param settings: Application settings providing the legacy state directory path.
+    :type settings: Settings
+    :param store: Active Store instance to receive imported configuration records.
+    :type store: Store
+    :raises RuntimeError: If a legacy credential or AI configuration file fails ownership, mode, size, or schema validation.
+    """
     from sqlalchemy import select
     from sqlalchemy.dialects.sqlite import insert
     from pbdesk.storage.database import settings_table
@@ -151,7 +225,14 @@ def import_legacy(settings, store):
 
 
 def archived_configuration(artifacts):
-    """Validate selected legacy records before migration changes any files."""
+    """Validate selected legacy records before migration changes any files.
+
+    :param artifacts: Sequence of ``(filename, content)`` pairs read from legacy state files.
+    :type artifacts: Iterable[tuple[str, str]]
+    :return: Mapping of normalized configuration keys to validated configuration dictionaries.
+    :rtype: dict[str, dict[str, Any]]
+    :raises RuntimeError: If any legacy record is invalid or duplicate files conflict.
+    """
     names = {'provider-credential.json': ('provider', provider_reference),
         'ai-settings.json': ('ai', ai_settings),
         'ui-preferences.json': ('ui', lambda value: value if isinstance(value, dict) else {})}
@@ -172,7 +253,13 @@ def archived_configuration(artifacts):
 
 
 def import_archived(store, values):
-    """Import verified archive records; established encrypted SQL values win."""
+    """Import verified archive records; established encrypted SQL values win.
+
+    :param store: Active Store instance into which archived values are inserted.
+    :type store: Store
+    :param values: Mapping of configuration keys to validated values to import.
+    :type values: dict[str, Any]
+    """
     from sqlalchemy import select
     from sqlalchemy.dialects.sqlite import insert
     from pbdesk.storage.database import settings_table

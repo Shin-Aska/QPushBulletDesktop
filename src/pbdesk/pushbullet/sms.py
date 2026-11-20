@@ -13,11 +13,29 @@ NORMALIZER_VERSION = 2
 
 
 def thread_fingerprint(thread):
+    """Return a versioned SHA-256 digest representing an SMS thread summary.
+
+    :param thread: Raw Pushbullet SMS thread summary dictionary from the conversation index.
+    :type thread: dict[str, Any]
+    :return: Hexadecimal SHA-256 digest incorporating ``NORMALIZER_VERSION`` and ``thread``.
+    :rtype: str
+    """
     return hashlib.sha256(json.dumps([NORMALIZER_VERSION, thread], sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
 class SmsHistory:
+    """Synchronizer and decoder for Pushbullet permanent-object SMS history."""
+
     def __init__(self,provider,pace=.35,interval=300):
+        """Initialize SMS history sync state, pacing, and coordination primitives.
+
+        :param provider: Parent Pushbullet provider used for authenticated reads, key lookup, and storage.
+        :type provider: pbdesk.pushbullet.provider.Provider
+        :param pace: Minimum interval in seconds between permanent-object HTTP reads.
+        :type pace: float
+        :param interval: Periodic background synchronization interval in seconds.
+        :type interval: float
+        """
         self.provider=provider
         self.store=provider.store
         self.pace=pace
@@ -28,6 +46,12 @@ class SmsHistory:
         self._last_read=0
 
     async def request(self,device_id=None):
+        """Queue SMS history synchronization for a specific device or all SMS devices.
+
+        :param device_id: Optional SMS-capable device ID to queue; queues all active SMS devices when ``None``.
+        :type device_id: str | None
+        :raises ValueError: If ``device_id`` is provided but is inactive or does not support SMS.
+        """
         devices=await asyncio.to_thread(self.store.device_list)
         ids={row['id'] for row in devices if row['active'] and row['can_sms']}
         if device_id is not None:
@@ -42,6 +66,17 @@ class SmsHistory:
         self.wake.set()
 
     async def _read_permanent(self,account,device,key):
+        """Fetch a permanent SMS object with request pacing and optional decryption.
+
+        :param account: Active Pushbullet account identifier.
+        :type account: str
+        :param device: Target Pushbullet device identifier.
+        :type device: str
+        :param key: Permanent object key such as ``<device>_threads`` or ``<device>_thread_<id>``.
+        :type key: str
+        :return: Tuple of ``(payload, decrypted)`` where ``payload`` is the decoded dictionary and ``decrypted`` indicates whether E2E decryption was applied.
+        :rtype: tuple[dict[str, Any], bool]
+        """
         wait=self.pace-(time.monotonic()-self._last_read)
         if wait>0:
             await asyncio.sleep(wait)
@@ -56,6 +91,18 @@ class SmsHistory:
         return payload,decrypted
 
     def decode(self,account,device,payload):
+        """Decrypt an encrypted permanent SMS object and verify device and account bindings.
+
+        :param account: Expected Pushbullet account identifier bound to the permanent object.
+        :type account: str
+        :param device: Expected Pushbullet device identifier bound to the permanent object.
+        :type device: str
+        :param payload: Encrypted permanent-object envelope dictionary containing ``ciphertext``.
+        :type payload: dict[str, Any]
+        :return: Authenticated and decrypted JSON dictionary.
+        :rtype: dict[str, Any]
+        :raises DecryptionError: If the device key is unavailable, ciphertext decryption fails, or decoded account/device fields mismatch.
+        """
         key=self.provider.device_keys.get(device)
         if key is None:
             self.provider.key_states[device]='locked'
@@ -75,6 +122,18 @@ class SmsHistory:
 
     @staticmethod
     def normalize_thread(thread,rows,decrypted):
+        """Validate and normalize raw SMS thread recipients and messages.
+
+        :param thread: Thread metadata dictionary containing the ``recipients`` list.
+        :type thread: dict[str, Any]
+        :param rows: Raw SMS message dictionaries belonging to the conversation.
+        :type rows: list[dict[str, Any]]
+        :param decrypted: Whether the thread payload was end-to-end encrypted and decrypted locally.
+        :type decrypted: bool
+        :return: List of normalized SMS message dictionaries ready for storage.
+        :rtype: list[dict[str, Any]]
+        :raises ValueError: If recipients, message records, identities, directions, timestamps, or bodies are malformed or out of range.
+        """
         recipients=thread.get('recipients') or []
         if not isinstance(recipients,list):
             raise ValueError('Malformed SMS recipients')
@@ -111,6 +170,15 @@ class SmsHistory:
         return result
 
     async def sync_device(self,device):
+        """Synchronize SMS threads and messages for a single Pushbullet device.
+
+        :param device: Pushbullet device identifier to synchronize SMS history for.
+        :type device: str
+        :return: ``True`` if synchronization completed (including partial 404 results), or ``False`` on handled failure.
+        :rtype: bool
+        :raises pbdesk.pushbullet.provider.RateLimited: When Pushbullet rate limits permanent-object reads.
+        :raises pbdesk.pushbullet.provider.ProviderUnauthorized: When Pushbullet rejects the access token.
+        """
         async with self.lock:
             account=await asyncio.to_thread(self.store.sms_account)
             try:
@@ -171,7 +239,11 @@ class SmsHistory:
             return True
 
     async def replay_cached(self,device):
-        """Recover locally retained history without requiring connectivity."""
+        """Recover locally retained history without requiring connectivity.
+
+        :param device: Pushbullet device identifier whose retained SMS envelopes should be replayed.
+        :type device: str
+        """
         account=await asyncio.to_thread(self.store.sms_account)
         rows=await asyncio.to_thread(self.store.sms_envelopes,account,device)
         payloads={row['permanent_key']:json.loads(row['payload']) for row in rows}
@@ -201,6 +273,7 @@ class SmsHistory:
             return  # Preserve recoverable ciphertext and any previously readable rows.
 
     async def run(self):
+        """Run the periodic and on-demand SMS history synchronization loop."""
         while True:
             device=None
             try:

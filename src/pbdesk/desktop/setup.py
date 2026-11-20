@@ -6,7 +6,16 @@ from .theme import primary
 
 
 class AccountSetup(QWidget):
+    """Settings view for selecting a KWallet entry or storing a new Pushbullet token."""
+
     def __init__(self, worker, parent=None):
+        """Initialize connection setup fields, buttons, and worker signal bindings.
+
+        :param worker: Core worker handling configuration reads and provider setup.
+        :type worker: pbdesk.desktop.worker.CoreWorker
+        :param parent: Optional parent widget owning this settings tab.
+        :type parent: QWidget | None
+        """
         super().__init__(parent)
         self.worker = worker
         self.revision = 0
@@ -60,15 +69,26 @@ class AccountSetup(QWidget):
         worker.result.connect(self._result)
 
     def _edited(self, *unused):
+        """Mark the form dirty when the user modifies connection inputs.
+
+        :param unused: Ignored signal arguments emitted by Qt input controls.
+        :type unused: object
+        """
         if not self._updating:
             self._dirty = True
 
     def _mode_changed(self):
+        """Enable the token input only when creating a new KWallet entry."""
         self.token.setEnabled(self.mode.currentData() == 'new' and self.pending is None)
         if self.mode.currentData() != 'new':
             self.token.clear()
 
     def apply_configuration(self, configuration):
+        """Update form fields, revision, and feedback from core configuration data.
+
+        :param configuration: Core configuration snapshot dictionary containing ``setup``.
+        :type configuration: dict
+        """
         setup = configuration['setup']
         source = setup.get('source')
         if self.pending is None and not self._dirty:
@@ -87,6 +107,7 @@ class AccountSetup(QWidget):
             self.feedback.setText('Your saved connection is established. Unlock KWallet and reload credentials if connection access is locked.')
 
     def submit(self):
+        """Validate wallet and token inputs and submit configure_provider to core."""
         if self.pending:
             return
         value = {'wallet': self.wallet.text().strip(), 'folder': self.folder.text().strip(),
@@ -107,6 +128,11 @@ class AccountSetup(QWidget):
         self.token.clear()
 
     def _result(self, result):
+        """Process configuration_get and configure_provider responses from the worker.
+
+        :param result: Worker result dictionary emitted after a core command completes.
+        :type result: dict
+        """
         if result.get('command') == 'configuration_get' and isinstance(result.get('data'), dict):
             self._dirty = False
             self.apply_configuration(result['data'])

@@ -9,6 +9,7 @@ depends_on = None
 
 
 def upgrade():
+    """Create account-scoped summary preset, state, generation, and entry tables."""
     op.create_table('summary_presets',
         sa.Column('account_id', sa.Text(), primary_key=True), sa.Column('id', sa.Text(), primary_key=True),
         sa.Column('revision', sa.Integer(), nullable=False), sa.Column('archived', sa.Integer(), nullable=False),
@@ -41,4 +42,8 @@ def upgrade():
 
 
 def downgrade():
+    """Refuse schema downgrade and require restoring a verified backup.
+
+    :raises RuntimeError: Always raised because schema downgrades are unsupported.
+    """
     raise RuntimeError('Restore a verified backup to downgrade')

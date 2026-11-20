@@ -9,6 +9,7 @@ depends_on = None
 
 
 def upgrade():
+    """Add bounded media metadata columns to items and sms_messages."""
     for name in ('application_name', 'icon', 'file_name', 'file_type', 'file_url'):
         op.add_column('items', sa.Column(name, sa.Text(), nullable=True))
     for name in ('image_urls', 'recipients'):
@@ -16,4 +17,8 @@ def upgrade():
 
 
 def downgrade():
+    """Refuse schema downgrade and require restoring a verified backup.
+
+    :raises RuntimeError: Always raised because schema downgrades are unsupported.
+    """
     raise RuntimeError('Restore a verified backup to downgrade')

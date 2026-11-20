@@ -11,6 +11,7 @@ depends_on = None
 
 
 def upgrade():
+    """Create initial items, events, settings, and full-text search tables."""
     op.create_table("items", sa.Column("id",sa.Integer(),primary_key=True),
         sa.Column("source_id",sa.Text(),nullable=False,unique=True),
         sa.Column("type",sa.Text(),nullable=False), sa.Column("title",sa.Text(),nullable=False),
@@ -27,4 +28,8 @@ def upgrade():
 
 
 def downgrade():
+    """Refuse schema downgrade and require restoring a verified backup.
+
+    :raises RuntimeError: Always raised because schema downgrades are unsupported.
+    """
     raise RuntimeError("Restore a verified backup to downgrade")

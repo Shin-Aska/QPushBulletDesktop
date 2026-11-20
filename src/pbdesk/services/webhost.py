@@ -19,24 +19,48 @@ class OwnedWebProcess:
     must remain available for authenticated adoption by the replacement core.
     """
     def __init__(self, process):
+        """Wrap a Popen handle for the optional web process.
+
+        :param process: Spawned ``Popen`` instance running the web server.
+        :type process: subprocess.Popen[bytes]
+        """
         self.process = process
 
     @property
     def returncode(self):
+        """Return the process exit code if terminated, or None while running.
+
+        :return: Exit code of the child process, or ``None`` if still running.
+        :rtype: int | None
+        """
         return self.process.poll()
 
     async def wait(self):
+        """Wait asynchronously in a worker thread for the web process to exit.
+
+        :return: Exit status code of the terminated web process.
+        :rtype: int
+        """
         return await asyncio.to_thread(self.process.wait)
 
     def terminate(self):
+        """Send a termination signal to the owned web process."""
         self.process.terminate()
 
     def kill(self):
+        """Forcibly kill the owned web process."""
         self.process.kill()
 
 
 class WebHost:
+    """Lifecycle manager for spawning, adopting, monitoring, and stopping the web host."""
+
     def __init__(self, settings):
+        """Initialize the web host manager with application settings.
+
+        :param settings: Application settings specifying host, port, and state directories.
+        :type settings: pbdesk.config.Settings
+        """
         self.settings = settings
         self.process = None
         self.instance_id = None
@@ -46,6 +70,11 @@ class WebHost:
         self.store = None
 
     def status(self):
+        """Return a snapshot of the web host running status, URL, and ownership.
+
+        :return: Dictionary describing enabled state, URL, host, port, error, instance ID, and ownership.
+        :rtype: dict[str, Any]
+        """
         alive = bool(self.instance_id and (self.adopted or (self.process and self.process.returncode is None)))
         return {'enabled': alive, 'url': f'http://{self.settings.web_host}:{self.settings.web_port}',
                 'host': self.settings.web_host, 'port': self.settings.web_port, 'error': self.error,
@@ -53,6 +82,14 @@ class WebHost:
                 'ownership': ('adopted' if self.adopted else 'owned') if alive else None}
 
     async def _probe(self, client):
+        """Probe the web host health endpoint and verify its cryptographic identity.
+
+        :param client: Asynchronous HTTP client used to contact the local web host.
+        :type client: httpx.AsyncClient
+        :return: Verified health payload dictionary, or ``None`` if the port refuses connections.
+        :rtype: dict[str, Any] | None
+        :raises RuntimeError: If the web port is inaccessible, unresponsive, or fails identity verification.
+        """
         headers = web_health_headers(self.settings)
         try:
             response = await client.get(self.status()['url'] + '/health', headers=headers)
@@ -74,6 +111,7 @@ class WebHost:
         return body
 
     async def watch(self):
+        """Periodically verify adopted web host liveness and clear stale ownership."""
         while True:
             await asyncio.sleep(1)
             async with self.lock:
@@ -91,6 +129,16 @@ class WebHost:
                     self.error = str(exc)
 
     async def set_enabled(self, enabled, *, persist=False):
+        """Enable or disable the web host, optionally persisting the preference.
+
+        :param enabled: Desired running state of the optional web host.
+        :type enabled: bool
+        :param persist: Whether to persist ``web_enabled`` in the database store first.
+        :type persist: bool
+        :return: Updated web host status dictionary.
+        :rtype: dict[str, Any]
+        :raises RuntimeError: If ``persist`` is ``True`` before ``self.store`` is initialized.
+        """
         async with self.lock:
             if persist:
                 if self.store is None:
@@ -99,6 +147,13 @@ class WebHost:
             return await self._set_enabled(enabled)
 
     async def _set_enabled(self, enabled):
+        """Start, adopt, or shut down the web host while holding the management lock.
+
+        :param enabled: Desired running state of the optional web host.
+        :type enabled: bool
+        :return: Updated web host status dictionary.
+        :rtype: dict[str, Any]
+        """
         async with httpx.AsyncClient(trust_env=False, timeout=.5, follow_redirects=False) as client:
             if not enabled:
                 try:

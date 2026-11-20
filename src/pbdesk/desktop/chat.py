@@ -26,6 +26,13 @@ E164 = re.compile(r"\+[1-9][0-9]{1,14}\Z")
 
 
 def _time(value):
+    """Parse a numeric or ISO timestamp into a local datetime, or return None.
+
+    :param value: Numeric Unix timestamp or ISO-8601 timestamp string.
+    :type value: int | float | str | None
+    :return: Timezone-aware local datetime, or `None` if parsing fails.
+    :rtype: datetime | None
+    """
     try:
         if isinstance(value, (int, float)):
             return datetime.fromtimestamp(value).astimezone()
@@ -35,12 +42,25 @@ def _time(value):
 
 
 def _order(value):
+    """Return a numeric Unix timestamp for sorting, or 0 if invalid.
+
+    :param value: Numeric or ISO-8601 timestamp value to convert.
+    :type value: int | float | str | None
+    :return: Unix timestamp in seconds, or `0` when invalid.
+    :rtype: float | int
+    """
     value = _time(value)
     return value.timestamp() if value else 0
 
 
 def _recipient(messages):
-    """A reply route comes only from consistent, single-address phone records."""
+    """A reply route comes only from consistent, single-address phone records.
+
+    :param messages: Message dictionaries belonging to a single SMS thread.
+    :type messages: list[dict]
+    :return: Shared E.164 recipient address if unambiguous, otherwise `None`.
+    :rtype: str | None
+    """
     recipients = set()
     for message in messages:
         addresses = message.get("addresses")
@@ -55,6 +75,23 @@ def _recipient(messages):
 
 @dataclass(frozen=True)
 class PendingCreate:
+    """Immutable record tracking an in-flight SMS outbox creation request.
+
+    :ivar account_id: Active account identifier when the request was submitted.
+    :type account_id: object
+    :ivar device_id: Target sending phone device identifier.
+    :type device_id: str
+    :ivar context: Composite `(account_id, device_id, thread_key)` context tuple.
+    :type context: tuple
+    :ivar recipient: Explicit E.164 destination phone number.
+    :type recipient: str
+    :ivar body: SMS message body text.
+    :type body: str
+    :ivar version: Draft version number captured at submission time.
+    :type version: int
+    :ivar request_id: Client-generated UUID correlating and reconciling the request.
+    :type request_id: str
+    """
     account_id: object
     device_id: str
     context: tuple
@@ -64,6 +101,11 @@ class PendingCreate:
     request_id: str
 
     def payload(self):
+        """Build the core outbox payload dictionary for this SMS action.
+
+        :return: Outbox creation request payload dictionary for core.
+        :rtype: dict[str, object]
+        """
         return {"kind": "sms", "device_id": self.device_id,
                 "recipient": self.recipient, "body": self.body, "title": "",
                 "url": None, "transport": "provider_plaintext",
@@ -73,6 +115,13 @@ class PendingCreate:
 class MessageText(QTextEdit):
     """Plain selectable text with native wrapping, including unbroken strings."""
     def __init__(self, text, parent=None):
+        """Initialize the auto-fitting read-only message text widget.
+
+        :param text: Plain message body text to display.
+        :type text: str
+        :param parent: Optional parent widget.
+        :type parent: QWidget | None
+        """
         super().__init__(parent)
         self.setReadOnly(True)
         self.setAcceptRichText(False)
@@ -86,20 +135,38 @@ class MessageText(QTextEdit):
         self.document().documentLayout().documentSizeChanged.connect(self._fit)
 
     def _fit(self, *unused):
+        """Resize widget height to fit the wrapped message document.
+
+        :param unused: Unused document size signal arguments.
+        :type unused: Any
+        """
         self.setFixedHeight(max(28, int(self.document().size().height()) + 4))
 
     def resizeEvent(self, event):
+        """Refit message height when the widget width changes.
+
+        :param event: Qt resize event delivered to the widget.
+        :type event: PyQt6.QtGui.QResizeEvent
+        """
         super().resizeEvent(event)
         self._fit()
 
 
 class SmsPage(QWidget):
+    """SMS conversations page displaying cached phone threads and send composer."""
     review_requested = pyqtSignal(dict)
     action_created = pyqtSignal(dict)
     activity_requested = pyqtSignal()
     ai_context_changed = pyqtSignal()
 
     def __init__(self, worker, parent=None):
+        """Initialize the SMS page layout, caches, composer, and worker signals.
+
+        :param worker: Background core worker managing snapshots and SMS requests.
+        :type worker: pbdesk.desktop.worker.CoreWorker
+        :param parent: Optional parent widget.
+        :type parent: QWidget | None
+        """
         super().__init__(parent)
         self.worker = worker
         self.account_id = None
@@ -305,7 +372,11 @@ class SmsPage(QWidget):
         theme_signals(QApplication.instance()).changed.connect(self._refresh_theme)
 
     def ai_context(self):
-        """Capture an insertion token without exposing thumbnail/attachment metadata."""
+        """Capture an insertion token without exposing thumbnail/attachment metadata.
+
+        :return: Active conversation context and insertion token dictionary, or `None` if unavailable.
+        :rtype: dict | None
+        """
         if (not self.account_known or not self.account_id or not self.selected_device_id or
                 not self.current_thread or self.current_thread[0] != "history" or self._current_pending()):
             return None
@@ -331,7 +402,15 @@ class SmsPage(QWidget):
             "can_reply": not reason, "reply_unavailable_reason": reason}
 
     def insert_ai_draft(self, text, token):
-        """Only a still-current explicit insertion can replace the captured draft."""
+        """Only a still-current explicit insertion can replace the captured draft.
+
+        :param text: Reviewed reply text to insert into the SMS composer.
+        :type text: str
+        :param token: Previously captured context token validating thread and draft currency.
+        :type token: dict
+        :return: `True` if the draft replaced the composer text, otherwise `False`.
+        :rtype: bool
+        """
         context = self.ai_context()
         if (not context or context["token"] != token or not isinstance(text, str) or
                 not text.strip() or len(text) > 65536 or self._current_pending()):
@@ -342,6 +421,13 @@ class SmsPage(QWidget):
 
     @staticmethod
     def _thread_recipients(thread):
+        """Return recipient descriptors for a thread from its messages.
+
+        :param thread: Thread dictionary containing `messages`.
+        :type thread: dict
+        :return: List of recipient metadata dictionaries.
+        :rtype: list[dict]
+        """
         messages = thread.get("messages", [])
         recipients = next((item.get("recipients") for item in reversed(messages) if item.get("recipients")), [])
         if recipients:
@@ -349,14 +435,31 @@ class SmsPage(QWidget):
         return [{"address": address} for address in sorted({str(address) for item in messages for address in item.get("addresses", [])})]
 
     def _media_validator(self, generation=None):
+        """Return a callback checking whether the page and render state are still current.
+
+        :param generation: Timeline render generation to match, or `None` for avatar state.
+        :type generation: int | None
+        :return: Zero-argument predicate returning whether captured media state is still valid.
+        :rtype: collections.abc.Callable[[], bool]
+        """
         page_ref = weakref.ref(self)
         def valid():
+            """Return whether the page still matches the captured avatar or render state.
+
+            :return: `True` if the page exists and matches the captured avatar or render state.
+            :rtype: bool
+            """
             page = page_ref()
             return (page is not None and not sip.isdeleted(page) and
                 (page._avatar_key == page._key() if generation is None else page._render_generation == generation))
         return valid
 
     def _remote_avatar_loaded(self, image):
+        """Cache and display a loaded remote contact avatar icon.
+
+        :param image: Decoded remote contact avatar image.
+        :type image: PyQt6.QtGui.QImage
+        """
         if self._avatar_key != self._key():
             return
         reference = self.avatar_remote.reference
@@ -380,6 +483,13 @@ class SmsPage(QWidget):
         self.avatar_remote.hide()
 
     def _contact_reference(self, thread):
+        """Return a remote contact avatar reference for a thread if applicable.
+
+        :param thread: Thread dictionary containing conversation messages.
+        :type thread: dict
+        :return: Remote contact image reference dictionary, or `None` if unavailable.
+        :rtype: dict | None
+        """
         recipients = self._thread_recipients(thread)
         reference = None
         if len(recipients) == 1 and recipients[0].get('image_url') and inline_image(recipients[0].get('thumbnail')) is None:
@@ -391,6 +501,13 @@ class SmsPage(QWidget):
         return reference
 
     def _cached_contact_icon(self, reference):
+        """Return and refresh an LRU-cached contact icon for a media reference.
+
+        :param reference: Remote contact image reference dictionary, or `None`.
+        :type reference: dict | None
+        :return: Cached `QIcon` if present, otherwise `None`.
+        :rtype: QIcon | None
+        """
         if not reference:
             return None
         key = (reference['account_id'], reference['revision'])
@@ -400,10 +517,24 @@ class SmsPage(QWidget):
         return icon
 
     def _thread_icon(self, thread, title):
+        """Return the cached remote icon or a fallback contact icon for a thread.
+
+        :param thread: Thread dictionary containing conversation messages.
+        :type thread: dict
+        :param title: Display title used for generating a fallback avatar icon.
+        :type title: str
+        :return: Contact avatar icon for the thread.
+        :rtype: QIcon
+        """
         cached = self._cached_contact_icon(self._contact_reference(thread))
         return cached if cached is not None else contact_icon(self._thread_recipients(thread), title)
 
     def _sync_remote_avatar(self, thread):
+        """Synchronize the remote contact avatar loader with the active thread.
+
+        :param thread: Active conversation thread dictionary.
+        :type thread: dict
+        """
         self._avatar_key = self._key()
         reference = self._contact_reference(thread)
         changed = reference != self.avatar_remote.reference
@@ -418,6 +549,7 @@ class SmsPage(QWidget):
                 self.avatar_remote.load_button.setText('Load contact image')
 
     def _refresh_theme(self):
+        """Refresh theme-dependent icons and avatars without rebuilding the timeline."""
         # Global semantic QSS repaints existing bubbles without rebuilding the
         # timeline, so drafts, selections, and scroll anchors remain intact.
         self.refresh_button.setIcon(make_icon("refresh", colors()["text"], 14))
@@ -432,15 +564,22 @@ class SmsPage(QWidget):
         self.threads.viewport().update()
 
     def _key(self):
+        """Return the composite draft and context key for the active thread.
+
+        :return: Tuple `(account_id, selected_device_id, current_thread)`, or `None`.
+        :rtype: tuple | None
+        """
         if self.current_thread is None:
             return None
         return (self.account_id, self.selected_device_id, self.current_thread)
 
     def focus_search(self):
+        """Focus and select the conversation search input."""
         self.search.setFocus()
         self.search.selectAll()
 
     def _save_draft(self):
+        """Persist the active composer text and selected thread context."""
         key = self._key()
         if key is not None:
             previous = self._drafts.get(key, ("", 0))
@@ -449,12 +588,14 @@ class SmsPage(QWidget):
             self._filter_contexts[self.filter_device_id] = self.current_thread
 
     def _load_draft(self):
+        """Load the saved draft for the current thread and update controls."""
         self._loading = True
         self.composer.setPlainText(self._drafts.get(self._key(), ("", 0))[0])
         self._loading = False
         self._update_controls()
 
     def _draft_changed(self):
+        """Increment draft version and update controls after composer edits."""
         if self._loading:
             return
         key = self._key()
@@ -464,6 +605,11 @@ class SmsPage(QWidget):
         self._update_controls()
 
     def _recipient_changed(self, text):
+        """Update new-message thread context when the recipient input changes.
+
+        :param text: Current text in the recipient input field.
+        :type text: str
+        """
         if self._loading or not self.current_thread or self.current_thread[0] != "new":
             return
         self._save_draft()
@@ -472,7 +618,11 @@ class SmsPage(QWidget):
         self._load_draft()
 
     def apply_snapshot(self, data):
-        """Consume each worker snapshot once; never connect worker.snapshot here."""
+        """Consume each worker snapshot once; never connect worker.snapshot here.
+
+        :param data: Full or partial snapshot payload emitted by the worker.
+        :type data: dict
+        """
         capabilities = data.get("capabilities")
         if capabilities is not None and "account_id" in capabilities:
             account = capabilities["account_id"]
@@ -512,9 +662,21 @@ class SmsPage(QWidget):
         self._update_controls()
 
     def _part_current(self, part):
+        """Return whether a snapshot fragment belongs to the current account.
+
+        :param part: Snapshot section or record dictionary to check.
+        :type part: dict
+        :return: `True` if `account_id` is absent or matches the current account.
+        :rtype: bool
+        """
         return "account_id" not in part or (self.account_known and part["account_id"] == self.account_id)
 
     def _reset_account(self, account):
+        """Reset SMS caches, drafts, pending actions, and thread selection for a new account.
+
+        :param account: New active Pushbullet account identifier.
+        :type account: object
+        """
         self._cancel_timeline_restore()
         if hasattr(self.worker, '_media_cache'):
             self.worker._media_cache.clear()
@@ -548,6 +710,11 @@ class SmsPage(QWidget):
         self._timeline_signature = None
 
     def _eligible_devices(self):
+        """Return devices eligible for SMS sending or retained history display.
+
+        :return: List of device dictionaries supporting SMS or having retained SMS history or actions.
+        :rtype: list[dict]
+        """
         known = {item["id"]: dict(item) for item in self.devices}
         retained = set(self.sms_cache) | {item.get("device_id") for item in self.actions if item.get("kind") == "sms"}
         for device_id in retained - set(known):
@@ -557,6 +724,13 @@ class SmsPage(QWidget):
             item.get("history", {}).get("count") or item["id"] in retained]
 
     def _device_label(self, device_id):
+        """Return a disambiguated display label for a phone device ID.
+
+        :param device_id: Phone device identifier, or `None`.
+        :type device_id: str | None
+        :return: Human-readable label disambiguated across devices and capabilities.
+        :rtype: str
+        """
         if not device_id:
             return "Choose a sending phone"
         devices = self._eligible_devices()
@@ -571,6 +745,7 @@ class SmsPage(QWidget):
         return name
 
     def _populate_phones(self):
+        """Populate the phone filter and sending device selectors."""
         devices = self._eligible_devices()
         self.phone.blockSignals(True)
         self.phone.clear()
@@ -591,9 +766,15 @@ class SmsPage(QWidget):
         self.send_from.blockSignals(False)
 
     def _phone_changed(self):
+        """Handle user selection changes in the phone filter combo box."""
         self._select_phone(self.phone.currentData())
 
     def _select_phone(self, device_id):
+        """Switch the active phone filter and restore its thread context.
+
+        :param device_id: Phone device ID to filter conversations by, or `None` for all devices.
+        :type device_id: str | None
+        """
         if device_id == self.filter_device_id:
             return
         self._save_draft()
@@ -614,6 +795,7 @@ class SmsPage(QWidget):
             "request_id": self.selection_request_id, "account_id": self.account_id})
 
     def _sender_changed(self):
+        """Update the sending phone for a new-message draft when selected."""
         if not self.current_thread or self.current_thread[0] != "new":
             return
         self._save_draft()
@@ -627,6 +809,7 @@ class SmsPage(QWidget):
         self._render_timeline(new_context=True)
 
     def refresh(self):
+        """Request SMS history refreshes for the active or eligible SMS devices."""
         if not self.account_known or not self.capabilities.get("features", {}).get("sms_history"):
             return
         devices = [self.filter_device_id] if self.filter_device_id else [item["id"] for item in
@@ -636,6 +819,11 @@ class SmsPage(QWidget):
                 "request_id": str(uuid.uuid4()), "account_id": self.account_id})
 
     def _rebuild_threads(self, new_context=False):
+        """Rebuild conversation threads from cached SMS history and local actions.
+
+        :param new_context: Whether the thread context changed so the timeline should scroll to the end.
+        :type new_context: bool
+        """
         threads = {}
         messages = [dict(message, device_id=device_id) for device_id, snapshot in self.sms_cache.items()
             if self.filter_device_id is None or device_id == self.filter_device_id
@@ -685,6 +873,15 @@ class SmsPage(QWidget):
         self._update_controls()
 
     def _thread_title(self, key, thread):
+        """Return the display title for a conversation thread.
+
+        :param key: Conversation thread key tuple.
+        :type key: tuple
+        :param thread: Thread dictionary containing `messages` and `recipient`.
+        :type thread: dict
+        :return: Display title string for the conversation thread.
+        :rtype: str
+        """
         if key[0] == "local":
             return "Local requests · " + key[1]
         messages = thread["messages"]
@@ -693,6 +890,7 @@ class SmsPage(QWidget):
         return name or thread.get("recipient") or (", ".join(addresses) if addresses else "Unknown sender")
 
     def _populate_threads(self):
+        """Filter, sort, and incrementally update the conversation list widget."""
         scroll = self.threads.verticalScrollBar()
         old_scroll = scroll.value()
         anchor = self.threads.itemAt(0, 0)
@@ -703,6 +901,13 @@ class SmsPage(QWidget):
         desired = []
         query = self.search.text().casefold()
         def recent(entry):
+            """Return the latest message or action timestamp for thread sorting.
+
+            :param entry: Tuple of `(thread_key, thread_dict)` from `self._threads.items()`.
+            :type entry: tuple[tuple, dict]
+            :return: Latest numeric Unix timestamp across thread messages and actions.
+            :rtype: float | int
+            """
             return max([_order(item.get("timestamp")) for item in entry[1]["messages"]] +
                        [_order(item.get("created_at")) for item in entry[1]["actions"]] + [0])
         for key, thread in sorted(self._threads.items(), key=recent, reverse=True):
@@ -754,10 +959,24 @@ class SmsPage(QWidget):
             self.threads.blockSignals(blocked)
 
     def _thread_changed(self, item, previous=None):
+        """Activate the thread corresponding to the selected list item.
+
+        :param item: Newly selected conversation list item, or `None`.
+        :type item: QListWidgetItem | None
+        :param previous: Previously selected conversation list item, or `None`.
+        :type previous: QListWidgetItem | None
+        """
         if item is not None:
             self._activate_thread(item.data(Qt.ItemDataRole.UserRole), True)
 
     def _activate_thread(self, key, new_context=False):
+        """Switch to the specified conversation thread and render its timeline.
+
+        :param key: Thread key tuple identifying the conversation.
+        :type key: tuple
+        :param new_context: Whether to reset scroll restoration to the bottom of the timeline.
+        :type new_context: bool
+        """
         # Compatibility callers must already have an explicit selected route.
         if len(key) == 2:
             if not self.selected_device_id:
@@ -781,6 +1000,7 @@ class SmsPage(QWidget):
         self._render_timeline(new_context=True)
 
     def start_new(self):
+        """Switch the composer to a new-message thread and focus recipient entry."""
         self._save_draft()
         self.selected_device_id = self.filter_device_id
         recipient = self._new_recipients.get((self.account_id, self.selected_device_id), "")
@@ -795,6 +1015,11 @@ class SmsPage(QWidget):
         self.recipient.setFocus()
 
     def open_action(self, action):
+        """Reveal and activate the conversation thread containing an SMS action.
+
+        :param action: SMS outbox action dictionary to locate and display.
+        :type action: dict
+        """
         if action.get("kind") != "sms" or not self._part_current(action):
             return
         if not any(item.get("id") == action.get("id") for item in self.actions):
@@ -808,15 +1033,30 @@ class SmsPage(QWidget):
             self._activate_thread(key, True)
 
     def _current_pending(self):
+        """Return the in-flight create record for the current thread key, if any.
+
+        :return: Matching `PendingCreate` record for the current thread, or `None`.
+        :rtype: PendingCreate | None
+        """
         key = self._key()
         return next((record for record in self._pending.values() if record.context == key), None)
 
     def _route(self):
+        """Return the active destination phone number for the current thread.
+
+        :return: E.164 recipient address for the active thread or new-message input, or `None`.
+        :rtype: str | None
+        """
         if self.current_thread and self.current_thread[0] == "new":
             return self.recipient.text().strip()
         return self._threads.get(self.current_thread, {}).get("recipient")
 
     def validation_message(self):
+        """Return a validation message if sending is blocked, or an empty string.
+
+        :return: User-facing validation error message, or `""` when valid.
+        :rtype: str
+        """
         if not self.account_known or not self.account_id:
             return "Connect a provider account to prepare an SMS."
         if not self.selected_device_id:
@@ -838,6 +1078,7 @@ class SmsPage(QWidget):
         return ""
 
     def _update_controls(self):
+        """Update composer, button, and feedback states for the current thread."""
         pending = self._current_pending()
         state = self._pending_state.get(pending.request_id) if pending else None
         self.composer.setEnabled(self.current_thread is not None and pending is None)
@@ -852,6 +1093,7 @@ class SmsPage(QWidget):
         self.ai_context_changed.emit()
 
     def submit(self):
+        """Submit or reconcile a local SMS send-review action request."""
         record = self._current_pending()
         if record:
             if self._pending_state.get(record.request_id) != "ambiguous" or record.account_id != self.account_id:
@@ -870,6 +1112,11 @@ class SmsPage(QWidget):
             "account_id": record.account_id, "payload": record.payload()})
 
     def handle_result(self, result):
+        """Process worker create_action results and update pending request state.
+
+        :param result: Worker result dictionary for a `create_action` command.
+        :type result: dict
+        """
         if result.get("command") != "create_action":
             return
         record = self._pending.get(result.get("request_id"))
@@ -908,6 +1155,7 @@ class SmsPage(QWidget):
             self.feedback.setText("The request was rejected. Your draft is kept; check the phone and recipient before trying again.")
 
     def _update_sync(self):
+        """Update the SMS synchronization status banner and diagnostic tooltip."""
         sync = dict(self.sms_cache.get(self.filter_device_id, {}).get("sync", {}))
         read_error = self.sms_cache.get(self.filter_device_id, {}).get("read_error")
         if read_error:
@@ -959,19 +1207,39 @@ class SmsPage(QWidget):
         self.sync_status.setToolTip("<qt>" + escape(description).replace("\n", "<br>") + "</qt>")
 
     def _queue_timeline_restore(self, *unused):
+        """Schedule deferred timeline scroll restoration when a restore is pending.
+
+        :param unused: Unused scrollbar range-change signal arguments.
+        :type unused: Any
+        """
         if self._scroll_restore is not None:
             self._scroll_restore_timer.start(0)
 
     def _restore_timeline_scroll(self):
+        """Invoke the queued timeline scroll restoration callback."""
         restore = self._scroll_restore
         if restore is not None:
             restore()
 
     def _cancel_timeline_restore(self, *unused):
+        """Cancel any pending deferred timeline scroll restoration.
+
+        :param unused: Unused scrollbar signal arguments.
+        :type unused: Any
+        """
         self._scroll_restore = None
         self._scroll_restore_timer.stop()
 
     def eventFilter(self, watched, event):
+        """Cancel automatic scroll restoration on user input events.
+
+        :param watched: Watched timeline, viewport, scrollbar, or message widget.
+        :type watched: PyQt6.QtCore.QObject
+        :param event: Qt event delivered to the watched object.
+        :type event: QEvent
+        :return: Result of the base `eventFilter` implementation.
+        :rtype: bool
+        """
         if event.type() in {QEvent.Type.Wheel, QEvent.Type.MouseButtonPress, QEvent.Type.KeyPress}:
             # User reading/navigation intent wins over a queued layout restore.
             # Native range clamps and our own setValue do not emit these events.
@@ -979,6 +1247,11 @@ class SmsPage(QWidget):
         return super().eventFilter(watched, event)
 
     def _anchor(self):
+        """Return the key and viewport offset of the first visible timeline row.
+
+        :return: Tuple `(row_key, offset_from_viewport_top)` of the first visible row, or `None`.
+        :rtype: tuple[tuple[str, str], int] | None
+        """
         value = self.timeline.verticalScrollBar().value()
         for key, row in self._rows:
             if row.y() + row.height() > value:
@@ -986,6 +1259,11 @@ class SmsPage(QWidget):
         return None
 
     def _render_timeline(self, new_context=False):
+        """Render the active thread header, message timeline, and scroll anchor.
+
+        :param new_context: Whether the active conversation changed so scrolling starts at the bottom.
+        :type new_context: bool
+        """
         thread = self._threads.get(self.current_thread, {"messages": [], "actions": []})
         is_new = bool(self.current_thread and self.current_thread[0] == "new")
         self.recipient.setVisible(is_new)
@@ -1086,6 +1364,7 @@ class SmsPage(QWidget):
 
         page_ref = weakref.ref(self)
         def restore():
+            """Restore timeline scroll to the bottom or saved message anchor."""
             page = page_ref()
             if (page is None or sip.isdeleted(page) or generation != page._render_generation or
                     page._scroll_restore is not restore):
@@ -1105,15 +1384,18 @@ class SmsPage(QWidget):
         self._queue_timeline_restore()
 
     def _media_anchor(self):
+        """Capture the timeline scroll anchor before inline image layout changes."""
         self._cancel_timeline_restore()
         scroll = self.timeline.verticalScrollBar()
         self._image_anchor = (self._anchor(), scroll.value(), scroll.maximum() - scroll.value() < 48)
 
     def _restore_media_anchor(self):
+        """Queue timeline scroll restoration after inline image geometry updates."""
         state = getattr(self, '_image_anchor', None)
         generation = self._render_generation
         page_ref = weakref.ref(self)
         def restore():
+            """Restore the timeline scroll position after an inline image resize."""
             page = page_ref()
             if (page is None or sip.isdeleted(page) or generation != page._render_generation or state is None or
                     page._scroll_restore is not restore):
@@ -1127,6 +1409,15 @@ class SmsPage(QWidget):
         self._queue_timeline_restore()
 
     def _card(self, name, outgoing):
+        """Create an aligned row and message bubble frame for the timeline.
+
+        :param name: Qt object name applied to the bubble frame for styling.
+        :type name: str
+        :param outgoing: Whether the message bubble represents outgoing traffic.
+        :type outgoing: bool
+        :return: Tuple `(row_widget, bubble_frame, bubble_layout)`.
+        :rtype: tuple[QWidget, QFrame, QVBoxLayout]
+        """
         row = QWidget()
         row_layout = QHBoxLayout(row)
         row_layout.setContentsMargins(0, 0, 0, 0)

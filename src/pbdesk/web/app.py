@@ -23,6 +23,16 @@ LOOPBACK = {"127.0.0.1", "::1", "localhost"}
 
 
 def create_app(settings: Settings | None = None, *, standalone=False) -> FastAPI:
+    """Create the loopback-only FastAPI web status application.
+
+    :param settings: Optional application settings; defaults to ``Settings.from_env()``.
+    :type settings: Settings | None
+    :param standalone: If True, skip creating and polling a core client lease.
+    :type standalone: bool
+    :return: Configured FastAPI web status application.
+    :rtype: FastAPI
+    :raises ValueError: If ``settings.web_host`` or ``settings.core_host`` is not a loopback address.
+    """
     settings = settings or Settings.from_env()
     if settings.web_host not in LOOPBACK or settings.core_host not in LOOPBACK:
         raise ValueError("Only loopback hosting is supported; remote authentication is not implemented.")
@@ -31,6 +41,13 @@ def create_app(settings: Settings | None = None, *, standalone=False) -> FastAPI
     generation = os.environ.get('PBDESK_STOP_GENERATION') or stop_generation(settings)
     @asynccontextmanager
     async def lifespan(app):
+        """Manage the web client lease and stop-generation monitor across app lifespan.
+
+        :param app: FastAPI application instance whose state holds the shutdown callback.
+        :type app: FastAPI
+        :return: Async context iterator spanning application startup through shutdown.
+        :rtype: AsyncIterator[None]
+        """
         lease = None
         monitor = None
         try:
@@ -39,6 +56,7 @@ def create_app(settings: Settings | None = None, *, standalone=False) -> FastAPI
                     demo=os.environ.get('PBDESK_LIFECYCLE_DEMO') == '1')
                 await asyncio.to_thread(lease.start)
                 async def check_stop():
+                    """Poll for stop-generation changes and trigger application shutdown."""
                     while True:
                         await asyncio.sleep(.5)
                         if await asyncio.to_thread(stop_generation, settings) != generation:
@@ -62,6 +80,15 @@ def create_app(settings: Settings | None = None, *, standalone=False) -> FastAPI
 
     @app.middleware("http")
     async def security_headers(request: Request, call_next):
+        """Reject cross-origin requests and attach strict security headers.
+
+        :param request: Incoming HTTP request to inspect.
+        :type request: Request
+        :param call_next: Next ASGI/FastAPI request handler in the middleware chain.
+        :type call_next: Callable[[Request], Awaitable[Response]]
+        :return: HTTP response with strict security headers, or a 403 JSON error for browser origins.
+        :rtype: Response
+        """
         if request.headers.get('origin'):
             from fastapi.responses import JSONResponse
             return JSONResponse({'detail': 'Browser origins are not accepted'}, status_code=403)
@@ -74,6 +101,14 @@ def create_app(settings: Settings | None = None, *, standalone=False) -> FastAPI
 
     @app.get("/health")
     async def host_health(request: Request):
+        """Return a signed web host health response for authorized probes.
+
+        :param request: Incoming HTTP health probe request containing signed headers.
+        :type request: Request
+        :return: Signed web host health payload dictionary.
+        :rtype: dict[str, Any]
+        :raises HTTPException: With status 401 if the request lacks a valid signed web probe proof.
+        """
         body = await asyncio.to_thread(web_health_response, settings, request.headers, instance_id, generation)
         if body is None:
             raise HTTPException(401, 'Signed web identity required')
@@ -81,6 +116,14 @@ def create_app(settings: Settings | None = None, *, standalone=False) -> FastAPI
 
     @app.post('/internal/shutdown')
     async def shutdown(request: Request):
+        """Validate a desktop shutdown request and schedule server exit.
+
+        :param request: Incoming HTTP POST request authenticated with the desktop service token.
+        :type request: Request
+        :return: Status dictionary indicating whether a shutdown callback was scheduled.
+        :rtype: dict[str, bool]
+        :raises HTTPException: With status 401, 422, or 409 if authorization, JSON payload, or instance ID fails validation.
+        """
         authorization = request.headers.get('authorization', '')
         if not authorization.startswith('Bearer ') or await asyncio.to_thread(identify_service, settings, authorization[7:]) != 'desktop':
             raise HTTPException(401, 'Desktop service credential required')
@@ -96,6 +139,13 @@ def create_app(settings: Settings | None = None, *, standalone=False) -> FastAPI
 
     @app.get("/", response_class=HTMLResponse)
     async def status(request: Request):
+        """Render the local core and provider status page.
+
+        :param request: Incoming HTTP GET request for the status page.
+        :type request: Request
+        :return: Rendered HTML template response displaying core and provider status.
+        :rtype: HTMLResponse
+        """
         ready = False
         provider = "unavailable"
         error = None
@@ -121,6 +171,7 @@ def create_app(settings: Settings | None = None, *, standalone=False) -> FastAPI
 
 
 def main():
+    """Parse CLI flags and run the local web status server."""
     import uvicorn
     import argparse
     parser = argparse.ArgumentParser(description='Optional local web status server')

@@ -9,12 +9,26 @@ from .theme import colors
 
 
 def application_icon():
-    """Load the bundled Device relay mark at the size and scale Qt requests."""
+    """Load the bundled Device relay mark at the size and scale Qt requests.
+
+    :return: Application icon loaded from the bundled SVG asset.
+    :rtype: QIcon
+    """
     return QIcon(str(Path(__file__).with_name('assets') / 'pbdesk.svg'))
 
 
 def make_icon(kind, color=None, size=18):
-    """Draw UI icons or load the bundled scalable application mark."""
+    """Draw UI icons or load the bundled scalable application mark.
+
+    :param kind: Symbolic icon name such as ``'brand'``, ``'notifications'``, or ``'sms'``.
+    :type kind: str
+    :param color: Optional stroke color; defaults to the current theme text color.
+    :type color: QColor | str | None
+    :param size: Square icon size in pixels.
+    :type size: int
+    :return: Rendered or bundled icon instance.
+    :rtype: QIcon
+    """
     if kind == 'brand':
         return application_icon()
     color = color or colors()["text"]
@@ -69,6 +83,13 @@ def make_icon(kind, color=None, size=18):
 
 
 def card_frame(name='card'):
+    """Create a borderless QFrame with the given object name for card styling.
+
+    :param name: Qt object name applied for stylesheet matching.
+    :type name: str
+    :return: Configured borderless frame container.
+    :rtype: QFrame
+    """
     frame = QFrame()
     frame.setObjectName(name)
     frame.setFrameShape(QFrame.Shape.NoFrame)
@@ -76,6 +97,11 @@ def card_frame(name='card'):
 
 
 def divider_line():
+    """Create a 1-pixel high horizontal divider QFrame.
+
+    :return: Thin horizontal separator frame styled via the ``divider`` object name.
+    :rtype: QFrame
+    """
     line = QFrame()
     line.setObjectName('divider')
     line.setFixedHeight(1)
@@ -83,6 +109,13 @@ def divider_line():
 
 
 def _small_font(source):
+    """Return a slightly smaller copy of source font clamped to readable minimums.
+
+    :param source: Base font to scale down by one point or pixel.
+    :type source: QFont
+    :return: Clamped smaller copy of ``source``.
+    :rtype: QFont
+    """
     font = QFont(source)
     if font.pointSizeF() > 0:
         font.setPointSizeF(max(8, font.pointSizeF() - 1))
@@ -92,12 +125,36 @@ def _small_font(source):
 
 
 def _pill_font(source):
+    """Return a demi-bold small font suitable for status and kind pills.
+
+    :param source: Base font from which pill sizing and weight are derived.
+    :type source: QFont
+    :return: Demi-bold reduced-size font copy.
+    :rtype: QFont
+    """
     font = _small_font(source)
     font.setWeight(QFont.Weight.DemiBold)
     return font
 
 
 def _draw_pill(painter, rect, text, bg, fg, border=None):
+    """Paint a rounded pill badge with elided text and return its drawn width.
+
+    :param painter: Active Qt painter positioned in item coordinates.
+    :type painter: QPainter
+    :param rect: Available bounding rectangle for the pill badge.
+    :type rect: QRectF
+    :param text: Label text rendered inside the pill.
+    :type text: str
+    :param bg: Background fill color accepted by ``QColor``.
+    :type bg: QColor | str
+    :param fg: Foreground text color accepted by ``QColor``.
+    :type fg: QColor | str
+    :param border: Optional outline border color accepted by ``QColor``.
+    :type border: QColor | str | None
+    :return: Actual painted pill width in pixels.
+    :rtype: float
+    """
     font = _pill_font(painter.font())
     painter.save()
     painter.setFont(font)
@@ -116,6 +173,13 @@ def _draw_pill(painter, rect, text, bg, fg, border=None):
 
 
 def _row_colors(option):
+    """Resolve palette colors adjusted for row enabled and selected states.
+
+    :param option: Item view style option containing state and palette.
+    :type option: PyQt6.QtWidgets.QStyleOptionViewItem
+    :return: Resolved semantic color mapping for painting the row.
+    :rtype: dict[str, str]
+    """
     palette = QPalette(option.palette)
     if not option.state & QStyle.StateFlag.State_Enabled:
         palette.setCurrentColorGroup(QPalette.ColorGroup.Disabled)
@@ -126,6 +190,15 @@ def _row_colors(option):
 
 
 def _draw_row(painter, option, c):
+    """Paint a list or table row background, separator line, and focus ring.
+
+    :param painter: Active Qt painter for the item view.
+    :type painter: QPainter
+    :param option: Item view style option describing geometry and state flags.
+    :type option: PyQt6.QtWidgets.QStyleOptionViewItem
+    :param c: Semantic color mapping returned by ``_row_colors``.
+    :type c: collections.abc.Mapping[str, str]
+    """
     selected = bool(option.state & QStyle.StateFlag.State_Selected)
     hovered = bool(option.state & QStyle.StateFlag.State_MouseOver)
     painter.fillRect(option.rect, QColor(c['highlight'] if selected else c['alternate']
@@ -146,13 +219,38 @@ class NotificationDelegate(QStyledItemDelegate):
     """Paints notification list rows with bold title, timestamp, 2-line preview, and type pill."""
 
     def __init__(self, stamp_fn, parent=None):
+        """Initialize the notification delegate with a timestamp formatting function.
+
+        :param stamp_fn: Callable converting notification timestamps into display text.
+        :type stamp_fn: collections.abc.Callable[[object], str]
+        :param parent: Optional Qt parent object owning the delegate.
+        :type parent: PyQt6.QtCore.QObject | None
+        """
         super().__init__(parent)
         self._stamp = stamp_fn
 
     def sizeHint(self, option, index):
+        """Return the fixed row size hint for a notification list item.
+
+        :param option: Item view style option containing available row width.
+        :type option: PyQt6.QtWidgets.QStyleOptionViewItem
+        :param index: Model index of the notification row being measured.
+        :type index: PyQt6.QtCore.QModelIndex
+        :return: Recommended size for the notification row.
+        :rtype: QSize
+        """
         return QSize(max(option.rect.width(), 240), 104)
 
     def paint(self, painter, option, index):
+        """Paint a notification row with icon, title, timestamp, body preview, and pill.
+
+        :param painter: Active Qt painter for the item view.
+        :type painter: QPainter
+        :param option: Item view style option describing geometry, font, and state.
+        :type option: PyQt6.QtWidgets.QStyleOptionViewItem
+        :param index: Model index of the notification item to render.
+        :type index: PyQt6.QtCore.QModelIndex
+        """
         item = index.data(Qt.ItemDataRole.UserRole)
         if not item:
             super().paint(painter, option, index)
@@ -207,13 +305,38 @@ class ConversationDelegate(QStyledItemDelegate):
     """Paints SMS conversation rows with bold contact name, right-aligned time, and 2-line preview."""
 
     def __init__(self, time_fn, parent=None):
+        """Initialize the conversation delegate with a timestamp formatter.
+
+        :param time_fn: Callable converting conversation timestamps to datetimes or strings.
+        :type time_fn: collections.abc.Callable[[object], object]
+        :param parent: Optional Qt parent object owning the delegate.
+        :type parent: PyQt6.QtCore.QObject | None
+        """
         super().__init__(parent)
         self._time = time_fn
 
     def sizeHint(self, option, index):
+        """Return the fixed row size hint for an SMS conversation item.
+
+        :param option: Item view style option containing available row width.
+        :type option: PyQt6.QtWidgets.QStyleOptionViewItem
+        :param index: Model index of the conversation row being measured.
+        :type index: PyQt6.QtCore.QModelIndex
+        :return: Recommended size for the conversation row.
+        :rtype: QSize
+        """
         return QSize(max(option.rect.width(), 220), 104)
 
     def paint(self, painter, option, index):
+        """Paint a conversation row with avatar, contact name, time, device, and preview.
+
+        :param painter: Active Qt painter for the item view.
+        :type painter: QPainter
+        :param option: Item view style option describing geometry, font, and state.
+        :type option: PyQt6.QtWidgets.QStyleOptionViewItem
+        :param index: Model index of the conversation item to render.
+        :type index: PyQt6.QtCore.QModelIndex
+        """
         row = index.data(Qt.ItemDataRole.UserRole + 1)
         if not isinstance(row, dict):
             row = index.data(Qt.ItemDataRole.UserRole)
@@ -269,11 +392,29 @@ class PillDelegate(QStyledItemDelegate):
     """Paints status, kind, or capability pills inside QTableView cells."""
 
     def __init__(self, pill_columns, multi_columns=(), parent=None):
+        """Configure single-pill and multi-pill column indices for table rendering.
+
+        :param pill_columns: Column indices rendered as a single pill badge.
+        :type pill_columns: collections.abc.Iterable[int]
+        :param multi_columns: Column indices containing comma-separated pill tokens.
+        :type multi_columns: collections.abc.Iterable[int]
+        :param parent: Optional Qt parent object owning the delegate.
+        :type parent: PyQt6.QtCore.QObject | None
+        """
         super().__init__(parent)
         self._pill_columns = set(pill_columns)
         self._multi_columns = set(multi_columns)
 
     def sizeHint(self, option, index):
+        """Return a column size hint wide enough for all rendered status pills.
+
+        :param option: Item view style option containing font metrics.
+        :type option: PyQt6.QtWidgets.QStyleOptionViewItem
+        :param index: Model index of the table cell being measured.
+        :type index: PyQt6.QtCore.QModelIndex
+        :return: Recommended cell size accommodating all rendered pill badges.
+        :rtype: QSize
+        """
         native = super().sizeHint(option, index)
         column = index.column()
         if column not in self._pill_columns and column not in self._multi_columns:
@@ -294,6 +435,15 @@ class PillDelegate(QStyledItemDelegate):
 
     @staticmethod
     def _colors(text, palette=None):
+        """Map a status or capability label to semantic pill background, text, and border.
+
+        :param text: Status or capability label string.
+        :type text: str
+        :param palette: Optional palette used to compute semantic colors.
+        :type palette: QPalette | None
+        :return: Three-tuple of ``(background, foreground, optional_border)`` hex colors.
+        :rtype: tuple[str, str, str | None]
+        """
         c = colors(palette)
         lower = text.casefold()
         if any(k in lower for k in ('inactive', 'not active', 'unavailable', 'not ready', 'not verified', 'unverified', 'unsupported', 'not supported')):
@@ -307,6 +457,15 @@ class PillDelegate(QStyledItemDelegate):
         return c['alternate'], c['text'], c['border']
 
     def paint(self, painter, option, index):
+        """Paint status or capability pill badges inside configured table columns.
+
+        :param painter: Active Qt painter for the table view.
+        :type painter: QPainter
+        :param option: Item view style option describing geometry, palette, and state.
+        :type option: PyQt6.QtWidgets.QStyleOptionViewItem
+        :param index: Model index of the table cell to render.
+        :type index: PyQt6.QtCore.QModelIndex
+        """
         col = index.column()
         if col not in self._pill_columns and col not in self._multi_columns:
             super().paint(painter, option, index)

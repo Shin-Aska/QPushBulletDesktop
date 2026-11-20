@@ -7,7 +7,14 @@ from .widgets import application_icon
 
 
 class HistorySecurityDialog(QDialog):
+    """Modal dialog guiding local history encryption, unlocking, migration, and recovery."""
+
     def __init__(self, worker):
+        """Initialize history security controls and connect worker status signals.
+
+        :param worker: Core worker managing local history security operations.
+        :type worker: pbdesk.desktop.worker.CoreWorker
+        """
         super().__init__()
         self.worker = worker
         self.state = {}
@@ -74,15 +81,26 @@ class HistorySecurityDialog(QDialog):
         worker.failed.connect(self.show_error)
 
     def show_error(self, message):
+        """Display an error message, clear busy state, and re-enable controls.
+
+        :param message: Error text explaining why the operation failed.
+        :type message: str
+        """
         self.busy = False
         self.error.setText(message)
         self.enable_controls()
 
     def enable_controls(self):
+        """Enable or disable interactive controls based on the current busy state."""
         for control in (self.primary, self.backup, self.refresh, self.recover_button, self.import_button, self.recovery):
             control.setEnabled(not self.busy)
 
     def update_security(self, state):
+        """Update prompts, buttons, and visibility from the latest history security state.
+
+        :param state: History security status payload received from the core worker.
+        :type state: dict
+        """
         self.state = state
         self.busy = bool(state.get("busy"))
         if state.get('history_ready'):
@@ -128,6 +146,13 @@ class HistorySecurityDialog(QDialog):
         self.enable_controls()
 
     def submit(self, command, value=None):
+        """Send a history security command through the worker if not already busy.
+
+        :param command: History security worker command name.
+        :type command: str
+        :param value: Optional command payload parameters.
+        :type value: dict | None
+        """
         if self.busy:
             return
         self.busy = True
@@ -136,6 +161,7 @@ class HistorySecurityDialog(QDialog):
         self.worker.request(command, value)
 
     def perform(self):
+        """Execute the primary history security action for the current state."""
         if not self.worker.isRunning():
             self.worker.stop_event.clear()
             self.worker.start()
@@ -153,21 +179,29 @@ class HistorySecurityDialog(QDialog):
                      'locked': 'history_unlock', 'ready': 'history_unlock'}.get(kind, 'history_status'))
 
     def show_recovery(self):
+        """Switch the dialog into manual recovery key entry mode."""
         self.recovering = True
         self.update_security(self.state)
         self.recovery.setFocus()
 
     def import_key(self):
+        """Prompt for a recovery key file path and submit a recovery request."""
         path, _ = QFileDialog.getOpenFileName(self, 'Import local history recovery key')
         if path:
             self.submit('history_recover', {'path': path})
 
     def save_key(self):
+        """Prompt for a destination path and save the recovery key backup."""
         path, _ = QFileDialog.getSaveFileName(self, 'Save local history recovery key', 'pbdesk-recovery.txt')
         if path:
             self.submit('history_save', {'path': path})
 
     def command_result(self, result):
+        """Handle worker results for history_* commands and advance setup flow.
+
+        :param result: Worker result dictionary emitted after a command finishes.
+        :type result: dict
+        """
         if not result.get('command', '').startswith('history_'):
             return
         self.busy = False
@@ -181,6 +215,7 @@ class HistorySecurityDialog(QDialog):
             self.update_security(result.get('data', {}))
 
     def reject(self):
+        """Stop the worker when exiting before history setup finishes."""
         if not self.finished_setup:
             self.worker.stop()
         super().reject()

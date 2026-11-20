@@ -25,18 +25,43 @@ PROMPT_VERSION = "saved-summary-v1"
 
 
 class AiError(ValueError):
+    """Error raised for AI validation, configuration, wallet, or provider failures."""
+
     def __init__(self, message, status=409):
+        """Initialize the AI error with a message and HTTP status code.
+
+        :param message: Human-readable error message safe for display.
+        :type message: str
+        :param status: HTTP status code associated with this AI error.
+        :type status: int
+        """
         super().__init__(message)
         self.status = status
 
 
 def validate_model(model):
+    """Validate and return a syntactically valid OpenAI model identifier.
+
+    :param model: Candidate OpenAI model name to validate.
+    :type model: object
+    :return: Validated OpenAI model identifier string.
+    :rtype: str
+    :raises AiError: If ``model`` is not a valid bounded model identifier string.
+    """
     if not isinstance(model, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._:-]{0,99}', model):
         raise AiError('Enter a valid OpenAI model name.', 422)
     return model
 
 
 def load_settings(settings):
+    """Load and validate AI configuration with the reserved KWallet key reference.
+
+    :param settings: Application settings used to resolve the configuration store.
+    :type settings: pbdesk.config.Settings
+    :return: Normalized AI settings dictionary including ``key_reference``.
+    :rtype: dict[str, Any]
+    :raises AiError: If stored AI configuration cannot be read or validated.
+    """
     from pbdesk.configuration import get, ai_settings
     try:
         data = get(settings, 'ai')
@@ -48,6 +73,17 @@ def load_settings(settings):
 
 
 def save_settings(settings, model=None, configured=None):
+    """Persist updated AI model and configured flags with a new revision token.
+
+    :param settings: Application settings used to store the updated AI config.
+    :type settings: pbdesk.config.Settings
+    :param model: Optional replacement OpenAI model identifier.
+    :type model: str | None
+    :param configured: Optional explicit configured flag override.
+    :type configured: bool | None
+    :return: Saved AI settings dictionary including the new ``revision`` and ``key_reference``.
+    :rtype: dict[str, Any]
+    """
     from pbdesk.configuration import put
     current = load_settings(settings)
     data = {'model': validate_model(model if model is not None else current['model']),
@@ -58,7 +94,14 @@ def save_settings(settings, model=None, configured=None):
 
 
 def check_key_reference(settings, store):
-    """Check references only, including inactive accounts; never open a wallet."""
+    """Check references only, including inactive accounts; never open a wallet.
+
+    :param settings: Application settings used to inspect the provider credential reference.
+    :type settings: pbdesk.config.Settings
+    :param store: Persistence store checked for conflicting device encryption entries.
+    :type store: pbdesk.storage.database.Store
+    :raises AiError: If the reserved AI KWallet entry conflicts with provider or encryption entries.
+    """
     reference = provider_credential_source(settings)
     if reference.get('backend') == 'kwallet' and reference.get('folder') == 'Pushbullet' and reference.get('entry') == AI_ENTRY:
         raise AiError('The reserved AI entry is already used by a provider credential. Choose a different provider entry first.')
@@ -69,6 +112,16 @@ def check_key_reference(settings, store):
 
 
 def read_ai_key(settings, store):
+    """Read and validate the OpenAI API key from KWallet without overwriting entries.
+
+    :param settings: Application settings used to verify key entry non-conflict.
+    :type settings: pbdesk.config.Settings
+    :param store: Persistence store used to verify key entry non-conflict.
+    :type store: pbdesk.storage.database.Store
+    :return: Validated OpenAI API key secret string.
+    :rtype: str
+    :raises AiError: If the key is missing, invalid, or KWallet is locked/unavailable.
+    """
     from pbdesk.services.kwallet import read_password
     check_key_reference(settings, store)
     try:
@@ -81,6 +134,18 @@ def read_ai_key(settings, store):
 
 
 def configure_key(settings, store, key=None):
+    """Validate, optionally store, and mark the KWallet OpenAI API key as configured.
+
+    :param settings: Application settings used to store configuration and verify key references.
+    :type settings: pbdesk.config.Settings
+    :param store: Persistence store used to verify key entry non-conflict.
+    :type store: pbdesk.storage.database.Store
+    :param key: New OpenAI API key to store in KWallet, or ``None`` to verify an existing key.
+    :type key: str | None
+    :return: Updated AI settings dictionary marked as configured.
+    :rtype: dict[str, Any]
+    :raises AiError: If ``key`` is malformed, KWallet creation fails, or an existing key cannot be read.
+    """
     check_key_reference(settings, store)
     if key is not None:
         if not isinstance(key, str) or not key or len(key) > 4096 or any(c.isspace() for c in key):
@@ -96,6 +161,13 @@ def configure_key(settings, store, key=None):
 
 
 def clean_text(value):
+    """Redact URLs, addresses, credentials, and control characters from source text.
+
+    :param value: Raw text value to sanitize before inclusion in AI prompts.
+    :type value: object
+    :return: Sanitized plain-text string with sensitive patterns omitted.
+    :rtype: str
+    """
     text = str(value or '')
     text = re.sub(r'https?://\S+|(?:mailto:)?[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}', '[link or address omitted]', text)
     text = re.sub(r'\b(?:sk-[A-Za-z0-9_-]{8,}|o\.[A-Za-z0-9_-]{12,})\b', '[credential omitted]', text)
@@ -105,6 +177,18 @@ def clean_text(value):
 
 @dataclass
 class Prepared:
+    """Short-lived prepared AI request preview bound to validated input state.
+
+    :ivar request: Original validated request parameters used to recompute context.
+    :type request: dict[str, Any]
+    :ivar preview: Sanitized preview payload presented to the user before generation.
+    :type preview: dict[str, Any]
+    :ivar expires: Monotonic timestamp at which this prepared preview expires.
+    :type expires: float
+    :ivar binding: Optional SHA-256 digest binding SMS draft selections and tone.
+    :type binding: str | None
+    """
+
     request: dict
     preview: dict
     expires: float
@@ -113,6 +197,42 @@ class Prepared:
 
 @dataclass
 class DigestState:
+    """In-memory scheduling, cache, and error state for one digest preset and model.
+
+    :ivar account_id: Active Pushbullet account identifier or ``None``.
+    :type account_id: str | None
+    :ivar model: Resolved OpenAI model identifier for this digest state.
+    :type model: str
+    :ivar revision: AI configuration revision token associated with failure tracking.
+    :type revision: str
+    :ivar desired: Most recently computed context snapshot awaiting or matching generation.
+    :type desired: dict[str, Any] | None
+    :ivar last_good: Latest successful or restored digest payload for UI display.
+    :type last_good: dict[str, Any] | None
+    :ivar cache: Fingerprint-indexed map of ``(result, valid_until)`` entries.
+    :type cache: dict[str, tuple[dict[str, Any], float]]
+    :ivar task: Active background asyncio task running :meth:`AiService._digest_job`, if any.
+    :type task: asyncio.Task[None] | None
+    :ivar status: Current lifecycle status (``queued``, ``updating``, ``ready``, ``error``, or ``unconfigured``).
+    :type status: str
+    :ivar error: User-facing error description when ``status`` is ``error`` or ``unconfigured``.
+    :type error: str | None
+    :ivar changed_at: Monotonic timestamp when ``desired`` fingerprint last changed.
+    :type changed_at: float
+    :ivar retry_at: Monotonic timestamp before which backoff suppresses another paid attempt.
+    :type retry_at: float
+    :ivar failures: Consecutive failure count under the current configuration revision.
+    :type failures: int
+    :ivar latched: Whether failures are latched against automatic background retries.
+    :type latched: bool
+    :ivar explicit_retry_used: Whether the single forced retry after latching has been consumed.
+    :type explicit_retry_used: bool
+    :ivar preset: Active summary preset configuration snapshot dictionary.
+    :type preset: dict[str, Any] | None
+    :ivar active_revision: Active preset selection revision counter from the store.
+    :type active_revision: int
+    """
+
     account_id: str | None
     model: str
     revision: str
@@ -132,7 +252,18 @@ class DigestState:
 
 
 class AiService:
+    """Coordinator for bounded AI previews, generation, models, and coalesced digests."""
+
     def __init__(self, settings, store_getter, client_factory=None):
+        """Initialize the AI service, synchronization primitives, and restored digest cache.
+
+        :param settings: Application settings used for AI configuration and key checks.
+        :type settings: pbdesk.config.Settings
+        :param store_getter: Callable returning the active database store or ``None``.
+        :type store_getter: collections.abc.Callable[[], pbdesk.storage.database.Store | None]
+        :param client_factory: Optional async HTTP client factory defaulting to ``httpx.AsyncClient``.
+        :type client_factory: collections.abc.Callable[..., httpx.AsyncClient] | None
+        """
         self.settings, self.store_getter = settings, store_getter
         self.client_factory = client_factory or httpx.AsyncClient
         self.prepared = {}
@@ -153,7 +284,18 @@ class AiService:
         self._load_digest_cache('ai-runtime-state.json')
 
     async def local(self, function, *args, **kwargs):
-        """Drain owned SQLite/wallet threads before cancellation or Store.close."""
+        """Drain owned SQLite/wallet threads before cancellation or Store.close.
+
+        :param function: Synchronous callable to execute in a tracked worker thread.
+        :type function: collections.abc.Callable[..., Any]
+        :param args: Positional arguments forwarded to ``function``.
+        :type args: Any
+        :param kwargs: Keyword arguments forwarded to ``function``.
+        :type kwargs: Any
+        :return: Value returned by ``function(*args, **kwargs)``.
+        :rtype: Any
+        :raises AiError: If the AI service has already begun shutting down.
+        """
         from pbdesk.services.core_settings import finish_mutation
         if self._closed:
             raise AiError('The AI service is stopping.')
@@ -173,12 +315,34 @@ class AiService:
             self._threads.discard(task)
 
     def repository(self, account_id):
+        """Return the summary repository after verifying the active account.
+
+        :param account_id: Expected active Pushbullet account identifier.
+        :type account_id: str | None
+        :return: Account-scoped summary repository bound to the active store.
+        :rtype: pbdesk.storage.summaries.SummaryRepository
+        :raises AiError: If the active account changed or no account is connected.
+        """
         self._account(account_id)
         if not isinstance(account_id, str) or not account_id.strip():
             raise AiError('Connect an account before using saved summaries.')
         return self.store_getter().summaries
 
     def summary_operation(self, account_id, method, *args, **kwargs):
+        """Execute a repository method for the active account and require a non-null result.
+
+        :param account_id: Active Pushbullet account identifier.
+        :type account_id: str
+        :param method: Method name on ``SummaryRepository`` to invoke.
+        :type method: str
+        :param args: Positional arguments forwarded after ``account_id``.
+        :type args: Any
+        :param kwargs: Keyword arguments forwarded to the repository method.
+        :type kwargs: Any
+        :return: Non-null result returned by the repository method.
+        :rtype: Any
+        :raises AiError: If the account changed or the requested summary/preset was not found.
+        """
         repo = self.repository(account_id)
         result = getattr(repo, method)(account_id, *args, **kwargs)
         self._account(account_id)
@@ -187,12 +351,33 @@ class AiService:
         return result
 
     def update_preset(self, account_id, preset_id, config, expected_revision):
+        """Verify preset existence for the account and save an optimistic-locked update.
+
+        :param account_id: Active Pushbullet account identifier.
+        :type account_id: str
+        :param preset_id: UUID string of the summary preset being updated.
+        :type preset_id: str
+        :param config: Validated summary preset configuration payload.
+        :type config: dict[str, Any]
+        :param expected_revision: Expected optimistic-locking preset revision integer.
+        :type expected_revision: int
+        :return: Updated summary preset dictionary.
+        :rtype: dict[str, Any]
+        :raises AiError: If ``preset_id`` does not exist for the active account.
+        """
         repo = self.repository(account_id)
         if not any(preset['id'] == preset_id for preset in repo.list_presets(account_id, include_archived=True)):
             raise AiError('The saved summary preset is unavailable.', 404)
         return self.summary_operation(account_id, 'save_preset', config, expected_revision, preset_id)
 
     def preset_options(self, account_id):
+        """List retained devices and SMS conversations available for summary preset scoping.
+
+        :param account_id: Active Pushbullet account identifier.
+        :type account_id: str
+        :return: Dictionary containing ``account_id``, bounded ``devices`` and ``conversations``, and ``truncated``.
+        :rtype: dict[str, Any]
+        """
         from pbdesk.storage.database import items
         from pbdesk.storage.sms import messages
         self.repository(account_id)
@@ -217,7 +402,16 @@ class AiService:
             'truncated': len(rows) > 500 or len(retained_devices) > 200 or len(devices) > 200}
 
     def validate_scope(self, account_id, config):
-        """Validate against retained account data only; never fetch a device/thread."""
+        """Validate against retained account data only; never fetch a device/thread.
+
+        :param account_id: Active Pushbullet account identifier.
+        :type account_id: str
+        :param config: Summary preset configuration dictionary to validate against stored history.
+        :type config: dict[str, Any]
+        :return: The validated ``config`` dictionary.
+        :rtype: dict[str, Any]
+        :raises AiError: If ``model_override``, a device ID, or a conversation pair is unavailable.
+        """
         from pbdesk.storage.sms import messages
         from pbdesk.storage.database import items
         store = self.store_getter()
@@ -240,12 +434,25 @@ class AiService:
         return config
 
     def _account(self, expected):
+        """Ensure the active store account still matches the expected account ID.
+
+        :param expected: Expected active Pushbullet account identifier or ``None``.
+        :type expected: str | None
+        :raises AiError: If the active store account changed since preparation.
+        """
         actual = self.store_getter().sms_account()
         if actual != expected:
             raise AiError('The account changed. Prepare the selected text again.')
 
     def draft_context(self, value):
-        """Resolve only checked rows from the latest twenty in one retained thread."""
+        """Resolve only checked rows from the latest twenty in one retained thread.
+
+        :param value: Request mapping containing ``account_id``, ``device_id``, ``conversation_id``, optional ``tone``, and optional ``message_ids``.
+        :type value: dict[str, Any]
+        :return: Bounded SMS draft preview dictionary with candidates, selected IDs, and binding hash.
+        :rtype: dict[str, Any]
+        :raises AiError: If the conversation, tone, or message selection is missing or invalid.
+        """
         from pbdesk.storage.sms import messages
         self._account(value['account_id'])
         if not value.get('device_id') or not value.get('conversation_id'):
@@ -300,6 +507,14 @@ class AiService:
             'has_older_messages': has_older, '_binding': binding}
 
     def context(self, value):
+        """Build bounded, sanitized notification or SMS context text for AI preview.
+
+        :param value: Request mapping specifying ``account_id``, ``source``, ``mode``, and target item or conversation filters.
+        :type value: dict[str, Any]
+        :return: Sanitized preview dictionary containing bounded text and selection metadata.
+        :rtype: dict[str, Any]
+        :raises AiError: If parameters conflict with mode/source rules or no retained items match.
+        """
         store = self.store_getter()
         self._account(value['account_id'])
         source, mode = value['source'], value['mode']
@@ -359,6 +574,13 @@ class AiService:
                 'count': len(lines), 'truncated': truncated, 'text': text}
 
     def prepare(self, value):
+        """Prepare and cache a short-lived AI input preview and return its metadata.
+
+        :param value: Request parameters selecting notifications or an SMS conversation.
+        :type value: dict[str, Any]
+        :return: Sanitized preview metadata including ``context_id`` and ``expires_in`` TTL.
+        :rtype: dict[str, Any]
+        """
         now = time.monotonic()
         self.prepared = {k: v for k, v in self.prepared.items() if v.expires > now}
         if len(self.prepared) >= 32:
@@ -375,6 +597,14 @@ class AiService:
         return preview
 
     def revalidate(self, prepared):
+        """Recompute context for a prepared preview and reject stale or altered inputs.
+
+        :param prepared: Previously cached :class:`Prepared` entry to verify against current data.
+        :type prepared: Prepared
+        :return: Revalidated context preview dictionary matching ``prepared``.
+        :rtype: dict[str, Any]
+        :raises AiError: If the underlying retained messages or notifications changed after preview.
+        """
         current = self.context(prepared.request)
         binding = current.pop('_binding', None)
         compared = ('account_id', 'mode', 'source', 'scope', 'count', 'truncated', 'text', 'selected_ids', 'tone') \
@@ -384,6 +614,13 @@ class AiService:
         return current
 
     async def generate(self, context_id):
+        """Track and execute a cloud AI generation request for a prepared context ID.
+
+        :param context_id: Opaque token identifying a previously prepared preview.
+        :type context_id: str
+        :return: Generated reply or summary result payload with metadata and timestamp.
+        :rtype: dict[str, Any]
+        """
         task = asyncio.current_task()
         self._cloud_tasks.add(task)
         try:
@@ -392,6 +629,14 @@ class AiService:
             self._cloud_tasks.discard(task)
 
     async def _generate(self, context_id):
+        """Validate preview, read key, and invoke the OpenAI Responses API for a draft or summary.
+
+        :param context_id: Opaque token identifying a previously prepared preview.
+        :type context_id: str
+        :return: Generated reply or summary dictionary containing text and metadata.
+        :rtype: dict[str, Any]
+        :raises AiError: If another request is busy, the preview expired, AI is unconfigured, or generation fails.
+        """
         if self.busy:
             raise AiError('An AI request is already running. Wait for it to finish.')
         prepared = self.prepared.pop(context_id, None)
@@ -425,6 +670,16 @@ class AiService:
             self.busy = False
 
     async def _respond(self, payload, key):
+        """Send a bounded request to the OpenAI Responses API and return text with metrics.
+
+        :param payload: JSON request payload conforming to the OpenAI Responses API schema.
+        :type payload: dict[str, Any]
+        :param key: OpenAI API bearer secret key.
+        :type key: str
+        :return: Extracted text response carrying an attached ``metrics`` dictionary.
+        :rtype: str
+        :raises AiError: On authentication, rate-limit, timeout, refusal, or response format failures.
+        """
         started = time.monotonic()
         try:
             async with self.client_factory(timeout=httpx.Timeout(45, connect=5), follow_redirects=False, trust_env=False) as client:
@@ -469,6 +724,7 @@ class AiService:
         if not text or len(text) > 16000:
             raise AiError('OpenAI returned no usable text.', 502)
         class ResponseText(str):
+            """String subclass carrying attached OpenAI response usage and latency metrics."""
             pass
         result = ResponseText(text)
         usage = body.get('usage') if isinstance(body.get('usage'), dict) else {}
@@ -483,6 +739,11 @@ class AiService:
 
     @staticmethod
     def _optimize(payload):
+        """Apply low-verbosity and no-reasoning options when targeting the default model.
+
+        :param payload: Mutable OpenAI Responses request payload dictionary.
+        :type payload: dict[str, Any]
+        """
         # Official Responses schema supports low verbosity; Luna supports no reasoning.
         # Keep model-specific options out of requests for custom/other model IDs.
         if payload['model'] == DEFAULT_MODEL:
@@ -490,6 +751,11 @@ class AiService:
             payload['text'] = {'verbosity': 'low'}
 
     async def models(self):
+        """Track and execute an explicit OpenAI model catalog fetch.
+
+        :return: Dictionary containing sorted candidate model IDs, selected model, default, and notice.
+        :rtype: dict[str, Any]
+        """
         task = asyncio.current_task()
         self._cloud_tasks.add(task)
         try:
@@ -498,7 +764,12 @@ class AiService:
             self._cloud_tasks.discard(task)
 
     async def _models(self):
-        """An explicit catalog refresh, never a side effect of settings or polling."""
+        """An explicit catalog refresh, never a side effect of settings or polling.
+
+        :return: Dictionary containing sorted candidate model IDs, selected model, default, and notice.
+        :rtype: dict[str, Any]
+        :raises AiError: If AI is unconfigured or fetching/parsing the OpenAI model catalog fails.
+        """
         config = await self.local(load_settings, self.settings)
         if not config['configured']:
             raise AiError('Set up the OpenAI API key in Settings first.')
@@ -544,7 +815,20 @@ class AiService:
             raise AiError('The OpenAI model list could not be loaded. Your saved model is unchanged.', 502) from None
 
     def recent_context(self, account_id, model, now=None, preset=None):
-        """Read only recent, account-scoped text; never fall back to all SMS history."""
+        """Read only recent, account-scoped text; never fall back to all SMS history.
+
+        :param account_id: Active Pushbullet account identifier or ``None``.
+        :type account_id: str | None
+        :param model: Resolved OpenAI model identifier included in the input fingerprint.
+        :type model: str
+        :param now: Optional Unix timestamp overriding the current window end time.
+        :type now: float | None
+        :param preset: Optional summary preset dictionary controlling sources, filters, and window hours.
+        :type preset: dict[str, Any] | None
+        :return: Bounded context snapshot with formatted text, fingerprint, counts, and window bounds.
+        :rtype: dict[str, Any]
+        :raises AiError: If ``conversation_filter`` is ``selected`` with no conversations chosen.
+        """
         from pbdesk.storage.database import items
         from pbdesk.storage.sms import messages
         self._account(account_id)
@@ -628,18 +912,50 @@ class AiService:
 
     @staticmethod
     def _result(snapshot, text, model):
+        """Build a digest result payload from a context snapshot, text, and model name.
+
+        :param snapshot: Context snapshot dictionary produced by :meth:`recent_context`.
+        :type snapshot: dict[str, Any]
+        :param text: Generated or fallback digest markdown text.
+        :type text: str
+        :param model: OpenAI model identifier associated with the digest result.
+        :type model: str
+        :return: Normalized digest result dictionary.
+        :rtype: dict[str, Any]
+        """
         return {name: snapshot[name] for name in ('fingerprint', 'counts', 'truncated', 'window_start', 'window_end')} | {
             'text': text, 'generated_at': time.time(), 'model': model}
 
     @staticmethod
     def _iso(stamp):
+        """Format a Unix timestamp as an ISO-8601 UTC string, or return None.
+
+        :param stamp: Unix timestamp in seconds, or ``None``.
+        :type stamp: float | None
+        :return: ISO-8601 UTC timestamp string, or ``None`` if ``stamp`` is ``None``.
+        :rtype: str | None
+        """
         return datetime.fromtimestamp(stamp, timezone.utc).isoformat() if stamp is not None else None
 
     @staticmethod
     def _stamp(value):
+        """Parse an ISO-8601 timestamp string into a Unix timestamp, or return None.
+
+        :param value: ISO-8601 timestamp string, or ``None``/empty.
+        :type value: str | None
+        :return: Unix timestamp in seconds, or ``None`` if ``value`` is empty.
+        :rtype: float | None
+        """
         return datetime.fromisoformat(value).timestamp() if value else None
 
     def _entry_result(self, entry):
+        """Convert a persisted summary history record into the API digest result format.
+
+        :param entry: Summary history dictionary returned by ``SummaryRepository``.
+        :type entry: dict[str, Any]
+        :return: Normalized digest result dictionary including metrics and history metadata.
+        :rtype: dict[str, Any]
+        """
         return {'text': entry['markdown'], 'generated_at': self._stamp(entry['generated_at']),
             'model': entry['resolved_model'], 'fingerprint': entry['input_fingerprint'],
             'counts': {'notifications': entry['notification_count'], 'sms': entry['sms_count'],
@@ -653,10 +969,28 @@ class AiService:
             'cost': None, 'cost_available': False}
 
     def _cached(self, state, snapshot):
+        """Look up or materialize a cached digest result under the cache lock.
+
+        :param state: Mutable digest state for the active preset and model.
+        :type state: DigestState
+        :param snapshot: Context snapshot dictionary produced by :meth:`recent_context`.
+        :type snapshot: dict[str, Any]
+        :return: ``True`` if a cached, persisted, or empty-window result satisfied the snapshot.
+        :rtype: bool
+        """
         with self._cache_lock:
             return self._cached_locked(state, snapshot)
 
     def _cached_locked(self, state, snapshot):
+        """Resolve a matching memory, persisted, or empty-window digest while holding the cache lock.
+
+        :param state: Mutable digest state for the active preset and model.
+        :type state: DigestState
+        :param snapshot: Context snapshot dictionary produced by :meth:`recent_context`.
+        :type snapshot: dict[str, Any]
+        :return: ``True`` if a cached, persisted, or empty-window result satisfied the snapshot.
+        :rtype: bool
+        """
         now = time.time()
         state.cache = {key: value for key, value in list(state.cache.items())[-128:] if value[1] > now}
         cached = state.cache.get(snapshot['fingerprint'])
@@ -704,6 +1038,11 @@ class AiService:
         return False
 
     def _import_legacy(self, account_id):
+        """Import restored legacy digest entries once per account into SQLite history.
+
+        :param account_id: Active Pushbullet account identifier.
+        :type account_id: str
+        """
         if account_id in self._imported:
             return
         repo = self.repository(account_id)
@@ -716,7 +1055,11 @@ class AiService:
         self._imported.add(account_id)
 
     def _prune_memory(self, current_key):
-        """SQLite owns history; keep only bounded completed-state memoization."""
+        """SQLite owns history; keep only bounded completed-state memoization.
+
+        :param current_key: Active digest cache key ``(account_id, model, preset_id, preset_revision)`` to retain.
+        :type current_key: tuple[str, str, str, int]
+        """
         with self._cache_lock:
             for key, state in list(self._digests.items()):
                 if len(self._digests) <= 64:
@@ -735,6 +1078,17 @@ class AiService:
             self._reuse_events.intersection_update(retained)
 
     def _last_saved(self, account_id, preset, model):
+        """Return the most recent persisted summary matching the active preset revision and model.
+
+        :param account_id: Active Pushbullet account identifier.
+        :type account_id: str
+        :param preset: Active summary preset dictionary.
+        :type preset: dict[str, Any]
+        :param model: Resolved OpenAI model identifier.
+        :type model: str
+        :return: Latest matching digest result dictionary, or ``None`` if absent.
+        :rtype: dict[str, Any] | None
+        """
         repo = self.repository(account_id)
         for entry in repo.list_history(account_id, preset_id=preset['id'], limit=100)['items']:
             if entry['preset_revision'] == preset['revision'] and entry['resolved_model'] == model:
@@ -742,6 +1096,18 @@ class AiService:
         return None
 
     async def digest(self, account_id, scope='recent', force=False):
+        """Return recent digest status and schedule a coalesced background refresh when needed.
+
+        :param account_id: Active Pushbullet account identifier or ``None``.
+        :type account_id: str | None
+        :param scope: Digest scope; only ``'recent'`` is supported.
+        :type scope: str
+        :param force: Whether to spend the single explicit retry if automatic retries are latched.
+        :type force: bool
+        :return: Current digest status dictionary including ``last_good``, ``status``, and scheduling metadata.
+        :rtype: dict[str, Any]
+        :raises AiError: If the service is stopping or an unsupported ``scope`` is requested.
+        """
         if self._closed:
             raise AiError('The AI service is stopping.')
         if scope != 'recent':
@@ -811,6 +1177,13 @@ class AiService:
         return self._digest_status(state)
 
     def _digest_status(self, state):
+        """Build the API status dictionary for a digest state and its next scheduled refresh.
+
+        :param state: Digest state instance to serialize into an API response.
+        :type state: DigestState
+        :return: Digest status dictionary for the active preset and model.
+        :rtype: dict[str, Any]
+        """
         next_refresh = None
         if state.task and not state.task.done() and not state.latched:
             delay = max(0, state.changed_at + DIGEST_DEBOUNCE - time.monotonic(),
@@ -823,6 +1196,13 @@ class AiService:
                 'history_entry_id': (state.last_good or {}).get('history_entry_id')}
 
     async def _is_current(self, state):
+        """Return whether the digest state still matches the configured model and active preset.
+
+        :param state: Digest state whose model and preset identity are verified.
+        :type state: DigestState
+        :return: ``True`` if AI remains configured and the active preset/model match ``state``.
+        :rtype: bool
+        """
         self._account(state.account_id)
         config = await self.local(load_settings, self.settings)
         active = await self.local(self.summary_operation, state.account_id, 'get_active_preset')
@@ -830,6 +1210,17 @@ class AiService:
             and active['preset']['id'] == state.preset['id'] and active['preset']['revision'] == state.preset['revision'])
 
     def _persist_result(self, state, snapshot, text):
+        """Save a generated digest to SQLite history and update in-memory memoization.
+
+        :param state: Digest state associated with the generated summary.
+        :type state: DigestState
+        :param snapshot: Input context snapshot dictionary used for generation.
+        :type snapshot: dict[str, Any]
+        :param text: Generated markdown text (optionally carrying ``metrics`` attributes).
+        :type text: str
+        :return: Persisted digest result dictionary mapped from the saved history entry.
+        :rtype: dict[str, Any]
+        """
         # Captured scope/model survives an active selection change during a paid call.
         data = {'canonical_config_hash': snapshot['canonical_config_hash'], 'resolved_model': state.model,
             'prompt_version': PROMPT_VERSION, 'input_fingerprint': snapshot['fingerprint'],
@@ -848,6 +1239,12 @@ class AiService:
         return result
 
     async def _digest_job(self, state):
+        """Debounce, rate-limit, generate, and persist background recent digests.
+
+        :param state: Mutable digest state managed by this background task.
+        :type state: DigestState
+        :raises asyncio.CancelledError: Propagated when the background digest task is cancelled.
+        """
         try:
             while not self._closed:
                 delay = max(0, state.changed_at + DIGEST_DEBOUNCE - time.monotonic(),
@@ -941,6 +1338,7 @@ class AiService:
         return None
 
     async def close(self):
+        """Stop background digest and cloud tasks and drain owned worker threads."""
         self._closed = True
         tasks = [state.task for state in list(self._digests.values()) if state.task and not state.task.done()]
         tasks.extend(task for task in self._cloud_tasks if not task.done() and task is not asyncio.current_task())
@@ -953,7 +1351,13 @@ class AiService:
         self.prepared.clear()
 
     def _load_digest_cache(self, filename='ai-digest-cache.json'):
-        """Restore only bounded, still-valid summaries; never source messages or API keys."""
+        """Restore only bounded, still-valid summaries; never source messages or API keys.
+
+        :param filename: Runtime setting suffix naming the stored digest cache or failure state.
+        :type filename: str
+        :return: Mapping of ``(account_id, model, scope)`` to fingerprint-indexed cached summaries.
+        :rtype: dict[tuple[str | None, str, str], dict[str, tuple[dict[str, Any], float]]]
+        """
         try:
             store = self.store_getter()
             if store is None:
@@ -1014,6 +1418,7 @@ class AiService:
             return {}
 
     async def _save_digest_cache(self):
+        """Persist bounded digest failure and rate-limit state into store settings."""
         now = time.time()
         failures = dict(self._restored_failures)
         failure_states = {id(state): state for state in [*self._digests.values(), *self._account_failures.values()]}
@@ -1030,6 +1435,7 @@ class AiService:
         if len(json.dumps(data).encode()) > 4 * 1024 * 1024:
             return
         def write():
+            """Write the serialized runtime digest state to the store if still open."""
             store = self.store_getter()
             if store is not None:
                 store.set_setting('ai_runtime:ai-runtime-state.json', data)

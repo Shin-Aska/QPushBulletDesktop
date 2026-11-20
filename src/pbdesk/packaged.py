@@ -20,14 +20,27 @@ IDENTITY = 'runtime-id'
 
 
 class PackagedRuntimeError(RuntimeError):
+    """Error raised when packaged runtime verification or setup fails."""
     pass
 
 
 def _fail(message):
+    """Raise PackagedRuntimeError with the given message.
+
+    :param message: Human-readable error message describing the runtime failure.
+    :type message: str
+    :raises PackagedRuntimeError: Always raised with ``message``.
+    """
     raise PackagedRuntimeError(message)
 
 
 def _private_directory(path):
+    """Create and verify an owned private directory with 0700 permissions.
+
+    :param path: Directory path to create and validate.
+    :type path: pathlib.Path
+    :raises PackagedRuntimeError: If ``path`` is not a regular directory owned by the user with ``0700`` mode.
+    """
     path.mkdir(mode=0o700, parents=True, exist_ok=True)
     info = path.lstat()
     if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o700:
@@ -35,6 +48,16 @@ def _private_directory(path):
 
 
 def _regular(path, *, private=False):
+    """Validate that a path is a safe regular file and return its stat info.
+
+    :param path: File path to inspect via ``lstat``.
+    :type path: pathlib.Path
+    :param private: Whether to require current-user ownership and single hard link.
+    :type private: bool
+    :return: Stat result for the verified regular file.
+    :rtype: os.stat_result
+    :raises PackagedRuntimeError: If the path fails file type, ownership, permission, or link-count checks.
+    """
     info = path.lstat()
     owners = {os.getuid()} if private else {os.getuid(), 0}
     if (not stat.S_ISREG(info.st_mode) or info.st_uid not in owners
@@ -44,6 +67,16 @@ def _regular(path, *, private=False):
 
 
 def _manifest(root, *, private=False):
+    """Load and validate the runtime manifest and its SHA-256 identity.
+
+    :param root: Root directory containing ``runtime-manifest.json`` and ``runtime-id``.
+    :type root: pathlib.Path
+    :param private: Whether manifest files must satisfy strict private cache ownership rules.
+    :type private: bool
+    :return: Tuple of hex SHA-256 runtime identity and validated manifest file entries.
+    :rtype: tuple[str, dict[str, dict[str, Any]]]
+    :raises PackagedRuntimeError: If the manifest or identity file fails verification or schema validation.
+    """
     for name in (MANIFEST, IDENTITY):
         _regular(root / name, private=private)
     raw = (root / MANIFEST).read_bytes()
@@ -82,7 +115,16 @@ def _manifest(root, *, private=False):
 
 
 def verify_runtime(root, *, private=False):
-    """Verify all entries, including symlinks, without traversing directory links."""
+    """Verify all entries, including symlinks, without traversing directory links.
+
+    :param root: Runtime bundle directory to verify.
+    :type root: pathlib.Path | str
+    :param private: Whether to enforce private user-owned ``0700``/``0600`` cache constraints.
+    :type private: bool
+    :return: Verified hex SHA-256 runtime identity string.
+    :rtype: str
+    :raises PackagedRuntimeError: If any directory, file, symlink, permission, or digest check fails.
+    """
     root = Path(root)
     root_info = root.lstat()
     if not stat.S_ISDIR(root_info.st_mode) or root_info.st_uid not in ({os.getuid()} if private else {0, os.getuid()}) or root_info.st_mode & 0o6022:
@@ -129,6 +171,16 @@ def verify_runtime(root, *, private=False):
 
 
 def cache_runtime(source, cache_home=None):
+    """Verify and cache the packaged runtime in a private user directory.
+
+    :param source: Source runtime directory containing the packaged application bundle.
+    :type source: pathlib.Path | str
+    :param cache_home: Optional XDG cache base directory override.
+    :type cache_home: pathlib.Path | str | None
+    :return: Path to the verified cached runtime directory.
+    :rtype: pathlib.Path
+    :raises PackagedRuntimeError: If verification, lock validation, or cache staging fails.
+    """
     source = Path(source)
     identity = verify_runtime(source)
     base = Path(cache_home or os.environ.get('XDG_CACHE_HOME', Path.home() / '.cache')) / 'pbdesk'
@@ -164,6 +216,10 @@ def cache_runtime(source, cache_home=None):
 
 
 def require_writable_application_directory():
+    """Ensure the application directory exists and is writable.
+
+    :raises PackagedRuntimeError: If the application directory cannot be created securely or written to.
+    """
     from pbdesk.config import application_directory
     root = application_directory()
     try:
@@ -190,6 +246,14 @@ def require_writable_application_directory():
 
 
 def _dispatch(arguments):
+    """Dispatch packaged CLI flags or internal module invocations.
+
+    :param arguments: Command-line arguments excluding the executable name.
+    :type arguments: list[str]
+    :return: Return value from the dispatched entry point, if any.
+    :rtype: Any
+    :raises PackagedRuntimeError: If an unsupported internal module or option is requested.
+    """
     if arguments[:1] == ['--pbdesk-run-module']:
         if len(arguments) < 2 or arguments[1] not in MODULES:
             _fail('Unsupported internal pbdesk process entry point')
@@ -220,6 +284,13 @@ def _dispatch(arguments):
 
 
 def main(argv=None):
+    """Run the packaged pbdesk bootstrapper and command dispatcher.
+
+    :param argv: Optional argument sequence to dispatch instead of ``sys.argv[1:]``.
+    :type argv: Sequence[str] | None
+    :return: Process exit status or return value from the dispatched entry point.
+    :rtype: int | None
+    """
     arguments = list(sys.argv[1:] if argv is None else argv)
     try:
         require_writable_application_directory()

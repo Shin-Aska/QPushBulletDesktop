@@ -13,6 +13,22 @@ from pbdesk.storage.database import settings_table
 
 
 class ProviderSetup(BaseModel):
+    """Request payload for configuring and verifying a Pushbullet credential source.
+
+    :ivar backend: Secret storage backend selected for the Pushbullet token.
+    :type backend: Literal['kwallet', 'keyring']
+    :ivar wallet: KWallet wallet name when using the ``kwallet`` backend.
+    :type wallet: str
+    :ivar folder: KWallet folder name storing the Pushbullet entry.
+    :type folder: str
+    :ivar entry: KWallet entry key name storing the Pushbullet token.
+    :type entry: str
+    :ivar token: Optional Pushbullet access token to verify and write to the secret backend.
+    :type token: str | None
+    :ivar expected_revision: Optimistic concurrency revision expected for provider configuration updates.
+    :type expected_revision: int
+    """
+
     model_config = ConfigDict(extra='forbid')
     backend: Literal['kwallet', 'keyring'] = 'kwallet'
     wallet: str = Field(default='kdewallet', min_length=1, max_length=1024)
@@ -23,12 +39,26 @@ class ProviderSetup(BaseModel):
 
 
 class Preferences(BaseModel):
+    """Request payload for updating desktop UI preferences.
+
+    :ivar main_page: Optional preferred primary navigation page in the desktop UI.
+    :type main_page: Literal['notifications', 'sms', 'summary'] | None
+    :ivar color_scheme: Optional UI color scheme preference.
+    :type color_scheme: Literal['system', 'light', 'dark'] | None
+    """
+
     model_config = ConfigDict(extra='forbid')
     main_page: Literal['notifications', 'sms', 'summary'] | None = None
     color_scheme: Literal['system', 'light', 'dark'] | None = None
 
 
 async def verify_token(token):
+    """Verify a Pushbullet access token against the Pushbullet users API.
+
+    :param token: Pushbullet access token to validate against ``/v2/users/me``.
+    :type token: str
+    :raises fastapi.HTTPException: If Pushbullet rejects the token with HTTP 401 (HTTP 422) or if an HTTP or payload validation error prevents verification (HTTP 502).
+    """
     try:
         async with httpx.AsyncClient(trust_env=False, follow_redirects=False, timeout=12) as client:
             response = await client.get('https://api.pushbullet.com/v2/users/me', headers={'Access-Token': token})
@@ -43,6 +73,15 @@ async def verify_token(token):
 
 
 def snapshot(store, demo=False):
+    """Build the current provider setup and UI preferences snapshot.
+
+    :param store: Opened local SQLite store instance.
+    :type store: pbdesk.storage.database.Store
+    :param demo: Whether the core is running in demo or fixture mode.
+    :type demo: bool
+    :return: Configuration snapshot containing storage type, setup status, and UI preferences.
+    :rtype: dict[str, object]
+    """
     with store.engine.connect() as conn:
         values = {key.removeprefix(PREFIX): json.loads(value) for key, value in conn.execute(
             select(settings_table.c.key, settings_table.c.value).where(settings_table.c.key.in_(
@@ -62,6 +101,15 @@ def snapshot(store, demo=False):
 
 
 def update_preferences(store, changes):
+    """Persist partial UI preference updates into the SQLite settings table.
+
+    :param store: Opened local SQLite store instance.
+    :type store: pbdesk.storage.database.Store
+    :param changes: Partial dictionary of UI preference fields to merge and persist.
+    :type changes: dict[str, object]
+    :return: Dictionary containing the updated ``preferences`` mapping.
+    :rtype: dict[str, dict[str, object]]
+    """
     with store.writing() as conn:
         raw = conn.execute(select(settings_table.c.value).where(
             settings_table.c.key == PREFIX + 'ui')).scalar_one_or_none()
@@ -73,22 +121,63 @@ def update_preferences(store, changes):
 
 
 def install_configuration_routes(app, authorization, settings, guard_mutation, reload_provider, demo=False):
+    """Register desktop-only configuration and provider setup routes.
+
+    :param app: FastAPI application instance to register routes on.
+    :type app: fastapi.FastAPI
+    :param authorization: FastAPI dependency verifying the bearer service role.
+    :type authorization: collections.abc.Callable[..., collections.abc.Awaitable[str]]
+    :param settings: Application configuration settings instance.
+    :type settings: pbdesk.config.Settings
+    :param guard_mutation: Decorator serializing mutating endpoints under the core operation gate.
+    :type guard_mutation: collections.abc.Callable[[collections.abc.Callable[..., object]], collections.abc.Callable[..., object]]
+    :param reload_provider: Async callback reloading the Pushbullet provider and capabilities after setup changes.
+    :type reload_provider: collections.abc.Callable[[], collections.abc.Awaitable[dict[str, object]]]
+    :param demo: Whether demo or fixture mode disables live provider setup.
+    :type demo: bool
+    """
     async def desktop(role=Depends(authorization)):
+        """Enforce local desktop authorization for configuration endpoints.
+
+        :param role: Authenticated caller role resolved by the authorization dependency.
+        :type role: str
+        :raises fastapi.HTTPException: If the caller role is not ``'desktop'`` (HTTP 403).
+        """
         if role != 'desktop':
             raise HTTPException(403, 'Configuration requires the local desktop')
 
     @app.get('/api/v1/configuration', dependencies=[Depends(desktop)])
     async def read():
+        """Return the current configuration and UI preferences snapshot.
+
+        :return: Current configuration and UI preferences snapshot dictionary.
+        :rtype: dict[str, object]
+        """
         return await asyncio.to_thread(snapshot, app.state.store, demo)
 
     @app.patch('/api/v1/configuration/preferences', dependencies=[Depends(desktop)])
     @guard_mutation
     async def preferences(value: Preferences):
+        """Update and return persisted UI preferences.
+
+        :param value: Validated partial UI preference update payload.
+        :type value: Preferences
+        :return: Dictionary containing the persisted ``preferences`` mapping.
+        :rtype: dict[str, dict[str, object]]
+        """
         return await asyncio.to_thread(update_preferences, app.state.store, value.model_dump(exclude_none=True))
 
     @app.post('/api/v1/configuration/provider', dependencies=[Depends(desktop)])
     @guard_mutation
     async def setup(value: ProviderSetup):
+        """Validate, optionally store, and activate the Pushbullet provider configuration.
+
+        :param value: Validated provider credential backend, entry, and optional token payload.
+        :type value: ProviderSetup
+        :return: Updated configuration snapshot dictionary after saving and reloading the provider.
+        :rtype: dict[str, object]
+        :raises fastapi.HTTPException: If demo mode is active or the revision or credential store state conflicts (HTTP 409), or if the selected entry or token is invalid (HTTP 422).
+        """
         if demo:
             raise HTTPException(409, 'Connection setup is disabled in demo mode.')
         reference = ({'backend': 'kwallet', 'wallet': value.wallet, 'folder': value.folder, 'entry': value.entry}
@@ -116,6 +205,10 @@ def install_configuration_routes(app, authorization, settings, guard_mutation, r
                         await asyncio.to_thread(write_provider_password, value.folder, value.entry, token, value.wallet)
                     else:
                         def write_keyring():
+                            """Store the Pushbullet token in the keyring backend and verify persistence.
+
+                            :raises CredentialLocked: If storing or verifying the Pushbullet token in the keyring fails.
+                            """
                             try:
                                 backend = secure_backend()
                                 backend.set_password('pbdesk', 'pushbullet', token)

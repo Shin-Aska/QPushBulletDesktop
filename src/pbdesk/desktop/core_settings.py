@@ -10,7 +10,16 @@ from .actions import plain_label
 
 
 class CoreSettings(QWidget):
+    """Settings tab displaying verified core status, notification controls, and restart."""
+
     def __init__(self, worker, parent=None):
+        """Initialize the core backend status view, controls, and restart timer.
+
+        :param worker: Core worker handling core settings and restart requests.
+        :type worker: pbdesk.desktop.worker.CoreWorker
+        :param parent: Optional parent widget owning this settings tab.
+        :type parent: QWidget | None
+        """
         super().__init__(parent)
         self.worker = worker
         self._requests = {}
@@ -105,6 +114,15 @@ class CoreSettings(QWidget):
         self.update_controls()
 
     def send(self, command, values=None):
+        """Dispatch a non-duplicate core command and track its pending request state.
+
+        :param command: Core worker command name to send.
+        :type command: str
+        :param values: Optional payload mapping included in the worker request.
+        :type values: dict | None
+        :return: Generated UUID request ID, or None if the same command is already pending.
+        :rtype: str | None
+        """
         if any(value['command'] == command for value in self._requests.values()):
             return None
         request_id = str(uuid.uuid4())
@@ -116,20 +134,32 @@ class CoreSettings(QWidget):
         return request_id
 
     def showEvent(self, event):
+        """Refresh core settings whenever this tab becomes visible.
+
+        :param event: Qt show event delivered when the widget becomes visible.
+        :type event: PyQt6.QtGui.QShowEvent
+        """
         super().showEvent(event)
         self.refresh()
 
     def refresh(self):
+        """Request current core settings unless the feature is known unsupported."""
         if self._supported is False:
             self.unsupported()
             return
         self.send('core_settings')
 
     def focus_details(self):
+        """Move focus to the storage details section and scroll it into view."""
         self.values['application'].setFocus()
         self.scroll.ensureWidgetVisible(self.values['application'])
 
     def apply_snapshot(self, data):
+        """Update feature support and verified core instance state from a snapshot.
+
+        :param data: Core snapshot payload containing capabilities and ``instance_id``.
+        :type data: dict
+        """
         features = data.get('capabilities', {}).get('features', {})
         self._supported = features.get('core_settings', self._supported)
         self._restart_supported = features.get('core_restart', self._restart_supported)
@@ -158,6 +188,11 @@ class CoreSettings(QWidget):
         self.update_controls()
 
     def connection_changed(self, message):
+        """Reflect worker connection state transitions in status text and controls.
+
+        :param message: Connection status message emitted by the core worker.
+        :type message: str
+        """
         if message.startswith('Connected'):
             self._connected = True
         elif any(word in message.lower() for word in ('disconnect', 'reconnect', 'starting', 'waiting')):
@@ -169,16 +204,23 @@ class CoreSettings(QWidget):
         self.update_controls()
 
     def connection_error(self, message):
+        """Mark the core disconnected and show the connection error message.
+
+        :param message: Fatal or connection-level error text from the worker.
+        :type message: str
+        """
         self._connected = False
         self.feedback.setText(message)
         self.update_controls()
 
     def clear_details(self):
+        """Reset displayed core detail labels to their unloaded placeholder state."""
         for value in self.values.values():
             value.setText('Not loaded')
         self.notification_outcome.setText('Delivery availability has not been checked.')
 
     def unsupported(self):
+        """Disable core settings controls when the connected backend lacks support."""
         self._data = None
         self._status_valid = False
         self._requests.clear()
@@ -191,6 +233,7 @@ class CoreSettings(QWidget):
         self.update_controls()
 
     def update_controls(self):
+        """Enable or disable refresh, notification, and restart controls by current state."""
         loading = any(value['command'] == 'core_settings' for value in self._requests.values())
         mutation = any(value['command'] != 'core_settings' for value in self._requests.values())
         valid = bool(self._data and self._status_valid and self._connected and self._supported is not False and
@@ -206,10 +249,12 @@ class CoreSettings(QWidget):
                                        not loading and not mutation and not restarting)
 
     def notification_edited(self):
+        """Track local edits to the notification toggle and refresh control states."""
         self._notification_revision += 1
         self.update_controls()
 
     def apply_notifications(self):
+        """Persist the desktop notification preference to the verified core instance."""
         if not self.apply_button.isEnabled():
             return
         self._operation_error = None
@@ -218,6 +263,11 @@ class CoreSettings(QWidget):
                     'notifications_enabled': self.notifications_enabled.isChecked()})
 
     def restart_confirmation(self):
+        """Build the confirmation dialog prompting the user before restarting the core.
+
+        :return: Pair of ``(message_box, restart_button)`` configured for confirmation.
+        :rtype: tuple[QMessageBox, QPushButton]
+        """
         box = QMessageBox(self)
         box.setWindowTitle('Restart core')
         box.setIcon(QMessageBox.Icon.Question)
@@ -230,11 +280,17 @@ class CoreSettings(QWidget):
         return box, restart
 
     def confirm_restart(self):
+        """Prompt for user confirmation and return True if restart was accepted.
+
+        :return: True if the user clicked the restart confirmation button.
+        :rtype: bool
+        """
         box, restart = self.restart_confirmation()
         box.exec()
         return box.clickedButton() is restart
 
     def restart(self):
+        """Confirm and submit a core restart request bound to the current instance."""
         instance = self._verified_instance
         if not self.restart_button.isEnabled() or not self.confirm_restart():
             return
@@ -250,6 +306,7 @@ class CoreSettings(QWidget):
         self.restart_timer.start()
 
     def restart_timeout(self):
+        """Handle expiration of the core restart confirmation timer without re-sending."""
         if not self._restart_from:
             return
         self._restart_timed_out = True
@@ -263,6 +320,13 @@ class CoreSettings(QWidget):
 
     @staticmethod
     def duration(value):
+        """Format a non-negative duration in seconds into a human-readable string.
+
+        :param value: Duration in seconds, or an invalid/missing value.
+        :type value: int | float | object
+        :return: Formatted duration string or ``'Not reported'``.
+        :rtype: str
+        """
         if not isinstance(value, (int, float)) or value < 0:
             return 'Not reported'
         seconds = int(value)
@@ -274,10 +338,26 @@ class CoreSettings(QWidget):
 
     @staticmethod
     def saved_preference(data):
+        """Return the saved desktop notification preference from core settings data.
+
+        :param data: Core settings dictionary containing a ``notifications`` mapping.
+        :type data: dict
+        :return: True when desktop notification delivery is requested/enabled.
+        :rtype: bool
+        """
         notifications = data.get('notifications', {})
         return bool(notifications.get('requested', notifications.get('enabled')))
 
     def render(self, data, revision, preserve_notification=False):
+        """Populate core status fields and notification delivery outcome from data.
+
+        :param data: Verified core settings response payload.
+        :type data: dict
+        :param revision: Notification edit revision captured when the request was sent.
+        :type revision: int
+        :param preserve_notification: Whether to keep unsaved local toggle changes intact.
+        :type preserve_notification: bool
+        """
         self._data = data
         self._status_valid = True
         lifecycle = data.get('lifecycle', {})
@@ -304,6 +384,11 @@ class CoreSettings(QWidget):
                                           + str(notifications.get('outcome') or 'No delivery outcome reported'))
 
     def result(self, result):
+        """Process worker responses for settings reads, updates, and core restarts.
+
+        :param result: Worker result dictionary emitted after a core command completes.
+        :type result: dict
+        """
         request_id = result.get('request_id')
         pending = self._requests.get(request_id)
         if not pending or result.get('command') != pending['command']:

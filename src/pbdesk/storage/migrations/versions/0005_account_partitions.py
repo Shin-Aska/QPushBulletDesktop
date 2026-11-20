@@ -8,6 +8,7 @@ depends_on=None
 
 
 def upgrade():
+    """Partition items, actions, locked envelopes, and devices by account."""
     for table in ('items','actions','locked_envelopes'):
         op.add_column(table,sa.Column('account_id',sa.Text(),nullable=False,server_default=''))
         op.create_index('ix_'+table+'_account',table,['account_id'])
@@ -24,4 +25,8 @@ def upgrade():
 
 
 def downgrade():
+    """Refuse schema downgrade and require restoring a verified backup.
+
+    :raises RuntimeError: Always raised because schema downgrades are unsupported.
+    """
     raise RuntimeError('Restore a verified backup to downgrade')

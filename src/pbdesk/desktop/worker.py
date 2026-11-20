@@ -28,6 +28,7 @@ class PollStopped(Exception):
 
 
 class CoreWorker(QThread):
+    """Background Qt thread managing private core polling and HTTP commands."""
     history_security = pyqtSignal(dict)
     snapshot = pyqtSignal(dict)
     connection = pyqtSignal(str)
@@ -37,6 +38,13 @@ class CoreWorker(QThread):
 
     @staticmethod
     def _media_error(exc):
+        """Translate a media fetch exception into a structured error dictionary.
+
+        :param exc: Exception raised while fetching or decoding a media image.
+        :type exc: Exception
+        :return: Dictionary containing `error_code`, user-facing `error`, and HTTP `status`.
+        :rtype: dict[str, str | int | None]
+        """
         status = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
         if isinstance(exc, AccountChangedError):
             code = 'account_changed'
@@ -54,6 +62,13 @@ class CoreWorker(QThread):
         return {'error_code': code, 'error': IMAGE_ERRORS[code], 'status': status}
 
     def __init__(self, settings: Settings, demo=False):
+        """Initialize the core worker thread and synchronization state.
+
+        :param settings: Desktop configuration settings.
+        :type settings: Settings
+        :param demo: Whether to seed a sanitized demo fixture in a newly started core.
+        :type demo: bool
+        """
         super().__init__()
         self.settings = settings
         self.demo = demo
@@ -73,18 +88,31 @@ class CoreWorker(QThread):
         self._pending_preferences = {}
 
     def request(self, action, value=None):
+        """Enqueue a worker command and track pending preference updates.
+
+        :param action: Worker command or mutation name to enqueue.
+        :type action: str
+        :param value: Optional command payload, search query, or toggle value.
+        :type value: dict | str | bool | None
+        """
         if action == 'preferences_update':
             with self._preference_lock:
                 self._pending_preferences.update(value['changes'])
         self.commands.put((action, value))
 
     def stop(self):
+        """Signal the worker thread and active core lease to stop."""
         self.stop_event.set()
         self.commands.put(("wake", None))
         if self.lease:
             self.lease.stop_event.set()
 
     def _account(self, data):
+        """Update tracked account state and clear stale data when the account changes.
+
+        :param data: Capabilities payload potentially containing an `account_id`.
+        :type data: dict
+        """
         if 'account_id' not in data:
             return
         account_id = data['account_id']
@@ -103,6 +131,15 @@ class CoreWorker(QThread):
 
     @staticmethod
     def _consistent_account(capabilities, *parts):
+        """Return whether all response sections belong to the capabilities account.
+
+        :param capabilities: Core capabilities dictionary defining the expected account.
+        :type capabilities: dict
+        :param parts: Response section dictionaries to verify against the active account.
+        :type parts: dict | None
+        :return: `True` if every section matches the capabilities account, otherwise `False`.
+        :rtype: bool
+        """
         if 'account_id' not in capabilities:
             return True  # Older cores have no new private-history surfaces.
         account_id = capabilities['account_id']
@@ -112,6 +149,19 @@ class CoreWorker(QThread):
             for part in parts)
 
     def _sms_targets(self, devices, actions, selected_device, account_id):
+        """Return sorted device IDs to poll for cached SMS history.
+
+        :param devices: Devices response dictionary containing cached device records.
+        :type devices: dict
+        :param actions: Outbox actions response dictionary containing pending SMS items.
+        :type actions: dict
+        :param selected_device: Currently selected phone device ID, or `None` for all.
+        :type selected_device: str | None
+        :param account_id: Active account identifier used to filter cached SMS snapshots.
+        :type account_id: str | int | None
+        :return: Sorted list of target device IDs to query for SMS history.
+        :rtype: list[str]
+        """
         if selected_device:
             return [selected_device]
         targets = {row['id'] for row in devices['devices']
@@ -123,7 +173,18 @@ class CoreWorker(QThread):
         return sorted(targets)
 
     def _read_sms(self, get, targets, account_id):
-        """Read the existing per-phone cache API; failures preserve that phone only."""
+        """Read the existing per-phone cache API; failures preserve that phone only.
+
+        :param get: Helper callable performing authenticated GET requests to core.
+        :type get: collections.abc.Callable
+        :param targets: Phone device IDs to query for cached SMS history.
+        :type targets: list[str]
+        :param account_id: Active account identifier for fallback cache validation.
+        :type account_id: str | int | None
+        :return: Mapping of device ID to SMS snapshot or fallback error dictionary.
+        :rtype: dict[str, dict]
+        :raises PollStopped: If the worker stop event is set during polling.
+        """
         snapshots = {}
         for device in targets:
             if self.stop_event.is_set():
@@ -141,6 +202,15 @@ class CoreWorker(QThread):
 
     @classmethod
     def _consistent_sms(cls, capabilities, snapshots):
+        """Return whether per-device SMS snapshots match the account and device IDs.
+
+        :param capabilities: Core capabilities dictionary defining the expected account.
+        :type capabilities: dict
+        :param snapshots: Per-device SMS snapshot dictionaries keyed by device ID.
+        :type snapshots: dict[str, dict]
+        :return: `True` if all snapshots and messages match the account and device IDs.
+        :rtype: bool
+        """
         if not cls._consistent_account(capabilities, *snapshots.values()):
             return False
         account_id = capabilities.get('account_id')
@@ -149,6 +219,14 @@ class CoreWorker(QThread):
             for device, sms in snapshots.items() for row in sms.get('messages', []))
 
     def _identity(self, client):
+        """Verify the core health endpoint, history encryption, and readiness.
+
+        :param client: Synchronous HTTP client connected to the private core.
+        :type client: httpx.Client
+        :return: Verified core health identity dictionary.
+        :rtype: dict
+        :raises ValueError: If core identity verification fails, history encryption is disabled, or core is not ready.
+        """
         proof = health_headers(self.settings, "desktop")
         response = client.get("/api/v1/health", headers=proof)
         response.raise_for_status()
@@ -162,6 +240,19 @@ class CoreWorker(QThread):
         return identity
 
     def _history_request(self, client, headers, command, value):
+        """Execute a history security request or recovery key file export.
+
+        :param client: Synchronous HTTP client connected to the private core.
+        :type client: httpx.Client
+        :param headers: Authorization headers for core requests.
+        :type headers: dict[str, str]
+        :param command: History security command name to perform.
+        :type command: str
+        :param value: Optional arguments such as recovery key or export file path.
+        :type value: dict | None
+        :return: Response JSON from core, or `{'saved': True}` after exporting a key.
+        :rtype: dict
+        """
         value = value or {}
         if command == 'history_status':
             response = client.get('/api/v1/history/security', headers=headers)
@@ -198,6 +289,21 @@ class CoreWorker(QThread):
         return response.json()
 
     def _mutate(self, client, headers, command, value):
+        """Send a configuration, device, action, or lifecycle mutation to core.
+
+        :param client: Synchronous HTTP client connected to the private core.
+        :type client: httpx.Client
+        :param headers: Authorization headers for core requests.
+        :type headers: dict[str, str]
+        :param command: Mutation or configuration command name.
+        :type command: str
+        :param value: Command payload dictionary, toggle flag, or `None`.
+        :type value: dict | bool | None
+        :return: Decoded JSON response from the core endpoint.
+        :rtype: dict
+        :raises ValueError: If the preference update response payload is invalid.
+        :raises AccountChangedError: If the active account changed before SMS refresh or action mutation.
+        """
         if command == 'configuration_get':
             response = client.get('/api/v1/configuration', headers=headers)
             response.raise_for_status()
@@ -278,6 +384,15 @@ class CoreWorker(QThread):
 
     @staticmethod
     def _mutation_error(exc, command="create_action"):
+        """Return a user-safe message, ambiguity flag, and HTTP status for a mutation error.
+
+        :param exc: Exception raised during the mutation request.
+        :type exc: Exception
+        :param command: Command name associated with the failed request.
+        :type command: str
+        :return: Tuple of `(message, ambiguous, status_code)`.
+        :rtype: tuple[str, bool, int | None]
+        """
         if isinstance(exc, AccountChangedError):
             return str(exc), False, 409
         if command in CORE_COMMANDS:
@@ -320,6 +435,7 @@ class CoreWorker(QThread):
         return "The result could not be confirmed. Refresh message activity before taking another action. A create request can be reconciled using the same request ID; sending is never automatically retried.", True, None
 
     def run(self):
+        """Execute the worker client loop and clean up preferences and lease on exit."""
         try:
             self._run_client()
         finally:
@@ -346,6 +462,12 @@ class CoreWorker(QThread):
             pass
 
     def _run_client(self):
+        """Run the core lease lifecycle, command dispatch, and snapshot polling loop.
+
+        :raises AccountChangedError: If the active account changes mid-request during media fetch (handled internally).
+        :raises ValueError: If a fetched media payload fails size or raster decoding checks (handled internally).
+        :raises PollStopped: If the worker stop event is set during snapshot polling (handled internally).
+        """
         if self.stop_event.is_set():
             return
         self.connection.emit("Starting private core…")
@@ -535,6 +657,16 @@ class CoreWorker(QThread):
                     next_poll = 0
                 try:
                     def get(path, **kwargs):
+                        """Fetch and decode JSON from a core endpoint unless stopping.
+
+                        :param path: Relative core API endpoint path.
+                        :type path: str
+                        :param kwargs: Additional keyword arguments forwarded to `client.get`.
+                        :type kwargs: Any
+                        :return: Decoded JSON response from the core endpoint.
+                        :rtype: dict
+                        :raises PollStopped: If the worker stop event is set before performing the request.
+                        """
                         if self.stop_event.is_set():
                             raise PollStopped()
                         response = client.get(path, headers=authorization, **kwargs)

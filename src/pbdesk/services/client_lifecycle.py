@@ -15,24 +15,53 @@ from pbdesk.credentials import private_dir, service_token
 
 @dataclass(frozen=True)
 class LeaseTiming:
+    """Timing bounds and intervals controlling client lease renewal and expiration.
+
+    :ivar renew: Lease renewal interval in seconds.
+    :type renew: float
+    :ivar expiry: Lease expiration timeout in seconds.
+    :type expiry: float
+    :ivar release_grace: Grace period in seconds after the last lease is released before shutdown.
+    :type release_grace: float
+    :ivar startup_grace: Grace period in seconds before requiring an initial client lease registration.
+    :type startup_grace: float
+    """
+
     renew: float = 5
     expiry: float = 45
     release_grace: float = 3
     startup_grace: float = 20
 
     def __post_init__(self):
+        """Validate that all lease timing parameters are within allowed bounds.
+
+        :raises ValueError: If any timing bound falls outside permitted limits.
+        """
         if not (.05 <= self.renew <= 60 and self.renew * 3 <= self.expiry <= 600
                 and .05 <= self.release_grace <= 60 and .1 <= self.startup_grace <= 120):
             raise ValueError("Invalid client lifecycle timing")
 
     @classmethod
     def from_env(cls):
+        """Load LeaseTiming overrides from PBDESK_LEASE_TIMING or return defaults.
+
+        :return: Constructed ``LeaseTiming`` configuration instance.
+        :rtype: LeaseTiming
+        """
         raw = os.environ.get('PBDESK_LEASE_TIMING')
         return cls(**json.loads(raw)) if raw else cls()
 
 
 def stop_generation(settings, *, advance=False):
-    """Read/create under the same lock used to serialize launch and Stop All."""
+    """Read/create under the same lock used to serialize launch and Stop All.
+
+    :param settings: Application settings pointing to the private state directory.
+    :type settings: pbdesk.config.Settings
+    :param advance: Whether to rotate and persist a fresh Stop All generation token.
+    :type advance: bool
+    :return: Current or newly generated 64-hex-character Stop All generation token.
+    :rtype: str
+    """
     root = private_dir(settings)
     fd = os.open(root / 'launcher.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
     try:
@@ -43,6 +72,16 @@ def stop_generation(settings, *, advance=False):
 
 
 def _generation_locked(root, *, advance=False):
+    """Read or atomically advance the persistent Stop All generation token under lock.
+
+    :param root: Private state directory path containing ``stop-generation``.
+    :type root: pathlib.Path
+    :param advance: Whether to rotate and atomically replace the generation token.
+    :type advance: bool
+    :return: Validated 64-hex-character Stop All generation token.
+    :rtype: str
+    :raises RuntimeError: If the existing ``stop-generation`` file is malformed.
+    """
     path = root / 'stop-generation'
     try:
         fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
@@ -73,7 +112,22 @@ def _generation_locked(root, *, advance=False):
 
 
 class LeaseRegistry:
+    """Core-side registry tracking active desktop and web client leases."""
+
     def __init__(self, instance_id, generation, shutdown, *, standalone=False, timing=None):
+        """Initialize the lease registry for a core instance and Stop All generation.
+
+        :param instance_id: Unique identifier of the owning core instance.
+        :type instance_id: str
+        :param generation: Active Stop All generation token for this core launch.
+        :type generation: str
+        :param shutdown: Callback invoked when coupled client leases expire.
+        :type shutdown: collections.abc.Callable[[], Any]
+        :param standalone: Whether the core stays alive without coupled client leases.
+        :type standalone: bool
+        :param timing: Optional lease timing overrides; defaults to environment settings.
+        :type timing: LeaseTiming | None
+        """
         self.instance_id, self.generation, self.shutdown = instance_id, generation, shutdown
         self.standalone = standalone
         self.timing = timing or LeaseTiming.from_env()
@@ -84,6 +138,18 @@ class LeaseRegistry:
         self.stopping = False
 
     def register(self, role, instance_id, generation):
+        """Register a new client lease for the active instance and generation.
+
+        :param role: Client role registering the lease (``desktop`` or ``web``).
+        :type role: str
+        :param instance_id: Core instance identifier expected by the client.
+        :type instance_id: str
+        :param generation: Stop All generation token held by the client.
+        :type generation: str
+        :return: Dictionary containing ``lease_id``, ``instance_id``, and ``renew_after``.
+        :rtype: dict[str, Any]
+        :raises ValueError: If the core is stopping or the instance/generation does not match.
+        """
         if self.stopping or instance_id != self.instance_id or generation != self.generation:
             raise ValueError('Core instance or Stop All generation changed; relaunch the client')
         lease_id = secrets.token_urlsafe(32)
@@ -93,6 +159,20 @@ class LeaseRegistry:
         return {'lease_id': lease_id, 'instance_id': self.instance_id, 'renew_after': self.timing.renew}
 
     def update(self, role, instance_id, lease_id, release=False):
+        """Renew or release an existing client lease for the matching role and instance.
+
+        :param role: Client role updating the lease.
+        :type role: str
+        :param instance_id: Core instance identifier expected by the client.
+        :type instance_id: str
+        :param lease_id: Lease identifier previously issued by :meth:`register`.
+        :type lease_id: str
+        :param release: Whether to delete the lease immediately instead of renewing it.
+        :type release: bool
+        :return: Dictionary containing ``released`` status and ``instance_id``.
+        :rtype: dict[str, Any]
+        :raises ValueError: If the instance, lease ID, or role does not match an active lease.
+        """
         if instance_id != self.instance_id or lease_id not in self.leases or self.leases[lease_id][0] != role:
             raise ValueError('Client lease is unknown or belongs to another core instance')
         if release:
@@ -102,6 +182,7 @@ class LeaseRegistry:
         return {'released': release, 'instance_id': self.instance_id}
 
     async def run(self):
+        """Monitor active leases and trigger shutdown when coupled clients disappear."""
         while not self.stopping:
             await asyncio.sleep(min(.5, self.timing.renew))
             now = time.monotonic()
@@ -124,6 +205,18 @@ class ClientLease:
     Only connection refusal permits recovery. Failed commands are never replayed.
     """
     def __init__(self, settings, role='desktop', *, demo=False, generation=None):
+        """Initialize a client lease holder for the desktop or web role.
+
+        :param settings: Application settings specifying core URL and state directory.
+        :type settings: pbdesk.config.Settings
+        :param role: Client role holding the lease (``desktop`` or ``web``).
+        :type role: str
+        :param demo: Whether core auto-launch should enable demo mode.
+        :type demo: bool
+        :param generation: Explicit Stop All generation token, or ``None`` to load/create it.
+        :type generation: str | None
+        :raises ValueError: If ``role`` is not ``desktop`` or ``web``.
+        """
         if role not in {'desktop', 'web'}:
             raise ValueError('Only desktop and web processes hold client leases')
         self.settings, self.role, self.demo = settings, role, demo
@@ -137,6 +230,12 @@ class ClientLease:
         self.timing = LeaseTiming.from_env()
 
     def connect(self):
+        """Ensure the core service is running and register or reuse a client lease.
+
+        :return: Verified core health payload dictionary returned by ``ensure_core``.
+        :rtype: dict[str, Any]
+        :raises RuntimeError: If the client lease closes during core startup.
+        """
         from pbdesk.services.lifecycle import ensure_core
         identity = ensure_core(self.settings, demo=self.demo, role=self.role, generation=self.generation, cancel=self.stop_event)
         with self.lock:
@@ -151,16 +250,27 @@ class ClientLease:
         return identity
 
     def _client(self):
+        """Create an authenticated synchronous HTTP client targeting the core API.
+
+        :return: Configured synchronous ``httpx.Client`` with bearer token authentication.
+        :rtype: httpx.Client
+        """
         return httpx.Client(base_url=self.settings.core_url, timeout=2, trust_env=False, follow_redirects=False,
                             headers={'Authorization': 'Bearer ' + service_token(self.settings, self.role)})
 
     def start(self):
+        """Connect to the core and launch the background lease heartbeat thread.
+
+        :return: This ``ClientLease`` instance for call chaining.
+        :rtype: ClientLease
+        """
         self.connect()
         self.thread = threading.Thread(target=self._run, name='pbdesk-' + self.role + '-lease', daemon=True)
         self.thread.start()
         return self
 
     def _run(self):
+        """Run the lease heartbeat loop and release the lease on exit."""
         try:
             self._heartbeat()
         finally:
@@ -172,6 +282,7 @@ class ClientLease:
         self.wake_event.set()
 
     def _heartbeat(self):
+        """Periodically renew the client lease and reconnect if the core restarts."""
         delay = self.timing.renew
         while True:
             deadline = time.monotonic() + delay
@@ -198,6 +309,7 @@ class ClientLease:
                     self.stop_event.set()
 
     def close(self):
+        """Stop the heartbeat thread and release the active client lease."""
         self.stop_event.set()
         if self.thread and self.thread is not threading.current_thread():
             self.thread.join(timeout=3)
@@ -205,6 +317,7 @@ class ClientLease:
             self._release()
 
     def _release(self):
+        """Verify the core instance identity and delete the active client lease."""
         if not self.lease_id:
             return
         # Never release against a replacement or an unverified listener.

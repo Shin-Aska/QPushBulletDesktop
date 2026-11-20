@@ -8,9 +8,15 @@ from pbdesk.credentials import service_token, health_headers, verify_health
 
 
 class AiWorker(QThread):
+    """Background Qt thread running cancellable AI HTTP requests."""
     result = pyqtSignal(dict)
 
     def __init__(self, settings):
+        """Initialize the AI worker thread and request synchronization state.
+
+        :param settings: Desktop configuration settings providing core URL and credentials.
+        :type settings: pbdesk.config.Settings
+        """
         super().__init__()
         self.settings = settings
         self._loop = None
@@ -21,6 +27,15 @@ class AiWorker(QThread):
         self._tasks = {}
 
     def request(self, command, payload=None):
+        """Enqueue an AI command with a request ID and return that ID.
+
+        :param command: AI command name to execute on the worker thread.
+        :type command: str
+        :param payload: Optional request parameters or JSON payload.
+        :type payload: dict | None
+        :return: Unique request identifier associated with the queued command.
+        :rtype: str
+        """
         payload = dict(payload or {})
         request_id = payload.pop('request_id', None) or str(uuid.uuid4())
         item = (command, payload, request_id)
@@ -34,6 +49,7 @@ class AiWorker(QThread):
         return request_id
 
     def stop(self):
+        """Signal the worker loop to cancel pending work and stop."""
         with self._lock:
             self._stopping = True
             self._pending.clear()
@@ -41,9 +57,11 @@ class AiWorker(QThread):
                 self._loop.call_soon_threadsafe(self._queue.put_nowait, ('stop', {}, ''))
 
     def run(self):
+        """Run the asyncio event loop for AI request processing."""
         asyncio.run(self._run())
 
     async def _run(self):
+        """Process queued AI requests and cancellations in an asyncio loop."""
         with self._lock:
             self._loop = asyncio.get_running_loop()
             self._queue = asyncio.Queue()
@@ -73,6 +91,18 @@ class AiWorker(QThread):
                 self._queue = None
 
     async def _perform(self, client, command, payload, request_id):
+        """Execute a single authenticated AI HTTP request and emit its result.
+
+        :param client: Asynchronous HTTP client connected to the private core.
+        :type client: httpx.AsyncClient
+        :param command: AI command name to route and execute.
+        :type command: str
+        :param payload: Request query parameters or JSON body for the command.
+        :type payload: dict
+        :param request_id: Unique request identifier correlated with the emitted result.
+        :type request_id: str
+        :raises ValueError: If core health verification fails or encrypted history is not ready (handled internally).
+        """
         try:
             proof = health_headers(self.settings, 'desktop')
             health = await client.get('/api/v1/health', headers=proof)

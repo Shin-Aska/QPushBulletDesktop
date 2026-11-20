@@ -15,6 +15,11 @@ from pbdesk.runtime import command, appimage_path, system_environment
 
 
 def core_main(argv=None):
+    """Parse CLI flags and run the private pbdesk core server.
+
+    :param argv: Optional argument list to parse instead of ``sys.argv``.
+    :type argv: list[str] | None
+    """
     parser = argparse.ArgumentParser(description="Run the private pbdesk core (coupled to desktop/web clients)")
     parser.add_argument("--foreground", action="store_true", help="Run in foreground (default)")
     parser.add_argument("--standalone", action="store_true", help="Keep core running without desktop/web clients (debug/service use)")
@@ -37,6 +42,11 @@ def core_main(argv=None):
 
 
 def desktop_main():
+    """Launch the pbdesk desktop application.
+
+    :return: Return value from the desktop application entry point, if it returns instead of exiting.
+    :rtype: int | None
+    """
     from pbdesk.desktop.app import main
     return main()
 
@@ -51,7 +61,16 @@ HISTORY_SETUP_HINT = ('Open pbdesk to protect or unlock local history, then retr
 
 
 def wait_for_history_ready(settings, *, timeout=12.0):
-    """Wait only on signed health reads; never authorize a wallet or replay work."""
+    """Wait only on signed health reads; never authorize a wallet or replay work.
+
+    :param settings: Application settings specifying core host, port, and state paths.
+    :type settings: Settings
+    :param timeout: Maximum seconds to wait for core and encrypted history readiness.
+    :type timeout: float
+    :return: Verified core health payload once history encryption is ready.
+    :rtype: dict[str, Any]
+    :raises HistoryNotReady: If core is unreachable, lacks history encryption, or times out before becoming ready.
+    """
     import httpx
     from pbdesk.services.lifecycle import _probe, CoreStartupError
     deadline = time.monotonic() + timeout
@@ -93,12 +112,27 @@ def web_main():
 
 
 def mcp_main():
+    """Run the pbdesk MCP stdio server.
+
+    :return: Return value from the MCP server stdio runner.
+    :rtype: None
+    """
     from pbdesk.mcp_server.server import main
     return main()
 
 
 def configure_connection(settings, reference, token=None):
-    """Local admin uses the same signed core API as native setup."""
+    """Local admin uses the same signed core API as native setup.
+
+    :param settings: Application settings specifying core URL and credential paths.
+    :type settings: Settings
+    :param reference: Provider credential backend reference dictionary.
+    :type reference: dict[str, Any]
+    :param token: Optional Pushbullet access token to include in the configuration payload.
+    :type token: str | None
+    :raises HistoryNotReady: If encrypted local history is not ready before saving settings.
+    :raises RuntimeError: If saving or verifying the connection settings fails.
+    """
     import httpx
     from pbdesk.services.client_lifecycle import ClientLease
     from pbdesk.credentials import service_token
@@ -124,6 +158,11 @@ def configure_connection(settings, reference, token=None):
 
 
 def admin_main(argv=None):
+    """Execute local administration and credential setup commands.
+
+    :param argv: Optional argument list to parse instead of ``sys.argv``.
+    :type argv: list[str] | None
+    """
     parser = argparse.ArgumentParser(description="Local secure setup (web accounts deferred)")
     parser.add_argument("action", choices=["provider-token", "use-kwallet", "reload-provider", "revoke-service", "install-service"])
     parser.add_argument("--role", choices=["desktop", "web", "mcp"])
@@ -172,6 +211,13 @@ def admin_main(argv=None):
         root = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "systemd/user"
         root.mkdir(parents=True, exist_ok=True)
         def quote(value):
+            """Escape and double-quote a value for a systemd unit file.
+
+            :param value: Value to escape and wrap in double quotes.
+            :type value: Any
+            :return: Escaped double-quoted systemd unit string.
+            :rtype: str
+            """
             return '"' + str(value).replace('\\', '\\\\').replace('"', '\\"').replace('%', '%%') + '"'
         image = appimage_path() if getattr(sys, "frozen", False) else None
         launch = [str(image), "--core", "--foreground", "--standalone"] if image else command("pbdesk.cli", "--foreground", "--standalone")
@@ -188,6 +234,7 @@ def admin_main(argv=None):
 
 
 def diagnostics_main():
+    """Collect local environment, core, and service diagnostics as JSON."""
     from pbdesk.credentials import health_headers, verify_health
     from pbdesk.storage.cipher import driver
     import httpx

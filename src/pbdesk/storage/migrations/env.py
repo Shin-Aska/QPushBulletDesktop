@@ -1,3 +1,4 @@
+"""Alembic migration environment runner using the provided connection."""
 from alembic import context
 from pbdesk.storage.database import metadata
 

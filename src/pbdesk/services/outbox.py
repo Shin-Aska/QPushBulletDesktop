@@ -7,13 +7,26 @@ from pbdesk.storage.workflows import utcnow
 
 
 class Dispatcher:
+    """Serialized dispatcher that claims and submits approved outbox actions."""
+
     def __init__(self,store,provider_getter):
+        """Initialize the dispatcher with the action store and provider getter.
+
+        :param store: Persistence store managing durable outbox actions.
+        :type store: pbdesk.storage.database.Store
+        :param provider_getter: Callable returning the active Pushbullet provider or ``None``.
+        :type provider_getter: collections.abc.Callable[[], pbdesk.pushbullet.provider.Provider | None]
+        """
         self.store=store
         self.provider_getter=provider_getter
         self.lock=asyncio.Lock()
         self.paused=False
 
     async def dispatch_once(self):
+        """Claim and submit all ready actions once after refreshing provider devices.
+
+        :raises asyncio.CancelledError: If the dispatch task is cancelled while refreshing or sending.
+        """
         async with self.lock:
             if self.paused:
                 return
@@ -55,6 +68,7 @@ class Dispatcher:
                     await asyncio.to_thread(self.store.finish_action,action_id,"upstream_accepted",None,None,upstream_id)
 
     async def run(self):
+        """Continuously poll for and dispatch ready outbox actions."""
         while True:
             await self.dispatch_once()
             await asyncio.sleep(.5)

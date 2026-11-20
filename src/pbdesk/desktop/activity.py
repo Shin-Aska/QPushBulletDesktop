@@ -9,9 +9,15 @@ from .widgets import PillDelegate, card_frame
 
 
 class ActivityDialog(QDialog):
+    """Dialog listing saved message actions with preview details and review launch."""
     review_requested = pyqtSignal(dict)
 
     def __init__(self, parent=None):
+        """Initialize the saved message activity table and detail preview pane.
+
+        :param parent: Optional parent widget owning this dialog.
+        :type parent: PyQt6.QtWidgets.QWidget | None
+        """
         super().__init__(parent)
         self.devices = []
         self.setWindowTitle('Message activity')
@@ -70,6 +76,13 @@ class ActivityDialog(QDialog):
         self.apply_actions([], [])
 
     def apply_actions(self, actions, devices):
+        """Replace displayed actions and devices while preserving selection and scroll.
+
+        :param actions: Saved action records to display in the table.
+        :type actions: collections.abc.Sequence[dict]
+        :param devices: Cached Pushbullet device records used for destination labels.
+        :type devices: collections.abc.Sequence[dict]
+        """
         self.devices = list(devices)
         selected = self.view.currentIndex().data(Qt.ItemDataRole.UserRole)
         identity = selected['id'] if selected else None
@@ -82,11 +95,19 @@ class ActivityDialog(QDialog):
         self.show_selected(self.view.currentIndex())
 
     def show_selected(self, current, previous=None):
+        """Render details for the currently selected action or show empty-state guidance.
+
+        :param current: Model index of the newly selected table row.
+        :type current: PyQt6.QtCore.QModelIndex
+        :param previous: Model index of the previously selected table row, if any.
+        :type previous: PyQt6.QtCore.QModelIndex | None
+        """
         action = current.data(Qt.ItemDataRole.UserRole)
         self.review_button.setEnabled(bool(action))
         self.detail.setPlainText(action_preview(action, self.devices) if action else 'No saved actions. Save a message for review to add it here. Saving sends nothing.')
 
     def review_selected(self):
+        """Emit review_requested for the currently selected action, if any."""
         action = self.view.currentIndex().data(Qt.ItemDataRole.UserRole)
         if action:
             self.review_requested.emit(dict(action))

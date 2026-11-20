@@ -11,6 +11,13 @@ CONFIG_KEYS = ('name', 'sources', 'device_ids', 'conversations', 'conversation_f
 
 
 def text_label(text=''):
+    """Create a selectable, word-wrapped plain-text QLabel.
+
+    :param text: Initial plain text displayed by the label.
+    :type text: str
+    :return: Configured plain-text label widget.
+    :rtype: QLabel
+    """
     item = QLabel(text)
     item.setWordWrap(True)
     item.setTextFormat(Qt.TextFormat.PlainText)
@@ -19,6 +26,13 @@ def text_label(text=''):
 
 
 def stamp(value):
+    """Format a numeric timestamp or ISO-8601 string in the local timezone.
+
+    :param value: Unix timestamp or ISO-8601 datetime string.
+    :type value: float | int | str | object
+    :return: Local formatted date/time string or ``'Not recorded'``.
+    :rtype: str
+    """
     try:
         if isinstance(value, (float, int)):
             moment = datetime.datetime.fromtimestamp(value).astimezone()
@@ -32,6 +46,13 @@ def stamp(value):
 
 
 def scope_text(snapshot):
+    """Format a summary preset snapshot into a human-readable scope description.
+
+    :param snapshot: Captured preset configuration dictionary, or None for legacy entries.
+    :type snapshot: dict | None
+    :return: Multiline description of sources, devices, conversations, window, and model.
+    :rtype: str
+    """
     if not snapshot:
         return 'Captured scope: Not recorded (legacy summary)'
     sources = ', '.join({'sms': 'SMS', 'notifications': 'Notifications'}.get(source, source) for source in snapshot.get('sources', [])) or 'Not recorded'
@@ -45,12 +66,26 @@ def scope_text(snapshot):
 
 
 def metrics_text(data):
+    """Format generation token counts, latency, model, coverage, and timestamps.
+
+    :param data: Saved summary or generation metadata dictionary.
+    :type data: dict
+    :return: Multiline plain-text summary of generation metrics and timestamps.
+    :rtype: str
+    """
     source = dict(data.get('generation') or {}, **data)
     metrics = source.get('metrics') or {}
     counts = source.get('counts') or {}
     for key, count in (('notification_count','notifications'), ('sms_count','sms'), ('conversation_count','conversations')):
         if key not in source and count in counts: source[key] = counts[count]
     def value(key):
+        """Return a formatted metric value from source or metrics, or 'Not recorded'.
+
+        :param key: Metric field name to look up in source or nested metrics.
+        :type key: str
+        :return: Stringified metric value or ``'Not recorded'``.
+        :rtype: str
+        """
         result = source.get(key, metrics.get(key))
         return 'Not recorded' if result is None else str(result)
     return ('Input tokens: ' + value('input_tokens') + ' · Output tokens: ' + value('output_tokens') +
@@ -67,13 +102,29 @@ def metrics_text(data):
 
 
 class CoreWidget(QWidget):
+    """Base widget managing account-scoped worker requests and result dispatch."""
+
     def __init__(self, client, parent=None):
+        """Initialize account tracking and connect the worker result signal.
+
+        :param client: AI worker client dispatching summary and preset commands.
+        :type client: pbdesk.desktop.ai_worker.AiWorker | None
+        :param parent: Optional parent widget owning this widget.
+        :type parent: QWidget | None
+        """
         super().__init__(parent)
         self.client, self.account_id, self.requests = client, None, {}
         if client:
             client.result.connect(self._result)
 
     def send(self, command, **payload):
+        """Send an account-scoped command to the core worker and track its request ID.
+
+        :param command: AI worker command name to send.
+        :type command: str
+        :param payload: Keyword payload fields merged into the request dictionary.
+        :type payload: object
+        """
         if not self.client or not self.account_id:
             return
         identity = str(uuid.uuid4())
@@ -81,6 +132,11 @@ class CoreWidget(QWidget):
         self.client.request(command, dict(payload, account_id=self.account_id, request_id=identity))
 
     def set_account(self, account):
+        """Switch active account, cancel pending requests, and reset view state.
+
+        :param account: Newly active Pushbullet account ID, or None when unavailable.
+        :type account: str | int | None
+        """
         if account == self.account_id:
             return
         for identity in self.requests:
@@ -90,9 +146,15 @@ class CoreWidget(QWidget):
         self.reset()
 
     def reset(self):
+        """Reset widget state after an account change."""
         pass
 
     def _result(self, result):
+        """Validate account correlation on worker replies and invoke received().
+
+        :param result: Worker result dictionary emitted after an AI command completes.
+        :type result: dict
+        """
         pending = self.requests.pop(result.get('request_id'), None)
         if not pending or pending[1] != self.account_id:
             return
@@ -107,8 +169,22 @@ class CoreWidget(QWidget):
 
 
 class PresetEditor(QDialog):
+    """Dialog for creating or editing a summary preset configuration."""
     saved = pyqtSignal(dict)
     def __init__(self, preset=None, choices=None, parent=None, is_active=False, choices_truncated=False):
+        """Initialize preset fields, cached device/conversation lists, and search filter.
+
+        :param preset: Existing preset dictionary to edit, or None to create a new preset.
+        :type preset: dict | None
+        :param choices: Optional ``(devices, conversations)`` tuple of cached choices.
+        :type choices: tuple[collections.abc.Sequence[dict], collections.abc.Sequence[dict]] | None
+        :param parent: Optional parent widget owning this dialog.
+        :type parent: QWidget | None
+        :param is_active: Whether the edited preset is currently the active preset.
+        :type is_active: bool
+        :param choices_truncated: Whether cached device/conversation choices were truncated.
+        :type choices_truncated: bool
+        """
         super().__init__(parent)
         self.setWindowTitle('Edit summary preset' if preset else 'New summary preset')
         self.resize(520, 590)
@@ -166,17 +242,28 @@ class PresetEditor(QDialog):
         self.search.textChanged.connect(lambda text: [self.conversations.item(i).setHidden(text.casefold() not in self.conversations.item(i).text().casefold()) for i in range(self.conversations.count())])
 
     def set_active(self, active):
+        """Update save button text and active-preset warning message.
+
+        :param active: Whether this preset is currently active across desktops.
+        :type active: bool
+        """
         self.buttons.button(QDialogButtonBox.StandardButton.Save).setText('Save && apply' if active else 'Save preset')
         self.active_notice.setText('Saving changes updates your automatic summary scope. The next update may send matching cached text to OpenAI.' if active else
             'Save this preset without changing the active summary. Only locally cached choices are shown. If this preset becomes active on another desktop, saved changes apply to its next automatic update.')
 
     def apply_template(self, index):
+        """Apply source checkboxes and default name for the selected starter template.
+
+        :param index: Selected starter template index in ``self.template``.
+        :type index: int
+        """
         self.notifications.setChecked(index != 2)
         self.sms.setChecked(index != 1)
         self.selected.setChecked(index == 2)
         if not self.name.text().strip(): self.name.setText(self.template.currentText())
 
     def save(self):
+        """Validate form selections and emit the saved preset dictionary."""
         sources = [name for name, box in (('notifications', self.notifications), ('sms', self.sms)) if box.isChecked()]
         pairs = [self.conversations.item(i).data(Qt.ItemDataRole.UserRole) for i in range(self.conversations.count()) if self.conversations.item(i).checkState() == Qt.CheckState.Checked]
         if not self.name.text().strip() or not sources or (self.selected.isChecked() and (not pairs or 'sms' not in sources)):
@@ -188,10 +275,18 @@ class PresetEditor(QDialog):
 
 
 class PresetControls(CoreWidget):
+    """Widget for choosing, activating, and managing summary presets."""
     changed = pyqtSignal()
     active_changed = pyqtSignal()
     mutated = pyqtSignal()
     def __init__(self, client, parent=None):
+        """Initialize the preset selector, action buttons, and state tracking.
+
+        :param client: AI worker client handling preset reads and mutations.
+        :type client: pbdesk.desktop.ai_worker.AiWorker | None
+        :param parent: Optional parent widget owning these controls.
+        :type parent: QWidget | None
+        """
         super().__init__(client, parent)
         self.presets, self.active_revision, self.active_id, self.active_preset_revision, self.choices = [], 0, None, None, ([], [])
         self.editor = None
@@ -208,6 +303,7 @@ class PresetControls(CoreWidget):
         self.selection_changed()
 
     def reset(self):
+        """Clear preset caches and reload presets for the active account."""
         if self.editor: self.editor.reject()
         self.choices = ([], [])
         self.options_truncated = False
@@ -216,21 +312,25 @@ class PresetControls(CoreWidget):
         self.combo.clear(); self.feedback.clear(); self.load()
 
     def load(self):
+        """Fetch preset list, active preset, and cached options if not pending."""
         if not self.account_id: return
         for command in ('ai_presets', 'ai_active_preset', 'ai_preset_options'):
             if not any(p[0] == command for p in self.requests.values()): self.send(command, **({'include_archived': True} if command == 'ai_presets' else {}))
 
     def selection_changed(self):
+        """Update Activate and Edit button availability for the current selection."""
         self.activate.setEnabled(bool(self.account_id and self.combo.currentData() and self.combo.currentData() != self.active_id))
         self.edit.setEnabled(bool(self.account_id))
 
     def activate_selected(self):
+        """Request activation of the currently selected summary preset."""
         if self.combo.currentData():
             self._user_selected = False
             self.send('ai_activate_preset', preset_id=self.combo.currentData(), expected_revision=self.active_revision)
             self.activate.setEnabled(False)
 
     def rebuild(self):
+        """Rebuild the preset dropdown and sync active preset feedback."""
         selected = self.combo.currentData()
         self.combo.blockSignals(True); self.combo.clear()
         for preset in self.presets:
@@ -244,6 +344,15 @@ class PresetControls(CoreWidget):
             self.editor.set_active(bool(self.editor.preset and self.editor.preset['id'] == self.active_id))
 
     def received(self, command, data, payload):
+        """Handle worker responses for preset options, listings, activation, and saves.
+
+        :param command: Completed AI worker command name.
+        :type command: str
+        :param data: Response payload returned by the core API.
+        :type data: dict
+        :param payload: Original request payload associated with the command.
+        :type payload: dict
+        """
         if command == 'ai_preset_options':
             self.choices = (data['devices'], data['conversations'])
             self.options_truncated = bool(data.get('truncated'))
@@ -272,6 +381,7 @@ class PresetControls(CoreWidget):
             self.mutated.emit()
 
     def manage(self):
+        """Open the modal preset management dialog for creating, editing, and archiving."""
         dialog = QDialog(self); dialog.setWindowTitle('Summary presets'); dialog.resize(460, 370)
         layout = QVBoxLayout(dialog); listing = QListWidget(); layout.addWidget(listing)
         for preset in self.presets:
@@ -279,6 +389,11 @@ class PresetControls(CoreWidget):
         layout.addWidget(text_label('Creating and editing keeps the current active preset. Archived presets keep their saved history.'))
         row = QHBoxLayout(); layout.addLayout(row)
         def edit(preset=None):
+            """Open the preset editor dialog for a new or selected preset.
+
+            :param preset: Existing preset dictionary to edit, or None to create a new preset.
+            :type preset: dict | None
+            """
             self.editor = PresetEditor(preset, self.choices, dialog, is_active=bool(preset and preset['id'] == self.active_id), choices_truncated=self.options_truncated)
             self.editor.saved.connect(lambda config: self.send('ai_update_preset' if preset else 'ai_create_preset', **dict(config=config, expected_revision=preset['revision'] if preset else 0, **({'preset_id': preset['id']} if preset else {}))))
             self.editor.open()
@@ -291,6 +406,11 @@ class PresetControls(CoreWidget):
         self.mutated.connect(dialog.accept); dialog.exec()
 
     def _result(self, result):
+        """Display save errors in an open preset editor before base result handling.
+
+        :param result: Worker result dictionary emitted after a preset command completes.
+        :type result: dict
+        """
         pending = self.requests.get(result.get('request_id'))
         if pending and not result.get('ok') and self.editor:
             self.editor.feedback.setText(result.get('error') or 'Save failed. Your edits are kept. Reload the preset to resolve a revision conflict.')
@@ -298,7 +418,18 @@ class PresetControls(CoreWidget):
 
 
 class HistoryPage(CoreWidget):
+    """Account-scoped saved summary browser with filtering, pinning, and retention controls."""
+
     def __init__(self, client, browser_class, parent=None):
+        """Initialize saved summary filters, list/detail splitter, and pagination controls.
+
+        :param client: AI worker client handling history queries, pinning, and retention.
+        :type client: pbdesk.desktop.ai_worker.AiWorker | None
+        :param browser_class: Widget class used to render saved summary markdown content.
+        :type browser_class: type[QWidget]
+        :param parent: Optional parent widget owning this history page.
+        :type parent: QWidget | None
+        """
         super().__init__(client, parent)
         self.offset, self.total, self.entry, self.list_revision, self.detail_revision = 0, 0, None, 0, 0
         self.policy = None
@@ -337,6 +468,7 @@ class HistoryPage(CoreWidget):
         self.previous.setEnabled(False); self.next.setEnabled(False)
 
     def reset(self):
+        """Clear saved summary list, filters, selection, and open settings dialog."""
         if hasattr(self, 'settings_dialog'): self.settings_dialog.reject()
         self.debounce.stop(); self.list_revision += 1; self.detail_revision += 1
         self.listing.clear(); self.output.clear(); self.details.clear(); self.heading.setText('Choose a saved summary'); self.pin.setEnabled(False)
@@ -346,17 +478,29 @@ class HistoryPage(CoreWidget):
         self.preset_filter.blockSignals(True); self.preset_filter.clear(); self.preset_filter.addItem('All presets', None); self.preset_filter.blockSignals(False)
 
     def set_presets(self, presets):
+        """Update preset filter choices while preserving the active filter selection.
+
+        :param presets: Sequence of preset dictionaries for populating the filter combo box.
+        :type presets: collections.abc.Sequence[dict]
+        """
         current = self.preset_filter.currentData(); self.preset_filter.blockSignals(True); self.preset_filter.clear(); self.preset_filter.addItem('All presets', None)
         for preset in presets: self.preset_filter.addItem(preset['name'] + (' · Archived' if preset.get('archived') else ''), preset['id'])
         self.preset_filter.setCurrentIndex(max(0,self.preset_filter.findData(current))); self.preset_filter.blockSignals(False)
 
     def filter_changed(self):
+        """Reset pagination offset to zero and reload filtered saved summaries."""
         self.offset = 0; self.load()
 
     def page(self, direction):
+        """Move pagination offset by one page in direction and reload summaries.
+
+        :param direction: Relative page step (for example ``-1`` or ``1``).
+        :type direction: int
+        """
         self.offset = max(0, self.offset + 50 * direction); self.load()
 
     def load(self):
+        """Cancel superseded list queries and request matching saved summaries."""
         if not self.account_id: return
         payload = {'limit':50, 'offset':self.offset}
         if self.search.text().strip(): payload['query'] = self.search.text().strip()
@@ -374,9 +518,15 @@ class HistoryPage(CoreWidget):
         self.send('ai_history', **payload)
 
     def showEvent(self, event):
+        """Reload saved summaries whenever the history page becomes visible.
+
+        :param event: Qt show event delivered when the widget becomes visible.
+        :type event: PyQt6.QtGui.QShowEvent
+        """
         super().showEvent(event); self.load()
 
     def adapt(self):
+        """Adjust splitter orientation and minimum height based on current widget width."""
         narrow = self.width() < 650
         self.body.setMinimumHeight((680 if self.details_button.isChecked() else 560) if narrow else 0)
         orientation = Qt.Orientation.Vertical if narrow else Qt.Orientation.Horizontal
@@ -385,16 +535,33 @@ class HistoryPage(CoreWidget):
             self.splitter.setSizes([110, 440] if narrow else [230, 650])
 
     def resizeEvent(self, event):
+        """Update responsive layout geometry before handling Qt resize events.
+
+        :param event: Qt resize event containing updated widget dimensions.
+        :type event: PyQt6.QtGui.QResizeEvent
+        """
         self.adapt()
         super().resizeEvent(event)
 
     def select(self, current, previous):
+        """Cancel stale detail requests and fetch the selected summary entry.
+
+        :param current: Newly selected list widget item, or None when selection cleared.
+        :type current: QListWidgetItem | None
+        :param previous: Previously selected list widget item, or None.
+        :type previous: QListWidgetItem | None
+        """
         if not current: return
         for identity, pending in list(self.requests.items()):
             if pending[0] == 'ai_history_detail': self.client.request('ai_cancel', {'target_id':identity}); self.requests.pop(identity)
         self.send('ai_history_detail', entry_id=current.data(Qt.ItemDataRole.UserRole))
 
     def render(self, entry):
+        """Render the selected summary entry's markdown, metadata, and pin button.
+
+        :param entry: Detailed saved summary entry dictionary returned by core.
+        :type entry: dict
+        """
         self.entry = entry
         snapshot = entry.get('preset_snapshot') or {}
         self.heading.setText((snapshot.get('name') or 'Legacy summary') + '\nSaved ' + stamp(entry.get('saved_at')) + ' · Generated ' + stamp(entry.get('generated_at')))
@@ -403,9 +570,19 @@ class HistoryPage(CoreWidget):
         self.pin.setEnabled(True); self.pin.setText('Unpin summary' if entry.get('pinned') else 'Pin summary')
 
     def toggle_pin(self):
+        """Toggle the pinned state of the currently displayed summary entry."""
         if self.entry: self.send('ai_pin_history', entry_id=self.entry['id'], pinned=not self.entry.get('pinned',False))
 
     def received(self, command, data, payload):
+        """Handle worker responses for history listings, details, pinning, and retention.
+
+        :param command: Completed AI worker command name.
+        :type command: str
+        :param data: Response payload returned by the core API.
+        :type data: dict
+        :param payload: Original request payload associated with the command.
+        :type payload: dict
+        """
         if command == 'ai_history':
             if not data['total']: self.offset = 0
             if data['total'] and self.offset >= data['total']:
@@ -443,6 +620,11 @@ class HistoryPage(CoreWidget):
                 self.policy = data; self.settings_dialog.accept(); self.feedback.setText(f"Retention saved. Removed {data.get('removed_count',0)} unpinned summaries."); self.load()
 
     def _result(self, result):
+        """Show retention settings errors in the dialog before base result handling.
+
+        :param result: Worker result dictionary emitted after a history command completes.
+        :type result: dict
+        """
         pending = self.requests.get(result.get('request_id'))
         if pending and pending[0] in ('ai_history_settings', 'ai_save_history_settings') and not result.get('ok'):
             self.settings_feedback.setText(result.get('error') or 'The policy could not be saved. Reload its current revision and try again.')
@@ -450,16 +632,19 @@ class HistoryPage(CoreWidget):
         super()._result(result)
 
     def cancel_settings_requests(self):
+        """Cancel pending retention settings requests when the settings dialog closes."""
         for identity, pending in list(self.requests.items()):
             if pending[0] in ('ai_history_settings', 'ai_save_history_settings'):
                 self.client.request('ai_cancel', {'target_id': identity}); self.requests.pop(identity)
 
     def preview_policy(self):
+        """Request a dry-run count of summaries affected by the chosen retention period."""
         if self.policy:
             self.retention_save.setEnabled(False)
             self.send('ai_save_history_settings', retention_days=self.retention.currentData(), expected_revision=self.policy['revision'], preview=True)
 
     def open_settings(self):
+        """Open or raise the saved summary retention settings dialog."""
         if hasattr(self, 'settings_dialog') and self.settings_dialog.isVisible():
             self.settings_dialog.raise_(); return
         self.settings_dialog = QDialog(self); self.settings_dialog.setWindowTitle('Saved summary retention'); layout = QVBoxLayout(self.settings_dialog)

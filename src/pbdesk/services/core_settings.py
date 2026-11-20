@@ -24,10 +24,25 @@ RESTART_TTL = 60
 
 
 def _canonical_uuid(value):
+    """Return whether the value is a canonical lowercase UUID string.
+
+    :param value: Candidate value to validate.
+    :type value: object
+    :return: ``True`` if ``value`` is a canonical UUID string, otherwise ``False``.
+    :rtype: bool
+    """
     return isinstance(value, str) and str(uuid.UUID(value)) == value
 
 
 def _validate_record(value):
+    """Validate the structure, timestamps, and launch profile of a restart handoff record.
+
+    :param value: Parsed JSON object representing a pending core restart record.
+    :type value: object
+    :return: Validated restart handoff record dictionary.
+    :rtype: dict[str, Any]
+    :raises RuntimeError: If the record schema, timestamps, or launch profile are invalid.
+    """
     try:
         if not isinstance(value, dict) or set(value) != {'version', 'instance_id', 'generation', 'created_at', 'expires_at', 'profile'}:
             raise ValueError()
@@ -55,7 +70,18 @@ def _validate_record(value):
 
 
 def pending_restart(settings, generation, *, allow_expired=False):
-    """Caller holds launcher.lock. No fallback to a different launch after failure."""
+    """Caller holds launcher.lock. No fallback to a different launch after failure.
+
+    :param settings: Application settings locating the private state directory.
+    :type settings: pbdesk.config.Settings
+    :param generation: Current Stop All generation token expected by the launcher.
+    :type generation: str
+    :param allow_expired: Whether to return an expired handoff record instead of raising.
+    :type allow_expired: bool
+    :return: Validated restart handoff dictionary, or ``None`` if absent or superseded.
+    :rtype: dict[str, Any] | None
+    :raises RuntimeError: If the handoff file is unsafe, malformed, or expired when disallowed.
+    """
     root = private_dir(settings)
     try:
         fd = os.open(root / RESTART_RECORD, os.O_RDONLY | os.O_NOFOLLOW)
@@ -80,7 +106,19 @@ def pending_restart(settings, generation, *, allow_expired=False):
 
 
 def write_restart(settings, instance_id, generation, profile):
-    """Write only the launch profile observed by this running core."""
+    """Write only the launch profile observed by this running core.
+
+    :param settings: Application settings locating the private state directory.
+    :type settings: pbdesk.config.Settings
+    :param instance_id: Canonical UUID string of the departing core instance.
+    :type instance_id: str
+    :param generation: Active Stop All generation token.
+    :type generation: str
+    :param profile: Launch profile dictionary capturing flags and lease timing.
+    :type profile: dict[str, Any]
+    :return: Validated restart handoff dictionary written to disk.
+    :rtype: dict[str, Any]
+    """
     now = time.time()
     value = _validate_record({'version': 1, 'instance_id': instance_id, 'generation': generation,
         'created_at': now, 'expires_at': now + RESTART_TTL, 'profile': profile})
@@ -99,7 +137,13 @@ def write_restart(settings, instance_id, generation, profile):
 
 
 def clear_restart(settings, expected_instance):
-    """Remove only the handoff owned by the expected old core instance."""
+    """Remove only the handoff owned by the expected old core instance.
+
+    :param settings: Application settings locating the private state directory.
+    :type settings: pbdesk.config.Settings
+    :param expected_instance: Instance UUID expected to own the pending handoff record.
+    :type expected_instance: str
+    """
     root = private_dir(settings)
     path = root / RESTART_RECORD
     try:
@@ -117,6 +161,12 @@ async def finish_mutation(awaitable):
 
     The request still observes cancellation after the in-flight operation settles;
     no provider command is replayed, and restart sees it active until then.
+
+    :param awaitable: Coroutine or awaitable representing the owned mutation work.
+    :type awaitable: collections.abc.Awaitable[Any]
+    :return: Result produced by ``awaitable``.
+    :rtype: Any
+    :raises asyncio.CancelledError: Re-raised after shielding and draining the in-flight task.
     """
     task = asyncio.ensure_future(awaitable)
     try:
@@ -140,13 +190,22 @@ async def finish_mutation(awaitable):
 
 
 class RestartGate:
+    """Async gate coordinating in-flight operations with core restart admission."""
+
     def __init__(self):
+        """Initialize the restart gate lock, active counter, and restarting flag."""
         self.lock = asyncio.Lock()
         self.active = 0
         self.restarting = False
 
     @asynccontextmanager
     async def operation(self):
+        """Guard an async core operation and reject new work once a restart begins.
+
+        :return: Async context manager yielding while an operation is active.
+        :rtype: collections.abc.AsyncIterator[None]
+        :raises fastapi.HTTPException: If a core restart has already been initiated.
+        """
         async with self.lock:
             if self.restarting:
                 raise HTTPException(409, 'Core is restarting; wait for reconnection before making changes')
@@ -159,7 +218,20 @@ class RestartGate:
 
 
 class CoreSettingsService:
+    """Service managing live core settings snapshots, updates, and quiescent restarts."""
+
     def __init__(self, app, settings, profile, *, launcher=None):
+        """Initialize the core settings service with app state, settings, and launch profile.
+
+        :param app: FastAPI application instance owning runtime state.
+        :type app: fastapi.FastAPI
+        :param settings: Application settings for the running core.
+        :type settings: pbdesk.config.Settings
+        :param profile: Launch profile dictionary for self-restart, or ``None`` if custom.
+        :type profile: dict[str, Any] | None
+        :param launcher: Optional async helper launcher callable used during restarts.
+        :type launcher: collections.abc.Callable[[pbdesk.config.Settings, str], collections.abc.Awaitable[Any]] | None
+        """
         self.app, self.settings, self.profile = app, settings, profile
         self.gate = RestartGate()
         self.request_id = None
@@ -169,13 +241,29 @@ class CoreSettingsService:
 
     @property
     def restarting(self):
+        """Return whether a core restart has been accepted and is in progress.
+
+        :return: ``True`` if a core restart is underway, otherwise ``False``.
+        :rtype: bool
+        """
         return self.gate.restarting
 
     def _instance(self, expected):
+        """Ensure the caller's expected instance ID matches the active core store.
+
+        :param expected: Instance UUID expected by the caller.
+        :type expected: str
+        :raises fastapi.HTTPException: If ``expected`` does not match the running instance ID.
+        """
         if expected != self.app.state.store.instance_id:
             raise HTTPException(409, 'Core instance changed; refresh core settings before continuing')
 
     def snapshot(self):
+        """Build a sanitized snapshot of core lifecycle, addresses, paths, and notifier state.
+
+        :return: Core settings and lifecycle status dictionary.
+        :rtype: dict[str, Any]
+        """
         registry, notifier = self.app.state.clients, self.app.state.notifier
         now = time.monotonic()
         roles = [role for role, deadline in registry.leases.values() if deadline > now]
@@ -195,9 +283,28 @@ class CoreSettingsService:
             'restarting': self.restarting, 'uptime_seconds': max(0, int(now - self.started))}
 
     async def update(self, expected, enabled):
+        """Apply a shielded core notification setting update for the expected instance.
+
+        :param expected: Instance UUID expected by the caller.
+        :type expected: str
+        :param enabled: Desired core desktop notification enabled state.
+        :type enabled: bool
+        :return: Updated core settings snapshot dictionary.
+        :rtype: dict[str, Any]
+        """
         return await finish_mutation(self._update(expected, enabled))
 
     async def _update(self, expected, enabled):
+        """Persist and apply the live notification preference while holding the restart gate.
+
+        :param expected: Instance UUID expected by the caller.
+        :type expected: str
+        :param enabled: Desired core desktop notification enabled state.
+        :type enabled: bool
+        :return: Updated core settings snapshot dictionary.
+        :rtype: dict[str, Any]
+        :raises fastapi.HTTPException: If the notifier cannot be configured live or instance differs.
+        """
         async with self.gate.operation():
             self._instance(expected)
             adapter = self.app.state.notifier
@@ -208,6 +315,11 @@ class CoreSettingsService:
             return self.snapshot()
 
     def _approved_actions(self):
+        """Return whether any approved outbox actions are currently ready or submitting.
+
+        :return: ``True`` if any ready or submitting actions exist for the current account.
+        :rtype: bool
+        """
         store = self.app.state.store
         store.expire_actions()
         with store.engine.connect() as connection:
@@ -215,9 +327,28 @@ class CoreSettingsService:
                 actions.c.account_id == store.account_key()).limit(1)).first() is not None
 
     async def restart(self, expected, request_id):
+        """Initiate a shielded quiescent core restart for the expected instance.
+
+        :param expected: Instance UUID expected by the caller.
+        :type expected: str
+        :param request_id: Idempotency identifier for this restart request.
+        :type request_id: str
+        :return: Acceptance payload containing ``accepted``, ``instance_id``, and ``request_id``.
+        :rtype: dict[str, Any]
+        """
         return await finish_mutation(self._restart(expected, request_id))
 
     async def _restart(self, expected, request_id):
+        """Validate idle state, publish the restart handoff, spawn helper, and schedule exit.
+
+        :param expected: Instance UUID expected by the caller.
+        :type expected: str
+        :param request_id: Idempotency identifier for this restart request.
+        :type request_id: str
+        :return: Acceptance payload containing ``accepted``, ``instance_id``, and ``request_id``.
+        :rtype: dict[str, Any]
+        :raises fastapi.HTTPException: If active operations prevent restart or handoff preparation fails.
+        """
         self._instance(expected)
         async with self.gate.lock:
             if self.gate.restarting:
@@ -257,6 +388,18 @@ class CoreSettingsService:
 
 
 def publish_restart(settings, instance_id, generation, profile):
+    """Write the restart handoff record under the launcher lock if generation matches.
+
+    :param settings: Application settings locating the private state directory.
+    :type settings: pbdesk.config.Settings
+    :param instance_id: Canonical UUID string of the departing core instance.
+    :type instance_id: str
+    :param generation: Expected Stop All generation token.
+    :type generation: str
+    :param profile: Launch profile dictionary to preserve across the restart.
+    :type profile: dict[str, Any]
+    :raises RuntimeError: If Stop All advanced the generation token before publication.
+    """
     import fcntl
     from pbdesk.services.client_lifecycle import _generation_locked
     root = private_dir(settings)
@@ -271,6 +414,13 @@ def publish_restart(settings, instance_id, generation, profile):
 
 
 def cancel_restart(settings, instance_id):
+    """Clear the restart handoff record for the given instance under the launcher lock.
+
+    :param settings: Application settings locating the private state directory.
+    :type settings: pbdesk.config.Settings
+    :param instance_id: Core instance UUID whose restart record should be removed.
+    :type instance_id: str
+    """
     import fcntl
     root = private_dir(settings)
     fd = os.open(root / 'launcher.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
@@ -282,6 +432,15 @@ def cancel_restart(settings, instance_id):
 
 
 async def launch_restart_helper(settings, instance_id):
+    """Spawn the detached restart helper subprocess and wait for its ready handshake.
+
+    :param settings: Application settings propagated via environment variables to the helper.
+    :type settings: pbdesk.config.Settings
+    :param instance_id: Departing core instance UUID passed to the restart helper.
+    :type instance_id: str
+    :raises RuntimeError: If the restart helper exits or fails to emit its ``ready`` handshake.
+    :raises BaseException: Re-raised after terminating the helper process on timeout or cancellation.
+    """
     env = dict(os.environ, PBDESK_APPLICATION_DIR=str(settings.application_dir), PBDESK_STATE_DIR=str(settings.state_dir.resolve()),
         PBDESK_CORE_PORT=str(settings.core_port), PBDESK_WEB_PORT=str(settings.web_port))
     # Popen has no asyncio transport finalizer that could kill this helper when
@@ -304,6 +463,13 @@ async def launch_restart_helper(settings, instance_id):
 
 
 def inspect_restart(settings):
+    """Read the Stop All generation and any valid pending restart under the launcher lock.
+
+    :param settings: Application settings locating the private state directory.
+    :type settings: pbdesk.config.Settings
+    :return: Tuple of the current Stop All generation token and pending restart record or ``None``.
+    :rtype: tuple[str, dict[str, Any] | None]
+    """
     import fcntl
     from pbdesk.services.client_lifecycle import _generation_locked
     root = private_dir(settings)
@@ -317,7 +483,11 @@ def inspect_restart(settings):
 
 
 def restart_helper(instance_id):
-    """No lease or PID markers: wait for signed old core exit, then serialized launch."""
+    """No lease or PID markers: wait for signed old core exit, then serialized launch.
+
+    :param instance_id: Departing core instance UUID this helper is waiting to replace.
+    :type instance_id: str
+    """
     import httpx
     from pbdesk.config import Settings
     from pbdesk.services.lifecycle import _probe, ensure_core, CoreStartupError

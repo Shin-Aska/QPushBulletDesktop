@@ -10,6 +10,13 @@ from .notification_content import NotificationBrowser, valid_http_url
 
 
 def label(text=''):
+    """Return a word-wrapped, selectable plain-text label widget.
+
+    :param text: Initial plain-text content for the label.
+    :type text: str
+    :return: Configured word-wrapped, mouse-selectable `QLabel`.
+    :rtype: QLabel
+    """
     widget = QLabel(text)
     widget.setWordWrap(True)
     widget.setTextFormat(Qt.TextFormat.PlainText)
@@ -18,7 +25,15 @@ def label(text=''):
 
 
 class AiPanel(QWidget):
+    """Base widget for preparing local text previews and generating AI output."""
     def __init__(self, ai_client, parent=None):
+        """Initialize the AI panel UI and bind client signals.
+
+        :param ai_client: Background AI worker emitting `result` signals, or `None` if unavailable.
+        :type ai_client: AiWorker | None
+        :param parent: Optional parent widget.
+        :type parent: QWidget | None
+        """
         super().__init__(parent)
         self.client = ai_client
         self.account_id = None
@@ -58,6 +73,15 @@ class AiPanel(QWidget):
             ai_client.result.connect(self.result)
 
     def send(self, command, payload):
+        """Dispatch an AI client command and return its request ID.
+
+        :param command: AI command name to send to the client.
+        :type command: str
+        :param payload: Command parameters excluding `request_id`.
+        :type payload: dict
+        :return: Generated request ID if the AI client is available, otherwise `None`.
+        :rtype: str | None
+        """
         if self.client is None:
             return None
         request_id = str(uuid.uuid4())
@@ -66,6 +90,7 @@ class AiPanel(QWidget):
         return request_id
 
     def clear(self):
+        """Cancel active requests and reset panel text and state."""
         self.cancel()
         self.preview.clear()
         self.output.clear()
@@ -73,6 +98,7 @@ class AiPanel(QWidget):
         self.scope.setText('Choose local text, then prepare a preview.')
 
     def cancel(self):
+        """Cancel all in-flight requests and reset generation controls."""
         if self.client:
             for request_id in list(self._requests):
                 self.client.request('ai_cancel', {'target_id': request_id})
@@ -82,6 +108,11 @@ class AiPanel(QWidget):
         self.prepare_button.setEnabled(self.client is not None)
 
     def apply_snapshot(self, data):
+        """Update account context and AI capability availability from a snapshot.
+
+        :param data: Snapshot or capabilities dictionary containing account and feature metadata.
+        :type data: dict
+        """
         caps = data.get('capabilities', data)
         account = caps.get('account_id')
         if self._known_account and account != self.account_id:
@@ -96,6 +127,7 @@ class AiPanel(QWidget):
             self.feedback.setText('AI is unavailable in this core version. Restart the updated core and desktop.')
 
     def generate(self):
+        """Request AI generation from the prepared preview context."""
         if not self.context_id:
             return
         self.generate_button.setEnabled(False)
@@ -107,6 +139,11 @@ class AiPanel(QWidget):
         self.context_id = None
 
     def result(self, result):
+        """Process AI prepare and generate results for tracked requests.
+
+        :param result: Result payload dictionary emitted by the AI worker.
+        :type result: dict
+        """
         command = self._requests.pop(result.get('request_id'), None)
         if command is None:
             return
@@ -134,15 +171,46 @@ class AiPanel(QWidget):
 
 
 class _SummaryImageBlocker(QObject, QTextObjectInterface):
+    """Zero-size Qt text object handler blocking Markdown image rendering."""
     def intrinsicSize(self, document, position, text_format):
+        """Return zero size to suppress layout space for embedded images.
+
+        :param document: Text document containing the object.
+        :type document: QTextDocument
+        :param position: Character offset of the object in the document.
+        :type position: int
+        :param text_format: Format descriptor for the text object.
+        :type text_format: QTextFormat
+        :return: Zero size `QSizeF(0, 0)`.
+        :rtype: QSizeF
+        """
         return QSizeF(0, 0)
 
     def drawObject(self, painter, rectangle, document, position, text_format):
+        """Suppress drawing of embedded Markdown image objects.
+
+        :param painter: Active Qt painter.
+        :type painter: PyQt6.QtGui.QPainter
+        :param rectangle: Target bounding rectangle for drawing.
+        :type rectangle: PyQt6.QtCore.QRectF
+        :param document: Text document containing the object.
+        :type document: QTextDocument
+        :param position: Character offset of the object in the document.
+        :type position: int
+        :param text_format: Format descriptor for the text object.
+        :type text_format: QTextFormat
+        """
         pass
 
 
 class _SummaryMarkdownDocument(QTextDocument):
+    """Text document subclass preventing local or remote resource loading."""
     def __init__(self, parent=None):
+        """Initialize the document with blocked image and resource handlers.
+
+        :param parent: Optional parent Qt object.
+        :type parent: QObject | None
+        """
         super().__init__(parent)
         # Qt's default image handler can fall back to reading files even when
         # loadResource returns nothing. Replace it before importing Markdown.
@@ -152,6 +220,13 @@ class _SummaryMarkdownDocument(QTextDocument):
         self.setResourceProvider(lambda url: None)
 
     def loadResource(self, resource_type, name):
+        """Block embedded resource resolution by returning None.
+
+        :param resource_type: Qt resource type requested by the document.
+        :type resource_type: int
+        :param name: Resource URL or identifier requested.
+        :type name: PyQt6.QtCore.QUrl
+        """
         # Markdown images can resolve local files through QTextDocument rather
         # than QTextBrowser. Block both routes to embedded resource loading.
         return None
@@ -160,6 +235,11 @@ class _SummaryMarkdownDocument(QTextDocument):
 class SummaryMarkdownBrowser(NotificationBrowser):
     """Scrollable native Markdown with no embedded resource loading."""
     def __init__(self, parent=None):
+        """Initialize the Markdown browser with blocked resource loading.
+
+        :param parent: Optional parent widget.
+        :type parent: QWidget | None
+        """
         super().__init__(parent)
         self.setDocument(_SummaryMarkdownDocument(self))
         self._markdown = None
@@ -167,6 +247,11 @@ class SummaryMarkdownBrowser(NotificationBrowser):
         self.anchorClicked.connect(self.open_link)
 
     def set_markdown(self, text):
+        """Render updated Markdown text while preserving scroll positions.
+
+        :param text: GitHub-flavored Markdown source text to render.
+        :type text: str
+        """
         # Rendered plain text differs from its Markdown source. Compare the
         # source so unchanged local polls preserve selection and scroll state.
         if text == self._markdown:
@@ -181,10 +266,16 @@ class SummaryMarkdownBrowser(NotificationBrowser):
             bar.setValue(position)
 
     def clear(self):
+        """Clear cached Markdown state and document contents."""
         self._markdown = None
         super().clear()
 
     def open_link(self, url):
+        """Open a valid HTTP or HTTPS hyperlink in the system browser.
+
+        :param url: Activated hyperlink URL from the browser.
+        :type url: PyQt6.QtCore.QUrl
+        """
         if url.isValid() and valid_http_url(url.toString()):
             QDesktopServices.openUrl(url)
 
@@ -194,6 +285,13 @@ class SummaryPage(QWidget):
     settings_requested = pyqtSignal()
 
     def __init__(self, ai_client, parent=None):
+        """Initialize the automatic summary page, tabs, and polling timers.
+
+        :param ai_client: Background AI worker emitting `result` signals, or `None`.
+        :type ai_client: AiWorker | None
+        :param parent: Optional parent widget.
+        :type parent: QWidget | None
+        """
         super().__init__(parent)
         self.client = ai_client
         self.account_id = None
@@ -265,6 +363,13 @@ class SummaryPage(QWidget):
             ai_client.result.connect(self.result)
 
     def send(self, command, payload):
+        """Send an AI command if no identical command is already pending.
+
+        :param command: AI command name to send.
+        :type command: str
+        :param payload: Command parameters excluding `request_id`.
+        :type payload: dict
+        """
         if not self.client or command in self._requests.values():
             return
         request_id = str(uuid.uuid4())
@@ -272,6 +377,7 @@ class SummaryPage(QWidget):
         self.client.request(command, dict(payload, request_id=request_id))
 
     def clear(self):
+        """Cancel pending summary requests, stop timers, and clear displayed state."""
         for request_id in list(self._requests):
             if self.client:
                 self.client.request('ai_cancel', {'target_id': request_id})
@@ -286,11 +392,21 @@ class SummaryPage(QWidget):
         self._configured = None
 
     def stop(self):
+        """Stop summary polling and clear account state across subwidgets."""
         self.clear()
         self.presets.set_account(None)
         self.history.set_account(None)
 
     def set_context(self, account_id, items, sms_context=None):
+        """Update account and cached activity context for digest polling.
+
+        :param account_id: Active Pushbullet account identifier, or `None` if disconnected.
+        :type account_id: str | int | None
+        :param items: Cached notification item dictionaries used to detect context changes.
+        :type items: list[dict]
+        :param sms_context: Optional dictionary containing cached SMS `messages`.
+        :type sms_context: dict | None
+        """
         if self._known_account and account_id != self.account_id:
             self.clear()
         self.account_id, self._known_account = account_id, True
@@ -316,6 +432,11 @@ class SummaryPage(QWidget):
             self.refresh_button.setEnabled(False)
 
     def apply_snapshot(self, data):
+        """Apply account and AI feature status from a core snapshot.
+
+        :param data: Snapshot or capabilities dictionary containing account and feature metadata.
+        :type data: dict
+        """
         caps = data.get('capabilities', data)
         self._supported = caps.get('features', {}).get('ai', True)
         account = caps.get('account_id')
@@ -333,6 +454,11 @@ class SummaryPage(QWidget):
             self.send('ai_settings', {})
 
     def configuration_changed(self, data):
+        """Update digest polling and UI controls when AI configuration changes.
+
+        :param data: AI configuration dictionary containing the `configured` flag.
+        :type data: dict
+        """
         # A newer settings result supersedes startup metadata still in flight.
         for request_id, command in list(self._requests.items()):
             if command == 'ai_settings':
@@ -349,6 +475,7 @@ class SummaryPage(QWidget):
             self.feedback.setText('Add or unlock your OpenAI key in AI Settings to enable automatic summaries.')
 
     def active_changed(self):
+        """Cancel pending digest updates and reset output after a preset change."""
         for identity, command in list(self._requests.items()):
             if command == 'ai_digest':
                 self.client.request('ai_cancel', {'target_id': identity})
@@ -359,21 +486,43 @@ class SummaryPage(QWidget):
         self.feedback.setText('Active preset changed. The next automatic update will use this scope.')
 
     def refresh(self, force=False):
+        """Reload presets and request a recent account digest update.
+
+        :param force: Whether to force a digest refresh bypassing cadence limits.
+        :type force: bool
+        """
         if self.client and self.account_id and self._supported and self._configured:
             self.presets.load()
             self.send('ai_digest', {'account_id': self.account_id, 'scope': 'recent', 'force': bool(force)})
 
     def showEvent(self, event):
+        """Refresh the summary digest when the page is shown.
+
+        :param event: Qt show event delivered when the widget becomes visible.
+        :type event: PyQt6.QtGui.QShowEvent
+        """
         super().showEvent(event)
         self.refresh()
 
     @staticmethod
     def stamp(value):
+        """Format a timestamp for summary scope and status labels.
+
+        :param value: Numeric Unix timestamp or fallback string value.
+        :type value: int | float | str | None
+        :return: Formatted local timestamp or fallback label string.
+        :rtype: str
+        """
         if isinstance(value, (int, float)):
             return time.strftime('%d %b %H:%M', time.localtime(value))
         return str(value or 'recent')
 
     def result(self, result):
+        """Handle AI settings and digest responses and update the summary view.
+
+        :param result: Response payload dictionary emitted by the AI worker.
+        :type result: dict
+        """
         command = self._requests.pop(result.get('request_id'), None)
         if not command:
             return
@@ -436,12 +585,20 @@ class SummaryPage(QWidget):
             self.feedback.setText('No recent cached text is available yet. New activity will appear automatically.')
 
     def focus_search(self):
+        """Focus the summary output browser."""
         self.output.setFocus()
 
 
 class ReplyToneDialog(QDialog):
     """A writing preference only; accepting this dialog never sends an SMS."""
     def __init__(self, tone='Natural', parent=None):
+        """Initialize the modal reply tone selection dialog.
+
+        :param tone: Initial reply tone or custom writing preference string.
+        :type tone: str
+        :param parent: Optional parent widget.
+        :type parent: QWidget | None
+        """
         super().__init__(parent)
         self.setWindowTitle('Draft again')
         self.resize(390, 190)
@@ -470,6 +627,15 @@ class SmsAiAssistant(QWidget):
     used = pyqtSignal()
 
     def __init__(self, ai_client, sms_page, parent=None):
+        """Initialize the SMS AI draft assistant UI and tracking state.
+
+        :param ai_client: Background AI worker emitting `result` signals, or `None`.
+        :type ai_client: AiWorker | None
+        :param sms_page: SMS page providing conversation context and draft insertion.
+        :type sms_page: SmsPage
+        :param parent: Optional parent widget.
+        :type parent: QWidget | None
+        """
         super().__init__(parent)
         self.client, self.sms_page = ai_client, sms_page
         self.account_id, self.token, self.context_id, self._identity = None, None, None, None
@@ -534,6 +700,11 @@ class SmsAiAssistant(QWidget):
             sms_page.ai_context_changed.connect(self.context_changed)
 
     def toggle_context(self, expanded):
+        """Expand or collapse the conversation context selector table.
+
+        :param expanded: Whether to show the conversation context table.
+        :type expanded: bool
+        """
         self.context_box.setVisible(expanded)
         dialog = self.window()
         if isinstance(dialog, QDialog) and dialog.isVisible():
@@ -544,6 +715,7 @@ class SmsAiAssistant(QWidget):
         self.preview.resizeRowsToContents()
 
     def context_changed(self):
+        """React to changes in the active SMS conversation or composer context."""
         account = getattr(self.sms_page, 'account_id', self.account_id)
         context = self.sms_page.ai_context()
         identity = tuple((context or {}).get(key) for key in ('account_id', 'device_id', 'conversation_id'))
@@ -555,12 +727,22 @@ class SmsAiAssistant(QWidget):
             self.feedback.setText('The conversation, draft, or pending send changed. Draft a fresh reply.')
 
     def send(self, command, payload, purpose):
+        """Dispatch a tracked AI command with its request purpose.
+
+        :param command: AI command name to send.
+        :type command: str
+        :param payload: Command parameters excluding `request_id`.
+        :type payload: dict
+        :param purpose: Logical request purpose such as `'preview'` or `'generate'`.
+        :type purpose: str
+        """
         if not self.client: return
         identity = str(uuid.uuid4())
         self._requests[identity] = (command, purpose)
         self.client.request(command, dict(payload, request_id=identity))
 
     def update_actions(self):
+        """Refresh enabled and primary states for assistant action buttons."""
         context = self.sms_page.ai_context() or {}
         ready = bool(self.output.toPlainText().strip() and self.token and self.current() and context.get('can_reply', True) and not self._busy and not self._closed)
         self.insert_button.setEnabled(ready)
@@ -572,10 +754,12 @@ class SmsAiAssistant(QWidget):
             button.style().unpolish(button); button.style().polish(button)
 
     def editor_changed(self):
+        """Track manual draft edits and update action buttons."""
         self._editor_revision += 1
         self.update_actions()
 
     def cancel(self):
+        """Cancel pending assistant requests and restore idle controls."""
         for identity in self._requests:
             self.client.request('ai_cancel', {'target_id': identity})
         self._requests.clear(); self.context_id = None; self._busy = False
@@ -584,6 +768,7 @@ class SmsAiAssistant(QWidget):
         self.update_actions()
 
     def clear(self):
+        """Reset assistant requests, context candidates, token, and editor."""
         self.cancel()
         if self.tone_dialog: self.tone_dialog.reject()
         self.token = None; self._identity = None; self.generated_text = None
@@ -596,6 +781,7 @@ class SmsAiAssistant(QWidget):
         self.update_actions()
 
     def open_context(self):
+        """Open the assistant for the active SMS conversation context."""
         self._closed = False
         context = self.sms_page.ai_context()
         identity = tuple((context or {}).get(key) for key in ('account_id', 'device_id', 'conversation_id'))
@@ -618,6 +804,7 @@ class SmsAiAssistant(QWidget):
             self.feedback.setText('The conversation or draft changed. Your previous text is kept for copying. Draft a fresh reply to use here.')
 
     def refresh_context(self):
+        """Reload selectable conversation messages for the current thread."""
         if self._busy or self._closed or not self._supported: return
         context = self.sms_page.ai_context()
         if not context or tuple(context.get(key) for key in ('account_id', 'device_id', 'conversation_id')) != self._identity:
@@ -628,19 +815,42 @@ class SmsAiAssistant(QWidget):
         self.send_prepare(context, 'preview')
 
     def send_prepare(self, context, purpose):
+        """Send an SMS reply context preparation request to the AI service.
+
+        :param context: Active SMS conversation context dictionary.
+        :type context: dict
+        :param purpose: Request purpose (`'preview'` or `'generate'`).
+        :type purpose: str
+        """
         message_ids = self.selected_ids() if purpose == 'generate' else None
         self.send('ai_prepare', {'account_id': context['account_id'], 'mode': 'draft_reply', 'source': 'sms',
             'device_id': context['device_id'], 'conversation_id': context['conversation_id'],
             'message_ids': message_ids, 'tone': self.tone}, purpose)
 
     def selected_ids(self):
+        """Return checked candidate message IDs in conversation order.
+
+        :return: List of selected candidate message IDs in conversation order.
+        :rtype: list[int]
+        """
         return [item['id'] for item in self._candidates if item['id'] in self._selected_ids]
 
     def update_context_header(self, truncated=False):
+        """Update the context toggle label with selection count and clip status.
+
+        :param truncated: Whether any candidate message text was clipped to local limits.
+        :type truncated: bool
+        """
         suffix = ' · text clipped to limits' if truncated else ''
         self.context_toggle.setText(f'Conversation context · {len(self._selected_ids)} of {len(self._candidates)} selected' + suffix)
 
     def populate_context(self, candidates):
+        """Validate and populate the checkable conversation context table.
+
+        :param candidates: Up to 20 candidate message dictionaries with integer `id` fields.
+        :type candidates: list[dict]
+        :raises ValueError: If `candidates` violates contract v1 format or size constraints.
+        """
         # Contract v1 is required; older cores cannot silently supply unchecked text.
         if not isinstance(candidates, list) or len(candidates) > 20 or any(not isinstance(item, dict) or type(item.get('id')) is not int for item in candidates):
             raise ValueError('This core does not provide selectable reply context. Restart the updated core and desktop.')
@@ -669,6 +879,11 @@ class SmsAiAssistant(QWidget):
         self.update_actions()
 
     def selection_changed(self, item):
+        """Update selected context message IDs when a checkbox changes.
+
+        :param item: Table widget item whose check state or data changed.
+        :type item: QTableWidgetItem
+        """
         if item.column() != 0: return
         identifier = item.data(Qt.ItemDataRole.UserRole)
         if item.checkState() == Qt.CheckState.Checked: self._selected_ids.add(identifier)
@@ -679,10 +894,20 @@ class SmsAiAssistant(QWidget):
         self.feedback.setText('Choose at least one message to draft a reply.' if not self._selected_ids else 'Context selection changed. The next draft will use only checked messages.')
 
     def current(self):
+        """Return whether the captured context token still matches the SMS page.
+
+        :return: `True` if the active SMS context token matches `self.token`, otherwise `False`.
+        :rtype: bool
+        """
         context = self.sms_page.ai_context()
         return bool(context and context.get('token', context) == self.token)
 
     def current_composer(self):
+        """Return whether the active SMS composer matches the captured token.
+
+        :return: `True` if the composer context matches excluding `message_ids` and `context_version`.
+        :rtype: bool
+        """
         context = self.sms_page.ai_context()
         if not context or not self.token: return False
         ignored = {'message_ids', 'context_version'}
@@ -691,6 +916,7 @@ class SmsAiAssistant(QWidget):
                 {key:value for key,value in self.token.items() if key not in ignored})
 
     def generate(self):
+        """Start reply generation or prompt for tone when redrafting."""
         if self._busy or self._closed or not self._supported or not self._selected_ids: return
         if self.output.toPlainText().strip():
             self.ask_tone()
@@ -698,12 +924,14 @@ class SmsAiAssistant(QWidget):
             self.begin_generation()
 
     def ask_tone(self):
+        """Prompt for a reply tone before regenerating the SMS draft."""
         if self.tone_dialog and self.tone_dialog.isVisible():
             self.tone_dialog.raise_(); self.tone_dialog.activateWindow(); return
         identity = self._identity
         self.tone_dialog = ReplyToneDialog(self.tone, self.window())
         dialog = self.tone_dialog
         def confirmed():
+            """Apply the confirmed reply tone and start draft generation."""
             if self._closed or self._identity != identity: return
             tone = dialog.tone.currentText().strip()
             if not tone or len(tone) > 200: return
@@ -713,6 +941,7 @@ class SmsAiAssistant(QWidget):
         dialog.open(); dialog.raise_(); dialog.activateWindow()
 
     def begin_generation(self):
+        """Prepare checked local context and begin drafting an SMS reply."""
         context = self.sms_page.ai_context()
         if not context:
             self.feedback.setText('Select a retained SMS conversation with no pending send first.'); return
@@ -732,6 +961,11 @@ class SmsAiAssistant(QWidget):
         self.send_prepare(context, 'generate')
 
     def result(self, result):
+        """Handle AI prepare and generate responses for the SMS assistant.
+
+        :param result: Result payload dictionary emitted by the AI worker.
+        :type result: dict
+        """
         pending = self._requests.pop(result.get('request_id'), None)
         if not pending or self._closed: return
         command, purpose = pending
@@ -771,6 +1005,7 @@ class SmsAiAssistant(QWidget):
             self.generate_button.setText('Draft again')
 
     def insert(self):
+        """Insert the reviewed draft into the SMS composer if context still matches."""
         text = self.output.toPlainText()
         context = self.sms_page.ai_context() or {}
         if not context.get('can_reply', True):
@@ -787,6 +1022,11 @@ class SmsAiAssistant(QWidget):
             self.feedback.setText('The conversation, draft, or pending send changed. Draft a fresh reply.'); self.insert_button.setEnabled(False)
 
     def apply_snapshot(self, data):
+        """Update account state, AI availability, and token currency from a snapshot.
+
+        :param data: Snapshot or capabilities dictionary containing account and feature metadata.
+        :type data: dict
+        """
         caps = data.get('capabilities', data); account = caps.get('account_id')
         if self.account_id != account:
             self.clear(); self.account_id = account
@@ -799,11 +1039,13 @@ class SmsAiAssistant(QWidget):
         self.update_actions()
 
     def closed(self):
+        """Mark the assistant closed and cancel any pending requests."""
         self._closed = True
         if self.tone_dialog: self.tone_dialog.reject()
         self.cancel()
 
     def close_dialog(self):
+        """Cancel active generation or close the assistant dialog."""
         if self._busy:
             self.cancel(); self.feedback.setText('Generation cancelled. Your editor text was kept.'); self.editor_changed()
         else:
@@ -813,9 +1055,17 @@ class SmsAiAssistant(QWidget):
 
 
 class AISettings(QWidget):
+    """Settings widget for managing the OpenAI model and API key."""
     configuration_changed = pyqtSignal(dict)
 
     def __init__(self, ai_client, parent=None):
+        """Initialize the AI settings form controls and client bindings.
+
+        :param ai_client: Background AI worker emitting `result` signals, or `None`.
+        :type ai_client: AiWorker | None
+        :param parent: Optional parent widget.
+        :type parent: QWidget | None
+        """
         super().__init__(parent)
         self.client = ai_client
         self._requests = {}
@@ -858,9 +1108,17 @@ class AISettings(QWidget):
                 button.setEnabled(False)
 
     def _edited(self):
+        """Increment the local edit revision when the model text changes."""
         self._revision += 1
 
     def send(self, command, payload):
+        """Send a non-overlapping AI settings command and track revisions.
+
+        :param command: AI settings command name to dispatch.
+        :type command: str
+        :param payload: Command parameters excluding `request_id`.
+        :type payload: dict
+        """
         if not self.client or any(pending[0] == command for pending in self._requests.values()):
             return
         request_id = str(uuid.uuid4())
@@ -872,15 +1130,26 @@ class AISettings(QWidget):
             self.catalog_status.setText('Loading available text models…')
 
     def save_secret(self):
+        """Clear the API key field and submit the entered key to core."""
         key = self.key.text()
         self.key.clear()
         self.send('ai_save_key', {'key': key})
 
     def showEvent(self, event):
+        """Load current AI settings when the widget is shown.
+
+        :param event: Qt show event delivered when the settings tab becomes visible.
+        :type event: PyQt6.QtGui.QShowEvent
+        """
         super().showEvent(event)
         self.send('ai_settings', {})
 
     def apply_snapshot(self, data):
+        """Enable or disable AI settings controls based on core capabilities.
+
+        :param data: Snapshot or capabilities dictionary containing AI feature flags.
+        :type data: dict
+        """
         caps = data.get('capabilities', data)
         supported = caps.get('features', {}).get('ai', True)
         for button in (self.save_model, self.save_key, self.use_key):
@@ -889,6 +1158,11 @@ class AISettings(QWidget):
             self.feedback.setText('AI is unavailable in this core version. Restart the updated core and desktop.')
 
     def result(self, result):
+        """Process AI configuration and model catalog responses.
+
+        :param result: Result payload dictionary emitted by the AI worker.
+        :type result: dict
+        """
         pending = self._requests.pop(result.get('request_id'), None)
         if pending is None:
             return

@@ -28,6 +28,13 @@ from .devices import AddDeviceDialog, EncryptionDialog, RemoveDeviceDialog, requ
 
 
 def stamp(value):
+    """Format a timestamp value into local time or a fallback label.
+
+    :param value: Unix timestamp, ISO-8601 timestamp string, or falsy value.
+    :type value: int | float | str | None
+    :return: Formatted local timestamp string or fallback label.
+    :rtype: str
+    """
     if not value:
         return 'not yet synced'
     if isinstance(value, (int, float)):
@@ -42,14 +49,32 @@ def stamp(value):
 
 
 class InboxModel(QAbstractListModel):
+    """Qt list model exposing retained notification items."""
     def __init__(self):
+        """Initialize the inbox list model with an empty items list."""
         super().__init__()
         self.items = []
 
     def rowCount(self, parent=QModelIndex()):
+        """Return the number of notification items in the model.
+
+        :param parent: Parent model index.
+        :type parent: QModelIndex
+        :return: Number of root items, or `0` for valid child indices.
+        :rtype: int
+        """
         return 0 if parent.isValid() else len(self.items)
 
     def data(self, index, role=Qt.ItemDataRole.DisplayRole):
+        """Return notification text, icon, payload, or tooltip for a model index.
+
+        :param index: Model index identifying the requested notification row.
+        :type index: QModelIndex
+        :param role: Qt item data role specifying the desired data representation.
+        :type role: int | Qt.ItemDataRole
+        :return: Formatted text, icon, raw item dict, tooltip, or `None`.
+        :rtype: str | PyQt6.QtGui.QIcon | dict | None
+        """
         if not index.isValid() or index.row() >= len(self.items):
             return None
         item = self.items[index.row()]
@@ -64,6 +89,11 @@ class InboxModel(QAbstractListModel):
         return None
 
     def replace(self, items):
+        """Replace the model items and reset the view when items change.
+
+        :param items: Sequence of retained notification dictionaries to display.
+        :type items: collections.abc.Sequence[dict]
+        """
         if self.items != items:
             self.beginResetModel()
             self.items = list(items)
@@ -71,7 +101,15 @@ class InboxModel(QAbstractListModel):
 
 
 class MainWindow(QMainWindow):
+    """Primary desktop main window for notifications, SMS, summaries, and settings."""
     def __init__(self, worker, ai_client=None):
+        """Initialize the desktop main window, views, dialogs, tray, and signals.
+
+        :param worker: Background core worker managing polling and commands.
+        :type worker: CoreWorker
+        :param ai_client: Optional background AI worker thread, or `None`.
+        :type ai_client: AiWorker | None
+        """
         super().__init__()
         apply_theme(QApplication.instance())
         self.worker = worker
@@ -254,6 +292,7 @@ class MainWindow(QMainWindow):
         self.update_status()
 
     def build_menu(self):
+        """Build the application menu bar actions and keyboard shortcuts."""
         menu = self.menuBar().addMenu('Application')
         menu.addAction('Settings…', self.show_settings)
         refresh = menu.addAction('Refresh current view', self.refresh_current)
@@ -272,6 +311,13 @@ class MainWindow(QMainWindow):
         exit_action.setShortcut(QKeySequence.StandardKey.Quit)
 
     def navigate(self, index, persist=True):
+        """Switch the active main page and update headers, actions, and icons.
+
+        :param index: Zero-based page index (`0` Notifications, `1` SMS, `2` Summary).
+        :type index: int
+        :param persist: Whether to persist the selected page in user preferences.
+        :type persist: bool
+        """
         if index not in range(len(self.navigation)):
             return
         self.tabs.setCurrentIndex(index)
@@ -294,6 +340,7 @@ class MainWindow(QMainWindow):
         self.refresh_navigation_icons()
 
     def build_inbox_tab(self):
+        """Build the Notifications tab layout and item detail pane."""
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -392,6 +439,7 @@ class MainWindow(QMainWindow):
         self.tabs.addWidget(page)
 
     def copy_selected_item(self):
+        """Copy the selected notification title, body, and URL to the clipboard."""
         item = self.list.currentIndex().data(Qt.ItemDataRole.UserRole)
         if not item:
             return
@@ -403,6 +451,13 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def table_view(model):
+        """Create a single-selection read-only table view for a Qt model.
+
+        :param model: Qt item model backing the table view.
+        :type model: PyQt6.QtCore.QAbstractItemModel
+        :return: Configured read-only single-row-selection `QTableView`.
+        :rtype: QTableView
+        """
         view = QTableView()
         view.setModel(model)
         view.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
@@ -416,6 +471,7 @@ class MainWindow(QMainWindow):
         return view
 
     def build_device_tab(self):
+        """Build the Devices tab table, inspector pane, and management controls."""
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -500,9 +556,15 @@ class MainWindow(QMainWindow):
         self.devices_page = page
 
     def selected_device(self):
+        """Return the currently selected notification filter device record, if any.
+
+        :return: Device dictionary matching `self.selected_device_id`, or `None`.
+        :rtype: dict | None
+        """
         return next((device for device in self.devices if device['id'] == self.selected_device_id), None)
 
     def sync_context_controls(self):
+        """Synchronize the notification source device selector with cached devices."""
         selector = self.inbox_device
         selector.blockSignals(True)
         selector.clear()
@@ -517,12 +579,18 @@ class MainWindow(QMainWindow):
         selector.blockSignals(False)
 
     def select_device(self, device_id):
+        """Filter the notifications list to the selected source device.
+
+        :param device_id: Device ID to filter notifications by, or `None` for all devices.
+        :type device_id: str | None
+        """
         # Notifications filtering never changes the SMS phone context.
         self.selected_device_id = device_id
         self.sync_context_controls()
         self.update_messages()
 
     def focus_search(self):
+        """Focus the search or details input for the active window or tab."""
         if self.settings_has_focus():
             self.settings_find()
             return
@@ -534,6 +602,7 @@ class MainWindow(QMainWindow):
             self.search.setFocus()
 
     def refresh_current(self):
+        """Refresh the currently focused settings pane or active main tab."""
         if self.settings_has_focus():
             self.settings_refresh()
             return
@@ -546,6 +615,7 @@ class MainWindow(QMainWindow):
             self.worker.request('search', self.search.text())
 
     def refresh_sms_control_geometry(self):
+        """Preserve minimum button heights on SMS composer action controls."""
         # A wrapped contact header can exceed the splitter's static size hint.
         # Preserve the native action targets; the outer SMS viewport can scroll.
         if sip.isdeleted(self) or sip.isdeleted(self.sms_ai_button) or sip.isdeleted(self.sms_page.send_button):
@@ -554,6 +624,15 @@ class MainWindow(QMainWindow):
             button.setMinimumHeight(button.sizeHint().height())
 
     def eventFilter(self, watched, event):
+        """Schedule SMS control geometry refresh on font or style changes.
+
+        :param watched: Watched SMS control object.
+        :type watched: PyQt6.QtCore.QObject
+        :param event: Qt event delivered to the watched object.
+        :type event: QEvent
+        :return: Result of the base `eventFilter` implementation.
+        :rtype: bool
+        """
         if (watched in (getattr(self, 'sms_ai_button', None),
                         getattr(getattr(self, 'sms_page', None), 'send_button', None))
                 and event.type() in (QEvent.Type.FontChange, QEvent.Type.StyleChange)):
@@ -561,6 +640,7 @@ class MainWindow(QMainWindow):
         return super().eventFilter(watched, event)
 
     def show_ai_assistant(self):
+        """Open and focus the SMS AI draft reply assistant dialog."""
         self.sms_ai.open_context()
         if self.sms_ai_dialog not in self.dialogs:
             self.dialogs.append(self.sms_ai_dialog)
@@ -569,6 +649,7 @@ class MainWindow(QMainWindow):
         self.sms_ai_dialog.activateWindow()
 
     def finish_ai_draft(self):
+        """Accept the AI draft dialog and restore focus to the SMS composer."""
         # Insertion changes the token. Capture that completed edit, then restore
         # focus only after hiding the assistant has released its active window.
         context = self.sms_page.ai_context()
@@ -578,6 +659,7 @@ class MainWindow(QMainWindow):
             return
 
         def restore_composer():
+            """Restore focus to the SMS composer if context and window remain valid."""
             if (not self.isVisible() or self.sms_ai_dialog.isVisible() or
                     self.tabs.currentWidget() is not self.sms_scroll or
                     getattr(self.worker, 'instance_id', None) != instance_id or
@@ -594,18 +676,30 @@ class MainWindow(QMainWindow):
         self.defer_current_account(restore_composer)
 
     def update_summary_context(self):
+        """Update the summary page with current notification and SMS context."""
         self.summary_page.set_context(self.account_id if self.account_known else None,
                                       self.items, {'messages': [message for cache in self.sms_page.sms_cache.values()
                                                                 for message in cache.get('messages', [])]})
 
     def search_changed(self):
+        """Filter local notifications and submit the search query to the worker."""
         self.update_messages()
         self.worker.request('search', self.search.text())
 
     def message_rows(self):
+        """Return retained notifications filtered by the selected source device.
+
+        :return: List of notification dictionaries matching `self.selected_device_id`.
+        :rtype: list[dict]
+        """
         return [item for item in self.items if self.selected_device_id is None or (item.get('source_device_id') or item.get('device_id')) == self.selected_device_id]
 
     def sync_text(self):
+        """Return the human-readable notification synchronization status line.
+
+        :return: Formatted synchronization status summary string.
+        :rtype: str
+        """
         sync = self.capabilities.get('push_sync')
         if not sync:
             return 'Stored on this computer'
@@ -618,6 +712,17 @@ class MainWindow(QMainWindow):
         return text
 
     def replace_list(self, view, model, rows, render):
+        """Replace list model rows while preserving current selection and scroll.
+
+        :param view: List view widget displaying notification items.
+        :type view: QListView
+        :param model: Model instance whose items are replaced.
+        :type model: InboxModel
+        :param rows: Filtered notification dictionaries to place in the model.
+        :type rows: list[dict]
+        :param render: Callback invoked with the active `QModelIndex` to render item details.
+        :type render: collections.abc.Callable[[QModelIndex], None]
+        """
         selected = view.currentIndex().data(Qt.ItemDataRole.UserRole)
         selected_id = selected.get('id') if selected else None
         scroll = view.verticalScrollBar().value()
@@ -637,6 +742,7 @@ class MainWindow(QMainWindow):
             self.item_image.set_reference(None)
 
     def update_messages(self):
+        """Filter and render the retained notifications list and sync status."""
         query = self.search.text().casefold()
         rows = [item for item in self.message_rows() if not query or query in (item.get('title', '') + ' ' + item.get('body', '') + ' ' + ' '.join(message.get('body', '') for message in item.get('history', []))).casefold()]
         self.replace_list(self.list, self.model, rows, self.show_item)
@@ -647,6 +753,13 @@ class MainWindow(QMainWindow):
         self.update_summary_context()
 
     def show_item(self, current, previous=QModelIndex()):
+        """Display the selected notification item in the detail pane.
+
+        :param current: Newly selected notification model index.
+        :type current: QModelIndex
+        :param previous: Previously selected notification model index.
+        :type previous: QModelIndex
+        """
         item = current.data(Qt.ItemDataRole.UserRole)
         if not item:
             return
@@ -664,12 +777,18 @@ class MainWindow(QMainWindow):
         self.copy_item_button.setEnabled(bool(item.get('title') or item.get('body') or item.get('url')))
 
     def notification_media_valid(self):
+        """Return whether the active item image preview matches the current item.
+
+        :return: `True` if the selected item and account match the active image reference.
+        :rtype: bool
+        """
         item = self.list.currentIndex().data(Qt.ItemDataRole.UserRole)
         reference = self.item_image.reference
         return bool(item and self.account_known and self.account_id == reference.get('account_id')
                     and item.get('id') == reference.get('item_id'))
 
     def update_devices(self):
+        """Filter and update the cached devices table and inspector."""
         mode = self.device_filter.currentIndex()
         selected = self.devices_view.currentIndex().data(Qt.ItemDataRole.UserRole)
         selected_id = selected['id'] if selected else None
@@ -681,6 +800,13 @@ class MainWindow(QMainWindow):
         self.show_device(self.devices_view.currentIndex())
 
     def show_device(self, current, previous=QModelIndex()):
+        """Display details and controls for the selected device row.
+
+        :param current: Newly selected device model index.
+        :type current: QModelIndex
+        :param previous: Previously selected device model index.
+        :type previous: QModelIndex
+        """
         device = current.data(Qt.ItemDataRole.UserRole)
         for button in (self.encryption_button, self.rename_button, self.remove_button):
             button.setEnabled(bool(device and device.get('active')))
@@ -699,11 +825,17 @@ class MainWindow(QMainWindow):
         self.device_detail.setHtml(document)
 
     def add_device(self):
+        """Open the dialog to register this computer as a Pushbullet device."""
         dialog = AddDeviceDialog(self.worker, self)
         dialog.registered.connect(self.registered_device)
         self.track_dialog(dialog)
 
     def registered_device(self, device_id):
+        """Select a newly registered device and prompt for encryption setup.
+
+        :param device_id: Newly registered Pushbullet device ID.
+        :type device_id: str
+        """
         self.show_settings('Devices')
         row = next((i for i, device in enumerate(self.device_model.records) if device['id'] == device_id), None)
         if row is not None:
@@ -713,6 +845,7 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(0, lambda: self.track_dialog(EncryptionDialog(self.worker, device, self)))
 
     def resolve_registration(self):
+        """Open a dialog to review and resolve an uncertain device registration."""
         dialog = QDialog(self)
         dialog.setWindowTitle('Review uncertain registration')
         dialog.resize(570, 370)
@@ -724,6 +857,11 @@ class MainWindow(QMainWindow):
         layout.addWidget(refresh)
         selector = QComboBox()
         def update_choices(data=None):
+            """Refresh candidate device choices for resolving an uncertain registration.
+
+            :param data: Optional snapshot payload when triggered by `worker.snapshot`.
+            :type data: dict | None
+            """
             selected = selector.currentData()
             selector.clear()
             selector.addItem('Choose a reviewed result…', 'unselected')
@@ -747,6 +885,7 @@ class MainWindow(QMainWindow):
         ack.toggled.connect(lambda checked: resolve.setEnabled(checked and selector.currentData() != 'unselected'))
         buttons.rejected.connect(dialog.reject)
         def submit():
+            """Submit the reviewed registration resolution choice to the worker."""
             request(self.worker, 'resolve_registration', device_id=selector.currentData())
             resolve.setEnabled(False)
             feedback.setText('Resolving the reviewed result. Check Devices for its current state.')
@@ -755,11 +894,13 @@ class MainWindow(QMainWindow):
         self.track_dialog(dialog)
 
     def manage_encryption(self):
+        """Open the encryption management dialog for the selected device."""
         device = self.devices_view.currentIndex().data(Qt.ItemDataRole.UserRole)
         if device:
             self.track_dialog(EncryptionDialog(self.worker, device, self))
 
     def rename_device(self):
+        """Prompt for a new name and rename the selected device."""
         device = self.devices_view.currentIndex().data(Qt.ItemDataRole.UserRole)
         if device:
             name, ok = QInputDialog.getText(self, 'Rename device', 'Device name · ' + device['id'], text=device.get('nickname') or '')
@@ -767,26 +908,39 @@ class MainWindow(QMainWindow):
                 request(self.worker, 'rename_device', device_id=device['id'], nickname=name.strip())
 
     def remove_device(self):
+        """Open the confirmation dialog to remove the selected device."""
         device = self.devices_view.currentIndex().data(Qt.ItemDataRole.UserRole)
         if device:
             self.track_dialog(RemoveDeviceDialog(self.worker, device, self))
 
     def update_activity(self):
+        """Update the message activity dialog with current actions and devices."""
         self.activity.apply_actions(self.actions, self.devices)
 
     def show_activity(self):
+        """Update and focus the message activity window."""
         self.update_activity()
         self.activity.show()
         self.activity.raise_()
         self.activity.activateWindow()
 
     def track_dialog(self, dialog):
+        """Register a dialog for lifecycle tracking and open it.
+
+        :param dialog: Dialog instance to track, mark delete-on-close, and open.
+        :type dialog: QDialog
+        """
         self.dialogs.append(dialog)
         dialog.finished.connect(lambda: self.dialogs.remove(dialog) if dialog in self.dialogs else None)
         dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         dialog.open()
 
     def compose(self, action=None):
+        """Open message composition for SMS or a Pushbullet note or link action.
+
+        :param action: Existing outbox action dictionary to edit, or `None` to compose a new message.
+        :type action: dict | None
+        """
         if action is None and (self.settings_has_focus() or self.tabs.currentIndex() == 2):
             return
         if action is None and self.tabs.currentIndex() == 1:
@@ -800,26 +954,52 @@ class MainWindow(QMainWindow):
         self.track_dialog(dialog)
 
     def merge_action(self, action):
+        """Insert or update a local outbox action and refresh activity.
+
+        :param action: Outbox action dictionary to prepend or replace by ID.
+        :type action: dict
+        """
         self.actions = [action] + [item for item in self.actions if item['id'] != action['id']]
         self.update_activity()
 
     def action_saved(self, action):
+        """Merge a saved action and schedule its review dialog.
+
+        :param action: Newly saved outbox action dictionary.
+        :type action: dict
+        """
         self.merge_action(action)
         # Editing a saved SMS leaves the current chat and its draft intact.
         self.defer_current_account(lambda: self.review(action))
 
     def defer_current_account(self, callback):
+        """Schedule a zero-delay callback guarded by window and account state.
+
+        :param callback: Zero-argument callable invoked if the window and account remain unchanged.
+        :type callback: collections.abc.Callable[[], None]
+        """
         origin = (self.account_known, self.account_id)
         def invoke():
+            """Run the deferred callback if window and account state remain unchanged."""
             if not sip.isdeleted(self) and not self._exiting and origin == (self.account_known, self.account_id):
                 callback()
         QTimer.singleShot(0, invoke)
 
     def review_sms_action(self, action):
+        """Open the review dialog for an SMS action when the SMS tab is active.
+
+        :param action: SMS outbox action dictionary to inspect and approve.
+        :type action: dict
+        """
         if not sip.isdeleted(self) and not self._exiting and self.isVisible() and self.tabs.currentIndex() == 1:
             self.review(action)
 
     def review(self, action):
+        """Open the review and approval dialog for a queued outbox action.
+
+        :param action: Outbox action dictionary to inspect and approve.
+        :type action: dict
+        """
         if self.account_known and "account_id" in action and action["account_id"] != self.account_id:
             return
         dialog = ReviewDialog(self.worker, action, self.devices, self.capabilities, self)
@@ -827,10 +1007,16 @@ class MainWindow(QMainWindow):
         self.track_dialog(dialog)
 
     def refresh_devices(self):
+        """Request a device list refresh from Pushbullet via the worker."""
         self.refresh_devices_button.setEnabled(False)
         request(self.worker, 'refresh_devices')
 
     def command_result(self, result):
+        """Handle worker command results for device, registration, and provider operations.
+
+        :param result: Command result payload dictionary emitted by the worker.
+        :type result: dict
+        """
         command = result['command']
         # These surfaces own their inline status and recovery controls. They
         # must neither raise a global banner nor clear an unrelated command error.
@@ -856,10 +1042,20 @@ class MainWindow(QMainWindow):
                 self.statusBar().showMessage('Provider credentials reloaded; encrypted backlog is refreshing.')
 
     def show_error(self, message):
+        """Display an error message in the main window error banner.
+
+        :param message: User-facing error message text to show.
+        :type message: str
+        """
         self.error.setText(message)
         self.error.show()
 
     def apply_snapshot(self, data):
+        """Apply a full or partial core snapshot across all desktop views.
+
+        :param data: Full or partial snapshot dictionary emitted by the worker.
+        :type data: dict
+        """
         # The component sees the original full or partial snapshot once.
         self.sms_page.apply_snapshot(data)
         # Only an authoritative general snapshot can change account context.
@@ -929,6 +1125,7 @@ class MainWindow(QMainWindow):
             self.error.hide()
 
     def build_settings(self):
+        """Build the persistent Settings dialog and its configuration tabs."""
         # These pages live for the window lifetime, preserving device selection
         # and ensuring reentry never duplicates worker connections.
         self.settings_dialog = dialog = QDialog(self)
@@ -1007,12 +1204,14 @@ class MainWindow(QMainWindow):
         self.update_web_settings()
 
     def change_appearance(self):
+        """Apply and persist the selected application color scheme."""
         try:
             set_color_scheme(QApplication.instance(), self.appearance.currentData())
         except OSError as error:
             self.show_error('Could not save the color scheme: ' + str(error))
 
     def update_web_settings(self):
+        """Update Local Web settings controls from the current web host state."""
         value = self.web_state
         self.web_enabled.blockSignals(True)
         self.web_enabled.setChecked(bool(value.get('enabled')))
@@ -1021,24 +1220,36 @@ class MainWindow(QMainWindow):
         self.web_open_button.setEnabled(bool(value.get('enabled')) and not value.get('error'))
 
     def settings_has_focus(self):
+        """Return whether the Settings dialog or a child window is currently active.
+
+        :return: `True` if the Settings dialog or one of its descendants is the active window.
+        :rtype: bool
+        """
         active = QApplication.activeWindow()
         return bool(self.settings_dialog and self.settings_dialog.isVisible() and
                     (active is self.settings_dialog or
                      (active is not None and self.settings_dialog.isAncestorOf(active))))
 
     def settings_refresh(self):
+        """Refresh the active Devices or Core tab inside Settings."""
         if self.settings_tabs.currentWidget() is self.devices_page:
             self.refresh_devices()
         elif self.settings_tabs.currentWidget() is self.core_settings:
             self.core_settings.refresh()
 
     def settings_find(self):
+        """Focus the filter or details control in the active Settings tab."""
         if self.settings_tabs.currentWidget() is self.devices_page:
             self.device_filter.setFocus()
         elif self.settings_tabs.currentWidget() is self.core_settings:
             self.core_settings.focus_details()
 
     def show_settings(self, tab=None):
+        """Show and focus the Settings dialog, optionally selecting a named tab.
+
+        :param tab: Optional tab title to activate when opening the dialog.
+        :type tab: str | None
+        """
         if isinstance(tab, str):
             for index in range(self.settings_tabs.count()):
                 if self.settings_tabs.tabText(index) == tab:
@@ -1051,17 +1262,24 @@ class MainWindow(QMainWindow):
         self.settings_dialog.activateWindow()
 
     def open_notification_link(self, url):
+        """Open a valid HTTP or HTTPS link from notification details.
+
+        :param url: Clicked hyperlink URL from the notification detail browser.
+        :type url: QUrl
+        """
         value = url.toString()
         if valid_http_url(value) and url.isValid():
             QDesktopServices.openUrl(url)
 
     def refresh_navigation_icons(self):
+        """Update sidebar navigation icons for the current selection and palette."""
         palette = colors(self.palette())
         for button in self.navigation:
             ink = palette['highlighted_text'] if button.isChecked() else palette['text']
             button.setIcon(make_icon(button.property('iconKind'), ink, 18))
 
     def refresh_theme(self):
+        """Refresh icons, detail stylesheets, and status styling after theme changes."""
         self.refresh_sms_control_geometry()
         self.appearance.blockSignals(True)
         self.appearance.setCurrentIndex(self.appearance.findData(current_scheme(QApplication.instance())))
@@ -1089,6 +1307,11 @@ class MainWindow(QMainWindow):
         self.update_status()
 
     def worker_connection(self, message):
+        """Handle worker connection status updates and refresh status indicators.
+
+        :param message: Connection status message emitted by the core worker.
+        :type message: str
+        """
         self.core_settings.connection_changed(message)
         self.connection_status.connection(message)
         self.update_status()
@@ -1096,11 +1319,17 @@ class MainWindow(QMainWindow):
         self.statusBar().clearMessage()
 
     def worker_failed(self, message):
+        """Handle worker connection errors and update status indicators.
+
+        :param message: Connection diagnostic error message emitted by the core worker.
+        :type message: str
+        """
         self.core_settings.connection_error(message)
         self.connection_status.failed(message)
         self.update_status()
 
     def update_status(self):
+        """Update the connection status pill, tooltip, sync text, and refresh timer."""
         view = self.connection_status.view(stamp)
         self.provider_status.setText(view.label)
         self.provider_status.setProperty('tone', view.tone)
@@ -1125,6 +1354,7 @@ class MainWindow(QMainWindow):
             self.status_dialog.setPlainText(view.diagnostics)
 
     def show_status_details(self):
+        """Open the connection diagnostics dialog."""
         dialog = QDialog(self)
         dialog.setWindowTitle('Connection details')
         dialog.resize(510, 330)
@@ -1145,6 +1375,7 @@ class MainWindow(QMainWindow):
         self.track_dialog(dialog)
 
     def stop_all(self):
+        """Confirm and request shutdown of all shared pbdesk services."""
         box = QMessageBox(self)
         box.setWindowTitle('Stop all pbdesk services?')
         box.setIcon(QMessageBox.Icon.Warning)
@@ -1159,15 +1390,22 @@ class MainWindow(QMainWindow):
             self.worker.request('shutdown')
 
     def show_from_tray(self):
+        """Restore and focus the main window from the system tray."""
         self.showNormal()
         self.raise_()
         self.activateWindow()
 
     def exit_desktop(self):
+        """Mark the window for exit and close the desktop application."""
         self._exiting = True
         self.close()
 
     def closeEvent(self, event):
+        """Hide to tray or stop workers and clean up resources when closing.
+
+        :param event: Qt window close event.
+        :type event: PyQt6.QtGui.QCloseEvent
+        """
         if not self._exiting and self.tray and self.tray.isVisible():
             self.hide()
             event.ignore()
@@ -1190,6 +1428,10 @@ class MainWindow(QMainWindow):
 
 
 def main():
+    """Launch the Qt desktop application and manage worker startup and shutdown.
+
+    :raises SystemExit: Always raised with the Qt event loop exit code upon termination.
+    """
     parser = argparse.ArgumentParser(description="Native pbdesk notifications and SMS; starts or connects to the private core.")
     parser.add_argument("--demo", action="store_true", help="Seed one sanitized stored-note fixture in a newly started core.")
     args = parser.parse_args()
@@ -1204,6 +1446,11 @@ def main():
     bootstrap = HistorySecurityDialog(worker)
     opened = {}
     def history_status(state):
+        """Open the main window and start the AI worker once history is ready.
+
+        :param state: History security status dictionary emitted by `worker.history_security`.
+        :type state: dict
+        """
         if not state.get('history_ready') or opened:
             return
         ai_client = AiWorker(settings)

@@ -11,16 +11,37 @@ from pbdesk.pushbullet.normalize import normalize
 
 
 class DecryptionError(ValueError):
+    """Error raised when encrypted Pushbullet payloads fail validation or authentication."""
     pass
 
 
 def derive_key(password,user_id):
+    """Derive a 32-byte encryption key from a password and user identity.
+
+    :param password: User's end-to-end encryption password.
+    :type password: str
+    :param user_id: Pushbullet user account identifier used as the PBKDF2 salt.
+    :type user_id: str
+    :return: Derived 32-byte AES-GCM encryption key.
+    :rtype: bytes
+    :raises ValueError: If ``password`` or ``user_id`` is not a string, or ``user_id`` is empty.
+    """
     if not isinstance(password,str) or not isinstance(user_id,str) or not user_id:
         raise ValueError("Encryption password and user identity are required")
     return PBKDF2HMAC(algorithm=hashes.SHA256(),length=32,salt=user_id.encode("utf-8"),iterations=30000).derive(password.encode("utf-8"))
 
 
 def decrypt_bytes(key,ciphertext):
+    """Decode and authenticate a versioned Pushbullet AES-GCM ciphertext string.
+
+    :param key: 32-byte AES-GCM decryption key derived via :func:`derive_key`.
+    :type key: bytes
+    :param ciphertext: Base64-encoded versioned Pushbullet AES-GCM frame string.
+    :type ciphertext: str
+    :return: Authenticated plaintext bytes.
+    :rtype: bytes
+    :raises DecryptionError: If ``ciphertext`` is invalid or oversized, base64 decoding fails, the frame header is unsupported, or AES-GCM authentication fails.
+    """
     if not isinstance(ciphertext,str) or len(ciphertext)>1400000:
         raise DecryptionError("Invalid encrypted payload")
     try:
@@ -37,6 +58,16 @@ def decrypt_bytes(key,ciphertext):
 
 
 def decrypt_object(key,ciphertext):
+    """Decrypt and parse an authenticated JSON object payload.
+
+    :param key: 32-byte AES-GCM decryption key derived via :func:`derive_key`.
+    :type key: bytes
+    :param ciphertext: Base64-encoded versioned Pushbullet AES-GCM frame string.
+    :type ciphertext: str
+    :return: Parsed JSON object dictionary decoded from authenticated plaintext.
+    :rtype: dict[str, Any]
+    :raises DecryptionError: If decryption fails or the authenticated plaintext does not decode to a JSON object.
+    """
     plaintext=decrypt_bytes(key,ciphertext)  # Authentication happens before parsing.
     try:
         value=json.loads(plaintext)
@@ -48,6 +79,13 @@ def decrypt_object(key,ciphertext):
 
 
 def encrypted_push(payload):
+    """Return the encrypted push dictionary from a payload, or None.
+
+    :param payload: Raw stream message or push payload to inspect.
+    :type payload: object
+    :return: Encrypted push dictionary when ``payload`` holds an encrypted push, otherwise ``None``.
+    :rtype: dict[str, Any] | None
+    """
     if not isinstance(payload,dict):
         return None
     push=payload.get("push") if payload.get("type")=="push" else payload
@@ -55,7 +93,16 @@ def encrypted_push(payload):
 
 
 class EncryptionService:
+    """Stateful manager for Pushbullet end-to-end encryption keys and pending envelopes."""
+
     def __init__(self,store,consumer):
+        """Initialize the encryption service with a backing store and message consumer.
+
+        :param store: Persistence store used to retain, query, and delete encrypted envelopes.
+        :type store: pbdesk.storage.database.Store
+        :param consumer: Asynchronous callable invoked with plaintext or decrypted push payloads.
+        :type consumer: collections.abc.Callable[[dict[str, Any]], collections.abc.Awaitable[dict[str, Any] | None]]
+        """
         self.store=store
         self.consumer=consumer
         self.key=None
@@ -65,10 +112,24 @@ class EncryptionService:
         self.lock=asyncio.Lock()
 
     async def ingest(self,payload):
+        """Serialize and ingest a push payload through decryption if encrypted.
+
+        :param payload: Incoming stream or stored push payload dictionary.
+        :type payload: dict[str, Any]
+        :return: Ingestion result returned by the consumer, or ``None`` if ignored, deferred, or invalid.
+        :rtype: dict[str, Any] | None
+        """
         async with self.lock:
             return await self._ingest(payload)
 
     async def _ingest(self,payload):
+        """Decrypt, validate, and dispatch an encrypted push envelope or pass through plaintext.
+
+        :param payload: Incoming push payload dictionary to decrypt or forward.
+        :type payload: dict[str, Any]
+        :return: Ingestion result returned by the consumer, or ``None`` if retained, ignored, or invalid.
+        :rtype: dict[str, Any] | None
+        """
         envelope=encrypted_push(payload)
         if envelope is None:
             return await self.consumer(payload)
@@ -141,10 +202,16 @@ class EncryptionService:
         return result
 
     async def _settle_state(self):
+        """Recompute service state from remaining pending encrypted envelopes."""
         pending=await asyncio.to_thread(self.store.encrypted_envelopes,0,100)
         self.state=('error' if any(row['status']=='unsupported_or_malformed_content' for row in pending) else 'locked') if pending else 'ready'
 
     async def clear(self,state="unconfigured"):
+        """Clear loaded encryption keys and set the service state.
+
+        :param state: Service state assigned after clearing keys.
+        :type state: str
+        """
         async with self.lock:
             self.key=None
             self.device_keys={}
@@ -152,6 +219,15 @@ class EncryptionService:
             self.state=state
 
     async def reload(self,key_loader,device_keys=None,key_states=None):
+        """Reload account and device keys and retry pending encrypted envelopes.
+
+        :param key_loader: Asynchronous callable returning the account-wide 32-byte key or ``None``.
+        :type key_loader: collections.abc.Callable[[], collections.abc.Awaitable[bytes | None]]
+        :param device_keys: Optional mapping of device IDs to 32-byte derived encryption keys.
+        :type device_keys: collections.abc.Mapping[str, bytes] | None
+        :param key_states: Optional mutable mapping of per-device key verification states.
+        :type key_states: dict[str, str] | None
+        """
         async with self.lock:
             self.key=None
             self.device_keys=dict(device_keys or {})
@@ -165,12 +241,20 @@ class EncryptionService:
             await self.retry_pending()
 
     async def set_device_keys(self,keys,states):
+        """Replace per-device encryption keys and retry pending envelopes.
+
+        :param keys: Mapping of device IDs to 32-byte derived encryption keys.
+        :type keys: collections.abc.Mapping[str, bytes]
+        :param states: Mutable mapping of per-device key verification states.
+        :type states: dict[str, str]
+        """
         async with self.lock:
             self.device_keys=dict(keys)
             self.key_states=states
         await self.retry_pending()
 
     async def retry_pending(self):
+        """Reprocess all stored encrypted envelopes in batches."""
         cursor=0
         while True:
             rows=await asyncio.to_thread(self.store.encrypted_envelopes,cursor,100)
@@ -183,4 +267,9 @@ class EncryptionService:
             await asyncio.sleep(0)
 
     async def pending_count(self):
+        """Return the count of retained encrypted envelopes awaiting decryption.
+
+        :return: Number of retained non-ignored encrypted envelopes awaiting decryption.
+        :rtype: int
+        """
         return await asyncio.to_thread(self.store.encrypted_count)

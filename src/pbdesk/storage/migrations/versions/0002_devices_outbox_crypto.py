@@ -8,6 +8,7 @@ depends_on = None
 
 
 def upgrade():
+    """Create devices, actions, action_audit, and locked_envelopes tables."""
     op.create_table("devices",sa.Column("id",sa.Text(),primary_key=True),
         sa.Column("nickname",sa.Text(),nullable=False),sa.Column("type",sa.Text()),
         sa.Column("manufacturer",sa.Text()),sa.Column("model",sa.Text()),
@@ -38,4 +39,8 @@ def upgrade():
 
 
 def downgrade():
+    """Refuse schema downgrade and require restoring a verified backup.
+
+    :raises RuntimeError: Always raised because schema downgrades are unsupported.
+    """
     raise RuntimeError("Restore a verified backup to downgrade")
